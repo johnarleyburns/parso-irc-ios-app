@@ -53,6 +53,7 @@ struct ConversationListView: View {
                                     channel: conversation.channel,
                                     connectionState: ircManager.connectionStates[conversation.server.id] ?? .disconnected
                                 )
+                                .accessibilityIdentifier("channel-\(conversation.channel.id)")
                                 .contentShape(Rectangle())
                                 .onTapGesture {
                                     selectedConversation = conversation

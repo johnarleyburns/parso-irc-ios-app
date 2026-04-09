@@ -14,6 +14,7 @@ struct ServerListView: View {
                         server: server,
                         connectionState: ircManager.connectionStates[server.id] ?? .disconnected
                     )
+                    .accessibilityIdentifier("server-\(server.id)")
                     .contentShape(Rectangle())
                     .onTapGesture {
                         connectToServer(server)
@@ -43,6 +44,7 @@ struct ServerListView: View {
                     } label: {
                         Image(systemName: "plus")
                     }
+                    .accessibilityIdentifier("addServerButton")
                 }
                 
                 ToolbarItem(placement: .topBarLeading) {
@@ -51,6 +53,7 @@ struct ServerListView: View {
                             ircManager.disconnectAll()
                         }
                         .foregroundColor(.red)
+                        .accessibilityIdentifier("disconnectAllButton")
                     }
                 }
             }

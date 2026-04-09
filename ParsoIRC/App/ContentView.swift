@@ -10,18 +10,21 @@ struct ContentView: View {
                     Label("Servers", systemImage: "server.rack")
                 }
                 .tag(0)
+                .accessibilityIdentifier("serversTab")
             
             ConversationListView()
                 .tabItem {
                     Label("Conversations", systemImage: "bubble.left.and.bubble.right")
                 }
                 .tag(1)
+                .accessibilityIdentifier("conversationsTab")
             
             SettingsView()
                 .tabItem {
                     Label("Settings", systemImage: "gear")
                 }
                 .tag(2)
+                .accessibilityIdentifier("settingsTab")
         }
         .tint(Color.theme.sentBubble)
     }

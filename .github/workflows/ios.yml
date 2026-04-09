@@ -171,26 +171,46 @@ jobs:
           name: ParsoIRC-TestFlight-IPA
           path: output/ParsoIRC.ipa
 
-  # Tests disabled - add test targets to enable
-  # test:
-  #   runs-on: macos-15
-  #   needs: build
-  #   steps:
-  #     - uses: actions/checkout@v4
-  #     - name: Select Xcode
-  #       run: |
-  #         if [ -d "/Applications/Xcode_16.app" ]; then
-  #           sudo xcode-select -s /Applications/Xcode_16.app/Contents/Developer
-  #         elif [ -d "/Applications/Xcode_15.app" ]; then
-  #           sudo xcode-select -s /Applications/Xcode_15.app/Contents/Developer
-  #         else
-  #           echo "Using system default Xcode"
-  #         fi
-  #     - name: Generate project
-  #       run: xcodegen generate
-  #     - name: Run Tests
-  #       run: |
-  #         xcodebuild test -project ParsoIRC.xcodeproj \
-  #           -scheme ParsoIRC \
-  #           -destination 'platform=iOS Simulator,name=iPhone 16' \
-  #           -derivedDataPath ./test_build
+  test:
+    runs-on: macos-15
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Select Xcode
+        run: |
+          if [ -d "/Applications/Xcode_16.app" ]; then
+            sudo xcode-select -s /Applications/Xcode_16.app/Contents/Developer
+          elif [ -d "/Applications/Xcode_15.app" ]; then
+            sudo xcode-select -s /Applications/Xcode_15.app/Contents/Developer
+          else
+            echo "Using system default Xcode"
+          fi
+      
+      - name: Install XcodeGen
+        run: |
+          if command -v xcodegen &> /dev/null; then
+            echo "XcodeGen already installed"
+          elif command -v brew &> /dev/null; then
+            brew install xcodegen
+          else
+            cd /tmp
+            curl -sL https://github.com/youtype/xcodegen/releases/download/v2.40.0/xcodegen-2.40.0-mac-x86_64.zip -o xcodegen.zip
+            unzip -o xcodegen.zip
+            if [ -f "./xcodegen" ]; then
+              sudo mv ./xcodegen /usr/local/bin/xcodegen
+            fi
+            chmod +x /usr/local/bin/xcodegen
+            cd -
+          fi
+          xcodegen --version
+      
+      - name: Generate project
+        run: xcodegen generate
+      
+      - name: Run Tests
+        run: |
+          xcodebuild test -project ParsoIRC.xcodeproj \
+            -scheme ParsoIRC \
+            -destination 'platform=iOS Simulator,name=iPhone 16' \
+            -derivedDataPath ./test_build
