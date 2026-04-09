@@ -40,12 +40,26 @@ jobs:
       
       - name: Install XcodeGen
         run: |
-          which xcodegen || brew install xcodegen || {
-            curl -o /tmp/xcodegen.zip https://github.com/youtype/xcodegen/releases/download/v2.40.0/xcodegen-2.40.0-mac-x86_64.zip
-            unzip -o /tmp/xcodegen.zip -d /tmp
-            sudo mv /tmp/xcodegen /usr/local/bin/xcodegen
+          # Check if xcodegen is already installed
+          if command -v xcodegen &> /dev/null; then
+            echo "XcodeGen already installed"
+          elif command -v brew &> /dev/null; then
+            brew install xcodegen
+          else
+            # Download and install manually
+            cd /tmp
+            curl -sL https://github.com/youtype/xcodegen/releases/download/v2.40.0/xcodegen-2.40.0-mac-x86_64.zip -o xcodegen.zip
+            unzip -o xcodegen.zip
+            # Find the xcodegen binary (might be in subfolder)
+            if [ -f "./xcodegen" ]; then
+              sudo mv ./xcodegen /usr/local/bin/xcodegen
+            elif [ -f "./build/xcodegen" ]; then
+              sudo mv ./build/xcodegen /usr/local/bin/xcodegen
+            fi
             chmod +x /usr/local/bin/xcodegen
-          }
+            cd -
+          fi
+          xcodegen --version
       
       - name: Generate Xcode project
         run: xcodegen generate
@@ -187,6 +201,24 @@ jobs:
           else
             echo "Using system default Xcode"
           fi
+      
+      - name: Install XcodeGen
+        run: |
+          if command -v xcodegen &> /dev/null; then
+            echo "XcodeGen already installed"
+          elif command -v brew &> /dev/null; then
+            brew install xcodegen
+          else
+            cd /tmp
+            curl -sL https://github.com/youtype/xcodegen/releases/download/v2.40.0/xcodegen-2.40.0-mac-x86_64.zip -o xcodegen.zip
+            unzip -o xcodegen.zip
+            if [ -f "./xcodegen" ]; then
+              sudo mv ./xcodegen /usr/local/bin/xcodegen
+            fi
+            chmod +x /usr/local/bin/xcodegen
+            cd -
+          fi
+          xcodegen --version
       
       - name: Generate project
         run: xcodegen generate
