@@ -96,6 +96,12 @@ struct ConversationCell: View {
                     Text(channel.name)
                         .font(.headline)
                     
+                    if channel.isWatched {
+                        Image(systemName: "eye.fill")
+                            .font(.caption)
+                            .foregroundColor(Color.theme.sentBubble)
+                    }
+                    
                     Spacer()
                     
                     Text("12:30 PM")
@@ -117,6 +123,22 @@ struct ConversationCell: View {
             }
         }
         .padding(.vertical, 4)
+        .contextMenu {
+            Button {
+                // Toggle watch - would need callback
+            } label: {
+                Label(
+                    channel.isWatched ? "Stop Watching" : "Watch Channel",
+                    systemImage: channel.isWatched ? "eye.slash" : "eye"
+                )
+            }
+            
+            Button {
+                // Channel settings
+            } label: {
+                Label("Settings", systemImage: "gear")
+            }
+        }
     }
 }
 

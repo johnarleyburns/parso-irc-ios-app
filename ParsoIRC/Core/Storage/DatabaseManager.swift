@@ -37,6 +37,10 @@ final class DatabaseManager {
     private let channelNotifications = Expression<String>("notifications")
     private let channelLastReadMessageId = Expression<String?>("last_read_message_id")
     private let channelJoinedAt = Expression<String?>("joined_at")
+    private let channelIsWatched = Expression<Int>("is_watched")
+    private let channelLastNotifiedAt = Expression<String?>("last_notified_at")
+    private let channelLastCheckedAt = Expression<String?>("last_checked_at")
+    private let channelNotifyOnAnyMessage = Expression<Int>("notify_on_any_message")
     
     // Message columns
     private let messageId = Expression<String>("id")
@@ -100,6 +104,10 @@ final class DatabaseManager {
                 t.column(channelNotifications, defaultValue: "mentions")
                 t.column(channelLastReadMessageId)
                 t.column(channelJoinedAt)
+                t.column(channelIsWatched, defaultValue: 0)
+                t.column(channelLastNotifiedAt)
+                t.column(channelLastCheckedAt)
+                t.column(channelNotifyOnAnyMessage, defaultValue: 0)
                 t.unique(channelServerId, channelName)
             })
             
@@ -210,7 +218,11 @@ final class DatabaseManager {
             channelMuted <- channel.isMuted ? 1 : 0,
             channelNotifications <- channel.notifications.rawValue,
             channelLastReadMessageId <- channel.lastReadMessageId,
-            channelJoinedAt <- channel.joinedAt.map { dateFormatter.string(from: $0) }
+            channelJoinedAt <- channel.joinedAt.map { dateFormatter.string(from: $0) },
+            channelIsWatched <- channel.isWatched ? 1 : 0,
+            channelLastNotifiedAt <- channel.lastNotifiedAt.map { dateFormatter.string(from: $0) },
+            channelLastCheckedAt <- channel.lastCheckedAt.map { dateFormatter.string(from: $0) },
+            channelNotifyOnAnyMessage <- channel.notifyOnAnyMessage ? 1 : 0
         )
         
         try db.run(insert)
@@ -231,12 +243,69 @@ final class DatabaseManager {
                 isMuted: row[channelMuted] == 1,
                 notifications: Channel.NotificationLevel(rawValue: row[channelNotifications]) ?? .mentions,
                 lastReadMessageId: row[channelLastReadMessageId],
-                joinedAt: row[channelJoinedAt].flatMap { dateFormatter.date(from: $0) }
+                joinedAt: row[channelJoinedAt].flatMap { dateFormatter.date(from: $0) },
+                isWatched: row[channelIsWatched] == 1,
+                lastNotifiedAt: row[channelLastNotifiedAt].flatMap { dateFormatter.date(from: $0) },
+                lastCheckedAt: row[channelLastCheckedAt].flatMap { dateFormatter.date(from: $0) },
+                notifyOnAnyMessage: row[channelNotifyOnAnyMessage] == 1
             )
             result.append(channel)
         }
         
         return result
+    }
+    
+    // MARK: - Watch Channel Operations
+    
+    func getWatchedChannels() throws -> [Channel] {
+        guard let db = db else { return [] }
+        
+        var result: [Channel] = []
+        let query = channels.filter(channelIsWatched == 1)
+        
+        for row in try db.prepare(query) {
+            let channel = Channel(
+                id: row[channelId],
+                serverId: row[channelServerId],
+                name: row[channelName],
+                topic: row[channelTopic],
+                isMuted: row[channelMuted] == 1,
+                notifications: Channel.NotificationLevel(rawValue: row[channelNotifications]) ?? .mentions,
+                lastReadMessageId: row[channelLastReadMessageId],
+                joinedAt: row[channelJoinedAt].flatMap { dateFormatter.date(from: $0) },
+                isWatched: true,
+                lastNotifiedAt: row[channelLastNotifiedAt].flatMap { dateFormatter.date(from: $0) },
+                lastCheckedAt: row[channelLastCheckedAt].flatMap { dateFormatter.date(from: $0) },
+                notifyOnAnyMessage: row[channelNotifyOnAnyMessage] == 1
+            )
+            result.append(channel)
+        }
+        
+        return result
+    }
+    
+    func getLatestMessage(forChannel cid: String) throws -> Message? {
+        guard let db = db else { return nil }
+        
+        let query = messages
+            .filter(messageChannelId == cid)
+            .order(messageTimestamp.desc)
+            .limit(1)
+        
+        for row in try db.prepare(query) {
+            return Message(
+                id: row[messageId],
+                channelId: row[messageChannelId],
+                sender: row[messageSender] ?? "",
+                senderHost: row[messageSenderHost],
+                content: row[messageContent],
+                timestamp: dateFormatter.date(from: row[messageTimestamp]) ?? Date(),
+                type: Message.MessageType(rawValue: row[messageType]) ?? .message,
+                isRead: row[messageIsRead] == 1
+            )
+        }
+        
+        return nil
     }
     
     // MARK: - Message Operations

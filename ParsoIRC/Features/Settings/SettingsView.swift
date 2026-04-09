@@ -8,6 +8,8 @@ struct SettingsView: View {
     @AppStorage("maxHistory") private var maxHistory = 1000
     
     @EnvironmentObject var appState: AppState
+    @EnvironmentObject var watchManager: WatchManager
+    @State private var showingNotificationPermissionAlert = false
     
     var body: some View {
         NavigationStack {
@@ -30,6 +32,56 @@ struct SettingsView: View {
                         Text("500 messages").tag(500)
                         Text("1000 messages").tag(1000)
                         Text("5000 messages").tag(5000)
+                    }
+                }
+                
+                Section("Background Watch") {
+                    Toggle("Enable Notifications", isOn: Binding(
+                        get: { watchManager.settings.notificationsEnabled },
+                        set: { newValue in
+                            if newValue {
+                                Task {
+                                    let granted = await NotificationManager.shared.requestAuthorization()
+                                    if !granted {
+                                        showingNotificationPermissionAlert = true
+                                    } else {
+                                        watchManager.toggleNotifications(true)
+                                    }
+                                }
+                            } else {
+                                watchManager.toggleNotifications(false)
+                            }
+                        }
+                    ))
+                    
+                    if watchManager.settings.notificationsEnabled {
+                        Picker("Check Interval", selection: Binding(
+                            get: { watchManager.settings.pollIntervalMinutes },
+                            set: { watchManager.updatePollInterval($0) }
+                        )) {
+                            Text("1 minute").tag(1)
+                            Text("2 minutes").tag(2)
+                            Text("3 minutes").tag(3)
+                            Text("4 minutes").tag(4)
+                            Text("5 minutes").tag(5)
+                        }
+                        
+                        Toggle("Show Message Preview", isOn: Binding(
+                            get: { watchManager.settings.showPreviewInNotification },
+                            set: { watchManager.togglePreview($0) }
+                        ))
+                        .help("Show sender and message preview in notifications")
+                        
+                        Button {
+                            Task {
+                                await NotificationManager.shared.sendTestNotification()
+                            }
+                        } label: {
+                            HStack {
+                                Image(systemName: "bell.badge")
+                                Text("Test Notification")
+                            }
+                        }
                     }
                 }
                 
@@ -68,6 +120,16 @@ struct SettingsView: View {
                 }
             }
             .navigationTitle("Settings")
+            .alert("Notifications Disabled", isPresented: $showingNotificationPermissionAlert) {
+                Button("Open Settings") {
+                    if let url = URL(string: UIApplication.openSettingsURLString) {
+                        UIApplication.shared.open(url)
+                    }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("Please enable notifications in Settings to receive alerts for watched channels.")
+            }
         }
     }
 }

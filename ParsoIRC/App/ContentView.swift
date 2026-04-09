@@ -16,6 +16,12 @@ struct ContentView: View {
                     Label("Conversations", systemImage: "bubble.left.and.bubble.right")
                 }
                 .tag(1)
+            
+            SettingsView()
+                .tabItem {
+                    Label("Settings", systemImage: "gear")
+                }
+                .tag(2)
         }
         .tint(Color.theme.sentBubble)
     }
@@ -25,4 +31,5 @@ struct ContentView: View {
     ContentView()
         .environmentObject(IRCClientManager.shared)
         .environmentObject(AppState())
+        .environmentObject(WatchManager.shared)
 }
