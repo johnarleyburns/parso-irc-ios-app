@@ -1,0 +1,112 @@
+name: iOS Build
+
+on:
+  push:
+    branches: [main]
+  release:
+    types: [created]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-15
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_15.4.app/Contents/Developer
+      
+      - name: Verify Xcode
+        run: xcodebuild -version
+      
+      - name: Install XcodeGen
+        run: |
+          which xcodegen || brew install xcodegen || {
+            curl -o /tmp/xcodegen.zip https://github.com/youtype/xcodegen/releases/download/v2.40.0/xcodegen-2.40.0-mac-x86_64.zip
+            unzip -o /tmp/xcodegen.zip -d /tmp
+            sudo mv /tmp/xcodegen /usr/local/bin/xcodegen
+            chmod +x /usr/local/bin/xcodegen
+          }
+      
+      - name: Generate Xcode project
+        run: xcodegen generate
+      
+      - name: Build for iOS Simulator
+        run: |
+          xcodebuild -project ParsoIRC.xcodeproj \
+            -scheme ParsoIRC \
+            -configuration Debug \
+            -destination 'platform=iOS Simulator,name=iPhone 16' \
+            -derivedDataPath ./build \
+            build
+      
+      - name: Build for Device (TestFlight)
+        if: github.event_name == 'release'
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          TEAM_ID: ${{ secrets.TEAM_ID }}
+        run: |
+          # Create self-signed certificate for development
+          openssl genrsa -out ios_signing.key 2048
+          openssl req -new -key ios_signing.key -out ios_signing.csr -subj "/CN=iPhone Developer/C=US"
+          openssl x509 -req -days 7 -in ios_signing.csr -signkey ios_signing.key -out ios_signing.crt
+          openssl pkcs12 -inkey ios_signing.key -in ios_signing.crt -export -out certificate.p12 -password pass:signing123
+          
+          # Import to keychain
+          security create-keychain -p build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p build.keychain
+          security import certificate.p12 -P signing123 -A -t cert -f pkcs12 -k build.keychain
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k build.keychain build.keychain
+          
+          # Build
+          xcodebuild -project ParsoIRC.xcodeproj \
+            -scheme ParsoIRC \
+            -configuration Release \
+            -archivePath build/ParsoIRC.xcarchive \
+            -codeSignIdentity "Apple Development" \
+            CODE_SIGN_IDENTITY="Apple Development" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            archive
+          
+          # Export IPA
+          xcodebuild -exportArchive \
+            -archivePath build/ParsoIRC.xcarchive \
+            -exportPath output \
+            -exportOptionsPlist ExportOptions.plist
+      
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: ParsoIRC-Build
+          path: build/ParsoIRC.xcarchive
+          retention-days: 7
+      
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        if: github.event_name == 'release'
+        with:
+          name: ParsoIRC-IPA
+          path: output/ParsoIRC.ipa
+
+  test:
+    runs-on: macos-15
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_15.4.app/Contents/Developer
+      
+      - name: Run Tests
+        run: |
+          xcodegen generate
+          xcodebuild test -project ParsoIRC.xcodeproj \
+            -scheme ParsoIRC \
+            -destination 'platform=iOS Simulator,name=iPhone 16' \
+            -derivedDataPath ./test_build
