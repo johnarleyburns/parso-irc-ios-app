@@ -49,9 +49,6 @@ jobs:
       - name: Generate Xcode project
         run: xcodegen generate
       
-      - name: Download iOS Platform
-        run: xcodebuild -downloadPlatform iOS -buildVersion 18.2
-      
       - name: Build for iOS Device
         env:
           TEAM_ID: ${{ secrets.TEAM_ID }}
