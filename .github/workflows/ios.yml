@@ -10,15 +10,17 @@ on:
       build_type:
         description: 'Build Type'
         required: true
-        default: 'simulator'
+        default: 'both'
         type: choice
         options:
+          - both
           - simulator
           - testflight
 
 jobs:
-  build:
+  simulator-build:
     runs-on: macos-15
+    if: github.event_name != 'workflow_dispatch' || github.inputs.build_type == 'both' || github.inputs.build_type == 'simulator'
     
     steps:
       - name: Checkout
@@ -43,20 +45,105 @@ jobs:
         run: xcodebuild -downloadPlatform iOS 2>/dev/null || true
       
       - name: Build for iOS Simulator
-        if: github.event_name != 'release' && (github.inputs.build_type != 'testflight' || github.inputs.build_type == '')
         run: |
           xcodebuild -project ParsoIRC.xcodeproj \
             -scheme ParsoIRC \
             -configuration Debug \
-            -destination 'generic/platform=iOS Simulator' \
-            -derivedDataPath ./build \
-            CODE_SIGNING_ALLOWED=NO \
-            build 2>&1 | tail -50
+            -destination 'platform=iOS Simulator,name=iPhone 16' \
+            build
       
-      - name: Upload Simulator Build
-        if: github.event_name != 'release' && (github.inputs.build_type != 'testflight' || github.inputs.build_type == '')
-        uses: actions/upload-artifact@v4
-        with:
-          name: ParsoIRC-Simulator-Build
-          path: build/Build/Products/Debug-iphonesimulator/ParsoIRC.xcarchive
-          retention-days: 7
+      - name: Run Tests
+        run: |
+          xcodebuild test -project ParsoIRC.xcodeproj \
+            -scheme ParsoIRC \
+            -configuration Debug \
+            -destination 'platform=iOS Simulator,name=iPhone 16'
+  
+  testflight-build:
+    runs-on: macos-15
+    needs: simulator-build
+    if: github.event_name != 'workflow_dispatch' || github.inputs.build_type == 'both' || github.inputs.build_type == 'testflight'
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Select Xcode
+        run: |
+          if [ -d "/Applications/Xcode_16.app" ]; then
+            sudo xcode-select -s /Applications/Xcode_16.app/Contents/Developer
+          fi
+      
+      - name: Import Certificate
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: |
+          # Create temporary keychain
+          security create-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
+          security set-keychain-settings -lut 21600 build.keychain
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
+          
+          # Decode certificate
+          echo -n "$APPLE_CERTIFICATE" | base64 --decode -o certificate.p12
+          
+          # Import certificate
+          security import certificate.p12 -P "$APPLE_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k build.keychain
+          security set-keychain-settings -lut 21600 build.keychain
+      
+      - name: Import Provisioning Profile
+        env:
+          PROVISIONING_PROFILE_BASE64: ${{ secrets.PROVISIONING_PROFILE_BASE64 }}
+          PROFILE_PATH: "$HOME/Library/MobileDevice/Provisioning Profiles/ParsoIRC.mobileprovision"
+        run: |
+          mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
+          echo -n "$PROVISIONING_PROFILE_BASE64" | base64 --decode -o "$PROFILE_PATH"
+      
+      - name: Install XcodeGen
+        run: |
+          curl -sL https://github.com/yonaskolb/XcodeGen/releases/download/2.45.3/xcodegen.zip -o xcodegen.zip
+          unzip -o xcodegen.zip
+          echo "${GITHUB_WORKSPACE}/xcodegen/bin" >> $GITHUB_PATH
+      
+      - name: Generate Xcode project
+        run: xcodegen generate
+      
+      - name: Build for iOS Device (TestFlight)
+        env:
+          TEAM_ID: ${{ secrets.TEAM_ID }}
+        run: |
+          xcodebuild -project ParsoIRC.xcodeproj \
+            -scheme ParsoIRC \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            CODE_SIGN_IDENTITY="-" \
+            CODE_SIGNING_REQUIRED=YES \
+            CODE_SIGNING_ALLOWED=YES \
+            PROVISIONING_PROFILE_SPECIFIER="Parso IRC" \
+            DEVELOPMENT_TEAM="$TEAM_ID" \
+            build
+      
+      - name: Export IPA
+        run: |
+          xcodebuild -exportArchive \
+            -archivePath build/Build/Products/Release-iphoneos/ParsoIRC.xcarchive \
+            -exportPath output \
+            -exportOptionsPlist ExportOptions.plist
+      
+      - name: Upload to TestFlight
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          TEAM_ID: ${{ secrets.TEAM_ID }}
+        run: |
+          xcrun altool --upload-app -f output/ParsoIRC.ipa \
+            -t ios \
+            -u "$APPLE_ID" \
+            -p "$APPLE_APP_SPECIFIC_PASSWORD" \
+            --team-id "$TEAM_ID"
+      
+      - name: Cleanup Keychain
+        if: always()
+        run: |
+          security delete-keychain build.keychain
