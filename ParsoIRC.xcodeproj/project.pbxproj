@@ -1,0 +1,606 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		05EAD9A1ACAC39B8D4373EED /* ChannelSettingsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81357BD4B36593226304E3AF /* ChannelSettingsSheet.swift */; };
+		1B57CBE65BEE6BE1B40F7361 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0AEC100EA46754BA3DC48FD3 /* SettingsView.swift */; };
+		3C9948BF220EE23FC86B23C5 /* IRCModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A9E13316FC1467F04022F5D /* IRCModels.swift */; };
+		3E6D10EADC1868FE5738C162 /* InputBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 437877A533701F4BF0DA1D9E /* InputBarView.swift */; };
+		3F9394E9CC4763FB472B9737 /* WatchManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA310C148C6DA8646DA945E8 /* WatchManager.swift */; };
+		3FAC22CD2585F5A3DBC58FB6 /* ConversationListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9DE41DE6C169810BB0E00698 /* ConversationListView.swift */; };
+		45D7365861655CD2765099CF /* NickColorGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D152909FA8E1CD2ECEF3561 /* NickColorGenerator.swift */; };
+		45F43AFC6AC55F724F611E57 /* ParsoIRCApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4B86422E8E405D0FE1027DA /* ParsoIRCApp.swift */; };
+		4AC9FA90B6E5295CD4E9D31A /* AvatarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7812F2E85A5555DB7AE4EB2 /* AvatarView.swift */; };
+		4FA80375CA263B9EF1A3D7EF /* MessageBubbleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BBBAA6732A32F014C0ED97A /* MessageBubbleView.swift */; };
+		58C03883AC45349DE7B6C305 /* MemberListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A17575386AA56E09FEE1287 /* MemberListView.swift */; };
+		58CE7EF9A534A43295AF27D3 /* TypingIndicatorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4AF4079211793DC5787E4C8F /* TypingIndicatorView.swift */; };
+		64496229C1B0D6032BB28028 /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB3B7B159E6462218B722671 /* ChatView.swift */; };
+		662E7D2E9CF93D494590DBCD /* IRCClientManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30CE7E42840DAD51D6330A76 /* IRCClientManager.swift */; };
+		6B66AEE6B038A0958C16D607 /* SQLite in Frameworks */ = {isa = PBXBuildFile; productRef = B048C700B0D1A78ADC51D3D4 /* SQLite */; };
+		6E6160E878A6124C890E4B5E /* IRCMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9002F82EFDDAFCFC614256F9 /* IRCMessage.swift */; };
+		74164C9BD427A53E32373376 /* Date+Formatting.swift in Sources */ = {isa = PBXBuildFile; fileRef = 090EFD258A710D226C62715D /* Date+Formatting.swift */; };
+		82B42B20306C0331C985A16F /* Color+Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07E7D04948ED236B84CB1A82 /* Color+Theme.swift */; };
+		897BD6D0A5AAE3B77ED59D79 /* ChatViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = ECAFA7366CA3C912F8B4E882 /* ChatViewModel.swift */; };
+		8EA0BBA948FC671C1BD17516 /* DateSeparatorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 69265E0EA6072F27008C69F3 /* DateSeparatorView.swift */; };
+		9F31103137D5A38CD5D44EDC /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 616CD3F176E8DCDFCBD24F68 /* Assets.xcassets */; };
+		AE8FAACD40CF8FB77DFD72CA /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79F387B1DB41E7CD8828DC5B /* ContentView.swift */; };
+		CC61408D85A9DD3DCC1CA735 /* NotificationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39A23300227F01ED77CBCC0F /* NotificationManager.swift */; };
+		D0C66AD97DB59F93B9AAB5CF /* DatabaseManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = C73FCAD8E5E67FB43D95A3CE /* DatabaseManager.swift */; };
+		D54B619A49E39B79F8BFBEEC /* ServerListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2872F9FFB33A997A689F144 /* ServerListView.swift */; };
+		DD2FB70605495937CC351F19 /* AddServerSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0E74ECA16340EE8BF5DE1D6 /* AddServerSheet.swift */; };
+		E636F1F7F534262C2F61E994 /* HapticManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68A8C90FA376CF1F00EE1B8A /* HapticManager.swift */; };
+		ED86B3C872073D3606376341 /* IRCClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADD9A6C8AD8D97A1C8D31013 /* IRCClient.swift */; };
+		FC491AC7AF49B40AB8AC79CA /* IRCError.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F902D39A7FB938CE624E1B3 /* IRCError.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		07E7D04948ED236B84CB1A82 /* Color+Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Color+Theme.swift"; sourceTree = "<group>"; };
+		090EFD258A710D226C62715D /* Date+Formatting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Date+Formatting.swift"; sourceTree = "<group>"; };
+		0AEC100EA46754BA3DC48FD3 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		30CE7E42840DAD51D6330A76 /* IRCClientManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IRCClientManager.swift; sourceTree = "<group>"; };
+		3523F453C71AD0DE752512DD /* ParsoIRC.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = ParsoIRC.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		39A23300227F01ED77CBCC0F /* NotificationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationManager.swift; sourceTree = "<group>"; };
+		437877A533701F4BF0DA1D9E /* InputBarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InputBarView.swift; sourceTree = "<group>"; };
+		4AF4079211793DC5787E4C8F /* TypingIndicatorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TypingIndicatorView.swift; sourceTree = "<group>"; };
+		4BBBAA6732A32F014C0ED97A /* MessageBubbleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageBubbleView.swift; sourceTree = "<group>"; };
+		616CD3F176E8DCDFCBD24F68 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		68A8C90FA376CF1F00EE1B8A /* HapticManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HapticManager.swift; sourceTree = "<group>"; };
+		69265E0EA6072F27008C69F3 /* DateSeparatorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DateSeparatorView.swift; sourceTree = "<group>"; };
+		6A17575386AA56E09FEE1287 /* MemberListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemberListView.swift; sourceTree = "<group>"; };
+		79F387B1DB41E7CD8828DC5B /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		7D152909FA8E1CD2ECEF3561 /* NickColorGenerator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NickColorGenerator.swift; sourceTree = "<group>"; };
+		81357BD4B36593226304E3AF /* ChannelSettingsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChannelSettingsSheet.swift; sourceTree = "<group>"; };
+		8A9E13316FC1467F04022F5D /* IRCModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IRCModels.swift; sourceTree = "<group>"; };
+		9002F82EFDDAFCFC614256F9 /* IRCMessage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IRCMessage.swift; sourceTree = "<group>"; };
+		9DE41DE6C169810BB0E00698 /* ConversationListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationListView.swift; sourceTree = "<group>"; };
+		9F902D39A7FB938CE624E1B3 /* IRCError.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IRCError.swift; sourceTree = "<group>"; };
+		A2872F9FFB33A997A689F144 /* ServerListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerListView.swift; sourceTree = "<group>"; };
+		A4B86422E8E405D0FE1027DA /* ParsoIRCApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ParsoIRCApp.swift; sourceTree = "<group>"; };
+		ADD9A6C8AD8D97A1C8D31013 /* IRCClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IRCClient.swift; sourceTree = "<group>"; };
+		C73FCAD8E5E67FB43D95A3CE /* DatabaseManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DatabaseManager.swift; sourceTree = "<group>"; };
+		DB3B7B159E6462218B722671 /* ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatView.swift; sourceTree = "<group>"; };
+		EA310C148C6DA8646DA945E8 /* WatchManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchManager.swift; sourceTree = "<group>"; };
+		ECAFA7366CA3C912F8B4E882 /* ChatViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatViewModel.swift; sourceTree = "<group>"; };
+		F0E74ECA16340EE8BF5DE1D6 /* AddServerSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddServerSheet.swift; sourceTree = "<group>"; };
+		F7812F2E85A5555DB7AE4EB2 /* AvatarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AvatarView.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		E981F7907B4AB13BA3910179 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				6B66AEE6B038A0958C16D607 /* SQLite in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		0CA26F0C6288F7426D7EAE49 /* Features */ = {
+			isa = PBXGroup;
+			children = (
+				A1AFC13A51A0E1B7C95AFBDE /* Chat */,
+				3A79A1857EE6E20257150808 /* Conversations */,
+				81136C3DDE3BC3C174ADB0BC /* Members */,
+				5D670B4EC170BF2281FAE5FC /* Servers */,
+				3572CB7B17147C5A69E3974F /* Settings */,
+			);
+			path = Features;
+			sourceTree = "<group>";
+		};
+		181E83AEAD7959B5E40CD59A /* Extensions */ = {
+			isa = PBXGroup;
+			children = (
+				07E7D04948ED236B84CB1A82 /* Color+Theme.swift */,
+				090EFD258A710D226C62715D /* Date+Formatting.swift */,
+			);
+			path = Extensions;
+			sourceTree = "<group>";
+		};
+		3572CB7B17147C5A69E3974F /* Settings */ = {
+			isa = PBXGroup;
+			children = (
+				0AEC100EA46754BA3DC48FD3 /* SettingsView.swift */,
+			);
+			path = Settings;
+			sourceTree = "<group>";
+		};
+		3A79A1857EE6E20257150808 /* Conversations */ = {
+			isa = PBXGroup;
+			children = (
+				9DE41DE6C169810BB0E00698 /* ConversationListView.swift */,
+			);
+			path = Conversations;
+			sourceTree = "<group>";
+		};
+		3B10AC55765CAEB748F19FB6 /* Storage */ = {
+			isa = PBXGroup;
+			children = (
+				C73FCAD8E5E67FB43D95A3CE /* DatabaseManager.swift */,
+			);
+			path = Storage;
+			sourceTree = "<group>";
+		};
+		43567211C76EDDEFEF01E2D1 /* Preview Content */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = "Preview Content";
+			sourceTree = "<group>";
+		};
+		53AAADF1DD7A3FB8D6CACFE5 /* Core */ = {
+			isa = PBXGroup;
+			children = (
+				720871EA3F221C63BB48E3C0 /* IRC */,
+				C783F6C396E166022B76A2A3 /* Models */,
+				3B10AC55765CAEB748F19FB6 /* Storage */,
+			);
+			path = Core;
+			sourceTree = "<group>";
+		};
+		5D3B2A55E40473FF45984FCD /* ParsoIRC */ = {
+			isa = PBXGroup;
+			children = (
+				78121EF8A6F2255886AB348A /* App */,
+				53AAADF1DD7A3FB8D6CACFE5 /* Core */,
+				0CA26F0C6288F7426D7EAE49 /* Features */,
+				D5B1C9BB52A0901620550DD8 /* Resources */,
+				C1BD8718912D3134CB8DA581 /* Shared */,
+			);
+			path = ParsoIRC;
+			sourceTree = "<group>";
+		};
+		5D670B4EC170BF2281FAE5FC /* Servers */ = {
+			isa = PBXGroup;
+			children = (
+				F0E74ECA16340EE8BF5DE1D6 /* AddServerSheet.swift */,
+				A2872F9FFB33A997A689F144 /* ServerListView.swift */,
+			);
+			path = Servers;
+			sourceTree = "<group>";
+		};
+		602715094E29323AEEF34B52 = {
+			isa = PBXGroup;
+			children = (
+				5D3B2A55E40473FF45984FCD /* ParsoIRC */,
+				985E89B7E6AAE7BB85AF4954 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		6C0E1EC4D79F7768B11BA9DE /* Components */ = {
+			isa = PBXGroup;
+			children = (
+				F7812F2E85A5555DB7AE4EB2 /* AvatarView.swift */,
+			);
+			path = Components;
+			sourceTree = "<group>";
+		};
+		720871EA3F221C63BB48E3C0 /* IRC */ = {
+			isa = PBXGroup;
+			children = (
+				ADD9A6C8AD8D97A1C8D31013 /* IRCClient.swift */,
+				30CE7E42840DAD51D6330A76 /* IRCClientManager.swift */,
+				9F902D39A7FB938CE624E1B3 /* IRCError.swift */,
+				9002F82EFDDAFCFC614256F9 /* IRCMessage.swift */,
+				39A23300227F01ED77CBCC0F /* NotificationManager.swift */,
+				EA310C148C6DA8646DA945E8 /* WatchManager.swift */,
+			);
+			path = IRC;
+			sourceTree = "<group>";
+		};
+		78121EF8A6F2255886AB348A /* App */ = {
+			isa = PBXGroup;
+			children = (
+				79F387B1DB41E7CD8828DC5B /* ContentView.swift */,
+				A4B86422E8E405D0FE1027DA /* ParsoIRCApp.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		81136C3DDE3BC3C174ADB0BC /* Members */ = {
+			isa = PBXGroup;
+			children = (
+				6A17575386AA56E09FEE1287 /* MemberListView.swift */,
+			);
+			path = Members;
+			sourceTree = "<group>";
+		};
+		985E89B7E6AAE7BB85AF4954 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				3523F453C71AD0DE752512DD /* ParsoIRC.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		A1AFC13A51A0E1B7C95AFBDE /* Chat */ = {
+			isa = PBXGroup;
+			children = (
+				81357BD4B36593226304E3AF /* ChannelSettingsSheet.swift */,
+				DB3B7B159E6462218B722671 /* ChatView.swift */,
+				ECAFA7366CA3C912F8B4E882 /* ChatViewModel.swift */,
+				69265E0EA6072F27008C69F3 /* DateSeparatorView.swift */,
+				437877A533701F4BF0DA1D9E /* InputBarView.swift */,
+				4BBBAA6732A32F014C0ED97A /* MessageBubbleView.swift */,
+				4AF4079211793DC5787E4C8F /* TypingIndicatorView.swift */,
+			);
+			path = Chat;
+			sourceTree = "<group>";
+		};
+		A74A4A94509CDB44BC6C98C2 /* Utilities */ = {
+			isa = PBXGroup;
+			children = (
+				68A8C90FA376CF1F00EE1B8A /* HapticManager.swift */,
+				7D152909FA8E1CD2ECEF3561 /* NickColorGenerator.swift */,
+			);
+			path = Utilities;
+			sourceTree = "<group>";
+		};
+		C1BD8718912D3134CB8DA581 /* Shared */ = {
+			isa = PBXGroup;
+			children = (
+				6C0E1EC4D79F7768B11BA9DE /* Components */,
+				181E83AEAD7959B5E40CD59A /* Extensions */,
+				A74A4A94509CDB44BC6C98C2 /* Utilities */,
+			);
+			path = Shared;
+			sourceTree = "<group>";
+		};
+		C783F6C396E166022B76A2A3 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				8A9E13316FC1467F04022F5D /* IRCModels.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		D5B1C9BB52A0901620550DD8 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				616CD3F176E8DCDFCBD24F68 /* Assets.xcassets */,
+				43567211C76EDDEFEF01E2D1 /* Preview Content */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		4D75E43C5C2DF2D555182C49 /* ParsoIRC */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C940645DC6E205C64304D9B1 /* Build configuration list for PBXNativeTarget "ParsoIRC" */;
+			buildPhases = (
+				B2AEBC20740D1F1F1CFF8C78 /* Sources */,
+				417FCB8D3BF76F2722F98FA6 /* Resources */,
+				E981F7907B4AB13BA3910179 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = ParsoIRC;
+			packageProductDependencies = (
+				B048C700B0D1A78ADC51D3D4 /* SQLite */,
+			);
+			productName = ParsoIRC;
+			productReference = 3523F453C71AD0DE752512DD /* ParsoIRC.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		B3EF558F13059E376E1FFE55 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1640;
+				TargetAttributes = {
+					4D75E43C5C2DF2D555182C49 = {
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = 87EFD93D9A530C4E043FE1FF /* Build configuration list for PBXProject "ParsoIRC" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 602715094E29323AEEF34B52;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				2F5407EB65871621C3BDE6C2 /* XCRemoteSwiftPackageReference "SQLite.swift" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = 985E89B7E6AAE7BB85AF4954 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				4D75E43C5C2DF2D555182C49 /* ParsoIRC */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		417FCB8D3BF76F2722F98FA6 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				9F31103137D5A38CD5D44EDC /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		B2AEBC20740D1F1F1CFF8C78 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				DD2FB70605495937CC351F19 /* AddServerSheet.swift in Sources */,
+				4AC9FA90B6E5295CD4E9D31A /* AvatarView.swift in Sources */,
+				05EAD9A1ACAC39B8D4373EED /* ChannelSettingsSheet.swift in Sources */,
+				64496229C1B0D6032BB28028 /* ChatView.swift in Sources */,
+				897BD6D0A5AAE3B77ED59D79 /* ChatViewModel.swift in Sources */,
+				82B42B20306C0331C985A16F /* Color+Theme.swift in Sources */,
+				AE8FAACD40CF8FB77DFD72CA /* ContentView.swift in Sources */,
+				3FAC22CD2585F5A3DBC58FB6 /* ConversationListView.swift in Sources */,
+				D0C66AD97DB59F93B9AAB5CF /* DatabaseManager.swift in Sources */,
+				74164C9BD427A53E32373376 /* Date+Formatting.swift in Sources */,
+				8EA0BBA948FC671C1BD17516 /* DateSeparatorView.swift in Sources */,
+				E636F1F7F534262C2F61E994 /* HapticManager.swift in Sources */,
+				ED86B3C872073D3606376341 /* IRCClient.swift in Sources */,
+				662E7D2E9CF93D494590DBCD /* IRCClientManager.swift in Sources */,
+				FC491AC7AF49B40AB8AC79CA /* IRCError.swift in Sources */,
+				6E6160E878A6124C890E4B5E /* IRCMessage.swift in Sources */,
+				3C9948BF220EE23FC86B23C5 /* IRCModels.swift in Sources */,
+				3E6D10EADC1868FE5738C162 /* InputBarView.swift in Sources */,
+				58C03883AC45349DE7B6C305 /* MemberListView.swift in Sources */,
+				4FA80375CA263B9EF1A3D7EF /* MessageBubbleView.swift in Sources */,
+				45D7365861655CD2765099CF /* NickColorGenerator.swift in Sources */,
+				CC61408D85A9DD3DCC1CA735 /* NotificationManager.swift in Sources */,
+				45F43AFC6AC55F724F611E57 /* ParsoIRCApp.swift in Sources */,
+				D54B619A49E39B79F8BFBEEC /* ServerListView.swift in Sources */,
+				1B57CBE65BEE6BE1B40F7361 /* SettingsView.swift in Sources */,
+				58CE7EF9A534A43295AF27D3 /* TypingIndicatorView.swift in Sources */,
+				3F9394E9CC4763FB472B9737 /* WatchManager.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		4D029EA9F3D8DA6A92F21DDF /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGNING_ALLOWED = NO;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.9;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		8F225E18F6C8D626A37ED1D1 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "Parso IRC";
+				INFOPLIST_KEY_CFBundleShortVersionString = 1.0.0;
+				INFOPLIST_KEY_CFBundleVersion = 1;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.parso.irc;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		9151DAAAACEEA6468CCE8A6E /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "Parso IRC";
+				INFOPLIST_KEY_CFBundleShortVersionString = 1.0.0;
+				INFOPLIST_KEY_CFBundleVersion = 1;
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.parso.irc;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		ADA74E1339FB52A55AF595DC /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGNING_ALLOWED = YES;
+				CODE_SIGNING_REQUIRED = YES;
+				CODE_SIGN_IDENTITY = "-";
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = UIInterfaceOrientationPortrait;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.9;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		87EFD93D9A530C4E043FE1FF /* Build configuration list for PBXProject "ParsoIRC" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				4D029EA9F3D8DA6A92F21DDF /* Debug */,
+				ADA74E1339FB52A55AF595DC /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		C940645DC6E205C64304D9B1 /* Build configuration list for PBXNativeTarget "ParsoIRC" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				8F225E18F6C8D626A37ED1D1 /* Debug */,
+				9151DAAAACEEA6468CCE8A6E /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		2F5407EB65871621C3BDE6C2 /* XCRemoteSwiftPackageReference "SQLite.swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/stephencelis/SQLite.swift";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.15.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		B048C700B0D1A78ADC51D3D4 /* SQLite */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 2F5407EB65871621C3BDE6C2 /* XCRemoteSwiftPackageReference "SQLite.swift" */;
+			productName = SQLite;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = B3EF558F13059E376E1FFE55 /* Project object */;
+}
