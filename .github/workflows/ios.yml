@@ -1,5 +1,4 @@
 name: iOS Build & TestFlight
-
 on:
   push:
     branches: [main]
@@ -10,16 +9,19 @@ on:
 jobs:
   testflight-build:
     runs-on: macos-15
-    
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      
-      - name: Select Xcode
-        uses: maxim-lobanov/setup-xcode@v1
-        with:
-          xcode-version: '16.2'
-      
+
+      - name: Select Xcode 16.4
+        run: |
+          sudo xcode-select -s /Applications/Xcode_16.4.app
+          xcodebuild -version
+
+      - name: Accept Xcode License
+        run: sudo xcodebuild -license accept
+
       - name: Import Certificate
         env:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
@@ -27,35 +29,47 @@ jobs:
           KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
         run: |
           security create-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
-          security set-keychain-settings -lut 21600 build.keychain
+          security default-keychain -s build.keychain
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
-          echo -n "$APPLE_CERTIFICATE" | base64 --decode -o certificate.p12
-          security import certificate.p12 -P "$APPLE_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k build.keychain
           security set-keychain-settings -lut 21600 build.keychain
-      
+          echo -n "$APPLE_CERTIFICATE" | base64 --decode -o certificate.p12
+          security import certificate.p12 \
+            -P "$APPLE_CERTIFICATE_PASSWORD" \
+            -A -t cert -f pkcs12 \
+            -k build.keychain
+          security set-key-partition-list \
+            -S apple-tool:,apple: \
+            -s -k "$KEYCHAIN_PASSWORD" build.keychain
+
       - name: Import Provisioning Profile
         env:
           PROVISIONING_PROFILE_BASE64: ${{ secrets.PROVISIONING_PROFILE_BASE64 }}
         run: |
           mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
-          echo -n "$PROVISIONING_PROFILE_BASE64" | base64 --decode -o "$HOME/Library/MobileDevice/Provisioning Profiles/ParsoIRC.mobileprovision"
-      
+          echo -n "$PROVISIONING_PROFILE_BASE64" | base64 --decode \
+            -o "$HOME/Library/MobileDevice/Provisioning Profiles/ParsoIRC.mobileprovision"
+
       - name: Install XcodeGen
         run: |
-          curl -sL https://github.com/yonaskolb/XcodeGen/releases/download/2.45.3/xcodegen.zip -o xcodegen.zip
+          curl -sL https://github.com/yonaskolb/XcodeGen/releases/download/2.45.3/xcodegen.zip \
+            -o xcodegen.zip
           unzip -o xcodegen.zip
           echo "${GITHUB_WORKSPACE}/xcodegen/bin" >> $GITHUB_PATH
-      
-      - name: Generate Xcode project
+
+      - name: Generate Xcode Project
         run: xcodegen generate
-      
-      - name: Initialize Xcode
-        run: sudo xcodebuild -runFirstLaunch
-      
-      - name: Download iOS Platform
-        run: xcodebuild -downloadPlatform iOS -buildVersion 18.1 || true
-      
-      - name: Build for iOS Device
+
+      - name: Run Tests
+        run: |
+          xcodebuild test \
+            -project ParsoIRC.xcodeproj \
+            -scheme ParsoIRC \
+            -configuration Debug \
+            -destination 'platform=iOS Simulator,name=iPhone 16,OS=18.5' \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Archive
         env:
           TEAM_ID: ${{ secrets.TEAM_ID }}
         run: |
@@ -65,45 +79,31 @@ jobs:
             -configuration Release \
             -destination "generic/platform=iOS" \
             -archivePath ./build/ParsoIRC.xcarchive \
-            CODE_SIGN_IDENTITY="-" \
-            CODE_SIGNING_REQUIRED=YES \
-            CODE_SIGNING_ALLOWED=YES \
-            PROVISIONING_PROFILE_SPECIFIER="Parso IRC" \
-            DEVELOPMENT_TEAM="$TEAM_ID"
-      
-      - name: Run Tests
-        env:
-          TEAM_ID: ${{ secrets.TEAM_ID }}
-        run: |
-          xcodebuild test -project ParsoIRC.xcodeproj \
-            -scheme ParsoIRC \
-            -configuration Debug \
-            -destination 'generic/platform=iOS' \
-            CODE_SIGN_IDENTITY="-" \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGNING_ALLOWED=NO \
-            DEVELOPMENT_TEAM="$TEAM_ID"
-      
+            DEVELOPMENT_TEAM="$TEAM_ID" \
+            CODE_SIGN_STYLE=Manual \
+            CODE_SIGN_IDENTITY="iPhone Distribution" \
+            PROVISIONING_PROFILE_SPECIFIER="Parso IRC"
+
       - name: Export IPA
         run: |
           xcodebuild -exportArchive \
             -archivePath ./build/ParsoIRC.xcarchive \
-            -exportPath output \
+            -exportPath ./output \
             -exportOptionsPlist ExportOptions.plist
-      
+
       - name: Upload to TestFlight
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           TEAM_ID: ${{ secrets.TEAM_ID }}
         run: |
-          xcrun altool --upload-app -f output/ParsoIRC.ipa \
-            -t ios \
-            -u "$APPLE_ID" \
-            -p "$APPLE_APP_SPECIFIC_PASSWORD" \
+          xcrun altool --upload-app \
+            --file output/ParsoIRC.ipa \
+            --type ios \
+            --username "$APPLE_ID" \
+            --password "$APPLE_APP_SPECIFIC_PASSWORD" \
             --team-id "$TEAM_ID"
-      
+
       - name: Cleanup Keychain
         if: always()
-        run: |
-          security delete-keychain build.keychain
+        run: security delete-keychain build.keychain
