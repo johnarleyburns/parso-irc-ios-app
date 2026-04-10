@@ -249,7 +249,7 @@ actor IRCClient {
         case "PART":
             let channel = message.parameters.first ?? ""
             let nick = message.source?.nick ?? ""
-            let partMessage = message.parameters.count > 1 ? message.parameters[1] : nil
+            let partMessage: String? = message.parameters.count > 1 ? message.parameters[1] : nil
             await MainActor.run {
                 self.onPart?(channel, nick, partMessage)
             }
@@ -296,8 +296,9 @@ actor IRCClient {
 
         case "ERROR":
             let errorMsg = message.parameters.joined(separator: " ")
+            let ircError = IRCError.connectionFailed(errorMsg)
             await MainActor.run {
-                self.onError?(IRCError.connectionFailed(errorMsg))
+                self.onError?(ircError)
             }
 
         default:
