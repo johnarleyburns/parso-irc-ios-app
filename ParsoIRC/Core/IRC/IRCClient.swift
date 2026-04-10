@@ -11,26 +11,22 @@ actor IRCClient {
     private let queue = DispatchQueue(label: "irc.client", qos: .userInitiated)
 
     // Event handlers (IRCKit-compatible API)
-    var onWelcome: ((String) -> Void)?
-    var onDisconnect: (() -> Void)?
-    var onError: ((Error) -> Void)?
-    var onMessage: ((IRCMessage) -> Void)?
-    var onJoin: ((String, String) -> Void)?
-    var onPart: ((String, String, String?) -> Void)?
-    var onQuit: ((String, String?) -> Void)?
-    var onNickChange: ((String, String) -> Void)?
-    var onTopicChange: ((String, String, String) -> Void)?
-    var onNamesList: ((String, [String]) -> Void)?
+    nonisolated var onWelcome: ((String) -> Void)?
+    nonisolated var onDisconnect: (() -> Void)?
+    nonisolated var onError: ((Error) -> Void)?
+    nonisolated var onMessage: ((IRCMessage) -> Void)?
+    nonisolated var onJoin: ((String, String) -> Void)?
+    nonisolated var onPart: ((String, String, String?) -> Void)?
+    nonisolated var onQuit: ((String, String?) -> Void)?
+    nonisolated var onNickChange: ((String, String) -> Void)?
+    nonisolated var onTopicChange: ((String, String, String) -> Void)?
+    nonisolated var onNamesList: ((String, [String]) -> Void)?
 
     private var readStream: InputStream?
     private var writeStream: OutputStream?
     private var useTLS = false
 
     init() {}
-
-    deinit {
-        Task { await disconnect() }
-    }
 
     // MARK: - Connection
 
@@ -114,12 +110,14 @@ actor IRCClient {
         case .ready:
             isConnected = true
         case .failed(let error):
-            onError?(error)
-            Task { await disconnect() }
+            Task { @MainActor in
+                self.onError?(error)
+            }
+            await disconnect()
         case .cancelled:
             isConnected = false
             Task { @MainActor in
-                onDisconnect?()
+                self.onDisconnect?()
             }
         default:
             break
@@ -138,8 +136,9 @@ actor IRCClient {
 
         connection.send(content: data, completion: .contentProcessed { error in
             if let error = error {
+                let err = error
                 Task { @MainActor in
-                    self.onError?(error)
+                    self.onError?(err)
                 }
             }
         })

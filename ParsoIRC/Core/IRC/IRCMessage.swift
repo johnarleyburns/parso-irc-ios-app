@@ -55,6 +55,8 @@ struct IRCTags: Hashable, Sendable, ExpressibleByDictionaryLiteral {
     typealias Value = String
 
     private var storage: [String: String]
+    
+    var dictionary: [String: String] { storage }
 
     init(dictionaryLiteral elements: (String, String)...) {
         var dict: [String: String] = [:]
@@ -160,8 +162,8 @@ struct IRCMessage: Sendable {
     func toString() -> String {
         var result = ""
 
-        if let tags = tags, !tags.storage.isEmpty {
-            let tagsString = tags.storage.map { "\($0.key)=\($0.value)" }.joined(separator: ";")
+        if let tags = tags, !tags.dictionary.isEmpty {
+            let tagsString = tags.dictionary.map { "\($0.key)=\($0.value)" }.joined(separator: ";")
             result += "@\(tagsString) "
         }
 

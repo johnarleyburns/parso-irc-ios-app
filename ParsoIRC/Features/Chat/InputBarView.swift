@@ -34,7 +34,7 @@ struct InputBarView: View {
                     .lineLimit(1...5)
                     .frame(minHeight: minHeight, maxHeight: textHeight)
                     .focused($isFocused)
-                    .onChange(of: text) { _, newValue in
+                    .onChange(of: text) { newValue in
                         updateHeight(for: newValue)
                     }
             }

@@ -149,7 +149,7 @@ struct MemberCell: View {
         switch member.mode {
         case .operator_, .admin, .founder:
             return .red
-        case .voice:
+        case .voice, .halfop:
             return .green
         case .none:
             return .gray
