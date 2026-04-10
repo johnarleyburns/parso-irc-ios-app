@@ -37,10 +37,9 @@ jobs:
       - name: Import Provisioning Profile
         env:
           PROVISIONING_PROFILE_BASE64: ${{ secrets.PROVISIONING_PROFILE_BASE64 }}
-          PROFILE_PATH: "$HOME/Library/MobileDevice/Provisioning Profiles/ParsoIRC.mobileprovision"
         run: |
           mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
-          echo -n "$PROVISIONING_PROFILE_BASE64" | base64 --decode -o "$PROFILE_PATH"
+          echo -n "$PROVISIONING_PROFILE_BASE64" | base64 --decode -o "$HOME/Library/MobileDevice/Provisioning Profiles/ParsoIRC.mobileprovision"
       
       - name: Install XcodeGen
         run: |
