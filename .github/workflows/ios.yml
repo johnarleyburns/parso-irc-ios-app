@@ -33,11 +33,12 @@ jobs:
       - name: Install XcodeGen
         run: |
           if ! command -v xcodegen &> /dev/null; then
-            cd /tmp
-            curl -sL https://github.com/youtype/xcodegen/releases/download/v2.40.0/xcodegen-2.40.0-mac-x86_64.zip -o xcodegen.zip
-            unzip -o xcodegen.zip
-            sudo mv ./xcodegen /usr/local/bin/xcodegen 2>/dev/null || true
+            # Download binary directly instead of zip
+            curl -sL "https://github.com/youtype/xcodegen/releases/download/v2.40.0/xcodegen" -o /tmp/xcodegen
+            chmod +x /tmp/xcodegen
+            sudo mv /tmp/xcodegen /usr/local/bin/xcodegen || true
           fi
+          xcodegen --version || echo "XcodeGen not available, will try anyway"
       
       - name: Generate Xcode project
         run: xcodegen generate
@@ -81,11 +82,11 @@ jobs:
       - name: Install XcodeGen
         run: |
           if ! command -v xcodegen &> /dev/null; then
-            cd /tmp
-            curl -sL https://github.com/youtype/xcodegen/releases/download/v2.40.0/xcodegen-2.40.0-mac-x86_64.zip -o xcodegen.zip
-            unzip -o xcodegen.zip
-            sudo mv ./xcodegen /usr/local/bin/xcodegen 2>/dev/null || true
+            curl -sL "https://github.com/youtype/xcodegen/releases/download/v2.40.0/xcodegen" -o /tmp/xcodegen
+            chmod +x /tmp/xcodegen
+            sudo mv /tmp/xcodegen /usr/local/bin/xcodegen || true
           fi
+          xcodegen --version || echo "XcodeGen not available"
       
       - name: Generate project
         run: xcodegen generate
