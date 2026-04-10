@@ -31,14 +31,7 @@ jobs:
           fi
       
       - name: Install XcodeGen
-        run: |
-          if ! command -v xcodegen &> /dev/null; then
-            # Download binary directly instead of zip
-            curl -sL "https://github.com/youtype/xcodegen/releases/download/v2.40.0/xcodegen" -o /tmp/xcodegen
-            chmod +x /tmp/xcodegen
-            sudo mv /tmp/xcodegen /usr/local/bin/xcodegen || true
-          fi
-          xcodegen --version || echo "XcodeGen not available, will try anyway"
+        uses: alexandria-oss/setup-xcodegen@v1
       
       - name: Generate Xcode project
         run: xcodegen generate
@@ -64,37 +57,3 @@ jobs:
           name: ParsoIRC-Simulator-Build
           path: build/ParsoIRC.xcarchive
           retention-days: 7
-
-  test:
-    runs-on: macos-15
-    needs: build
-    if: false  # Disabled for now
-    
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Select Xcode
-        run: |
-          if [ -d "/Applications/Xcode_16.app" ]; then
-            sudo xcode-select -s /Applications/Xcode_16.app/Contents/Developer
-          fi
-      
-      - name: Install XcodeGen
-        run: |
-          if ! command -v xcodegen &> /dev/null; then
-            curl -sL "https://github.com/youtype/xcodegen/releases/download/v2.40.0/xcodegen" -o /tmp/xcodegen
-            chmod +x /tmp/xcodegen
-            sudo mv /tmp/xcodegen /usr/local/bin/xcodegen || true
-          fi
-          xcodegen --version || echo "XcodeGen not available"
-      
-      - name: Generate project
-        run: xcodegen generate
-      
-      - name: Run Tests
-        run: |
-          xcodebuild test -project ParsoIRC.xcodeproj \
-            -scheme ParsoIRC \
-            -destination 'generic/platform=iOS Simulator' \
-            -derivedDataPath ./test_build \
-            CODE_SIGNING_ALLOWED=NO 2>&1 | tail -30
