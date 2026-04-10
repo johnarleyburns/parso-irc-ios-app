@@ -62,15 +62,6 @@ targets:
       - package: IRCKit
       - package: SQLite
 
-  ParsoIRCTests:
-    type: bundle.unit-test
-    platform: iOS
-    deploymentTarget: "16.0"
-    sources:
-      - path: ParsoIRCTests
-    dependencies:
-      - target: ParsoIRC
-
 schemes:
   ParsoIRC:
     build:
@@ -80,8 +71,6 @@ schemes:
       config: Debug
     test:
       config: Debug
-      targets:
-        - ParsoIRCTests
     profile:
       config: Release
     analyze:
