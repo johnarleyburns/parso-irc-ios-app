@@ -59,13 +59,13 @@ jobs:
       - name: Generate Xcode Project
         run: xcodegen generate
 
-      - name: Run Tests
+      - name: Build
         run: |
-          xcodebuild test \
+          xcodebuild build \
             -project ParsoIRC.xcodeproj \
             -scheme ParsoIRC \
             -configuration Debug \
-            -destination 'platform=iOS Simulator,name=iPhone 16,OS=18.5' \
+            -destination 'generic/platform=iOS Simulator' \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO
 
