@@ -70,17 +70,23 @@ jobs:
       - name: Find available simulator
         id: simulator
         run: |
-          # Get first available iPhone simulator (not shutdown)
-          SIMULATOR=$(xcrun simctl list devices available | grep -E "iPhone" | grep -v "Shutdown" | head -1 | awk -F'(' '{print $1}' | xargs)
+          # List available simulators and find a booted iPhone
+          xcrun simctl list devices available | head -30
+          # Try to find any available iPhone simulator
+          SIMULATOR=$(xcrun simctl list devices available 2>/dev/null | grep -E "iPhone" | grep -v "Shutdown" | head -3 | tail -1)
           if [ -z "$SIMULATOR" ]; then
-            SIMULATOR=$(xcrun simctl list devices available | grep -E "iPhone|iPad" | grep -v "Shutdown" | head -1 | awk -F'(' '{print $1}' | xargs)
+            SIMULATOR=$(xcrun simctl list devices available 2>/dev/null | grep -E "iPhone|iPad" | head -1)
           fi
-          echo "name=$SIMULATOR" >> $GITHUB_OUTPUT
-          echo "Found simulator: $SIMULATOR"
+          echo "$SIMULATOR"
+          # Extract just the name before the parenthesis
+          SIM_NAME=$(echo "$SIMULATOR" | sed 's/[[:space:]]*(.*//' | xargs)
+          echo "name=$SIM_NAME" >> $GITHUB_OUTPUT
+          echo "Using simulator: $SIM_NAME"
       
       - name: Boot simulator
         run: |
-          xcrun simctl boot "${{ steps.simulator.outputs.name }}" || true
+          xcrun simctl boot "${{ steps.simulator.outputs.name }}" 2>/dev/null || true
+          xcrun simctl list devices | grep "${{ steps.simulator.outputs.name }}"
       
       - name: Build for iOS Simulator
         if: github.event_name != 'release' && (github.inputs.build_type != 'testflight' || github.inputs.build_type == '')
@@ -226,16 +232,20 @@ jobs:
       - name: Find available simulator
         id: simulator
         run: |
-          SIMULATOR=$(xcrun simctl list devices available | grep -E "iPhone" | grep -v "Shutdown" | head -1 | awk -F'(' '{print $1}' | xargs)
+          xcrun simctl list devices available | head -30
+          SIMULATOR=$(xcrun simctl list devices available 2>/dev/null | grep -E "iPhone" | grep -v "Shutdown" | head -3 | tail -1)
           if [ -z "$SIMULATOR" ]; then
-            SIMULATOR=$(xcrun simctl list devices available | grep -E "iPhone|iPad" | grep -v "Shutdown" | head -1 | awk -F'(' '{print $1}' | xargs)
+            SIMULATOR=$(xcrun simctl list devices available 2>/dev/null | grep -E "iPhone|iPad" | head -1)
           fi
-          echo "name=$SIMULATOR" >> $GITHUB_OUTPUT
-          echo "Found simulator: $SIMULATOR"
+          echo "$SIMULATOR"
+          SIM_NAME=$(echo "$SIMULATOR" | sed 's/[[:space:]]*(.*//' | xargs)
+          echo "name=$SIM_NAME" >> $GITHUB_OUTPUT
+          echo "Using simulator: $SIM_NAME"
       
       - name: Boot simulator
         run: |
-          xcrun simctl boot "${{ steps.simulator.outputs.name }}" || true
+          xcrun simctl boot "${{ steps.simulator.outputs.name }}" 2>/dev/null || true
+          xcrun simctl list devices | grep "${{ steps.simulator.outputs.name }}"
       
       - name: Run Tests
         run: |
