@@ -69,18 +69,34 @@ jobs:
       # ==========================================================================
       - name: Download iOS Simulator Platform
         run: |
-          echo "Downloading iOS Simulator platform..."
-          xcodebuild -downloadPlatform iOS 2>/dev/null || xcodebuild -downloadAllPlatforms 2>/dev/null || true
+          echo "=== Checking available SDKs ==="
+          xcodebuild -showsdks
+          
+          echo "=== Checking available runtimes ==="
+          xcrun simctl list runtimes
+          
+          echo "=== Checking available simulators ==="
+          xcrun simctl list devices available || true
+          
+          echo "=== Attempting to download iOS platform ==="
+          xcodebuild -downloadPlatform iOS || echo "Download may have failed, but continuing..."
+          
+          echo "=== Re-checking after download attempt ==="
+          xcrun simctl list runtimes || true
           xcrun simctl list devices available || true
       
       - name: Build for iOS Simulator
         if: github.event_name != 'release' && (github.inputs.build_type != 'testflight' || github.inputs.build_type == '')
         run: |
+          echo "=== Available destinations ==="
+          xcodebuild -project ParsoIRC.xcodeproj -scheme ParsoIRC -showdestinations 2>/dev/null || true
+          
           xcodebuild -project ParsoIRC.xcodeproj \
             -scheme ParsoIRC \
             -configuration Debug \
             -destination 'generic/platform=iOS Simulator' \
             -derivedDataPath ./build \
+            CODE_SIGNING_ALLOWED=NO \
             build
       
       - name: Upload Simulator Build
@@ -216,13 +232,22 @@ jobs:
       
       - name: Download iOS Simulator Platform
         run: |
-          echo "Downloading iOS Simulator platform..."
-          xcodebuild -downloadPlatform iOS 2>/dev/null || xcodebuild -downloadAllPlatforms 2>/dev/null || true
-          xcrun simctl list devices available || true
+          echo "=== Checking available SDKs ==="
+          xcodebuild -showsdks
+          
+          echo "=== Checking available runtimes ==="
+          xcrun simctl list runtimes || true
+          
+          echo "=== Attempting to download iOS platform ==="
+          xcodebuild -downloadPlatform iOS || echo "Download may have failed, continuing..."
+          
+          echo "=== Re-checking after download attempt ==="
+          xcrun simctl list runtimes || true
       
       - name: Run Tests
         run: |
           xcodebuild test -project ParsoIRC.xcodeproj \
             -scheme ParsoIRC \
             -destination 'generic/platform=iOS Simulator' \
-            -derivedDataPath ./test_build
+            -derivedDataPath ./test_build \
+            CODE_SIGNING_ALLOWED=NO
