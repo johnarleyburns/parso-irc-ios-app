@@ -26,6 +26,10 @@ packages:
   SQLite:
     url: https://github.com/stephencelis/SQLite.swift
     from: "0.15.0"
+    settings:
+      base:
+        IPHONEOS_DEPLOYMENT_TARGET: "16.0"
+        TARGETED_DEVICE_FAMILY: "1"
 
 targets:
   ParsoIRC:
