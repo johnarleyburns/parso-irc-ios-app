@@ -1,6 +1,14 @@
 import Foundation
 import Combine
 
+enum ConnectionState {
+    case disconnected
+    case connecting
+    case connected
+    case reconnecting
+    case failed(Error)
+}
+
 @MainActor
 final class IRCClientManager: ObservableObject {
     static let shared = IRCClientManager()
@@ -13,7 +21,7 @@ final class IRCClientManager: ObservableObject {
     private var maxReconnectAttempts = 5
     
     private init() {}
-    
+
     // MARK: - Connection State
     
     func connectionState(for serverId: String) -> ConnectionState {
@@ -182,7 +190,8 @@ final class IRCClientManager: ObservableObject {
             connections[serverId] = nil
             
         case "me":
-            try await client.sendMessage("\u0001ACTION \(args)\u0001", to: channel)
+            let action = "\u{0001}ACTION \(args)\u{0001}"
+            try await client.sendMessage(action, to: channel)
             
         case "topic":
             if args.isEmpty {

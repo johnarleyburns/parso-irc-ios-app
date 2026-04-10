@@ -285,7 +285,13 @@ struct Message: Identifiable, Codable, Equatable {
     var isRead: Bool
     var reactions: [MessageReaction]
     var isFromCurrentUser: Bool
-    var previousSameSenderMessage: Message?
+    
+    var previousSameSenderMessageId: String?
+    
+    var previousSameSenderMessage: Message? {
+        get { nil }
+        set { previousSameSenderMessageId = newValue?.id }
+    }
 
     enum MessageType: String, Codable {
         case message
