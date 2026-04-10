@@ -1,6 +1,5 @@
 import SwiftUI
 import Combine
-import IRCKit
 
 @MainActor
 class ChatViewModel: ObservableObject {
@@ -163,7 +162,7 @@ class ChatViewModel: ObservableObject {
         
         guard target == channel.name || target == server.nickname else { return }
         
-        let isAction = ircMessage.tags["intent"] == "action"
+        let isAction = ircMessage.tags?["intent"] == "action"
         let messageType: Message.MessageType = isAction ? .action : .message
         let sender = ircMessage.source?.nick ?? "unknown"
         

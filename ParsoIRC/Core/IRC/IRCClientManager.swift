@@ -1,27 +1,35 @@
 import Foundation
-import IRCKit
 import Combine
 
 @MainActor
 final class IRCClientManager: ObservableObject {
     static let shared = IRCClientManager()
     
-    @Published var connections: [String: IRCClient] = [:]
-    @Published var connectionStates: [String: ConnectionState] = [:]
+    private var connections: [String: IRCClient] = [:]
+    private var connectionStates: [String: IRCConnectionState] = [:]
     @Published var currentNicknames: [String: String] = [:]
-    
-    enum ConnectionState {
-        case disconnected
-        case connecting
-        case connected
-        case reconnecting
-        case failed(Error)
-    }
     
     private var reconnectTimers: [String: Timer] = [:]
     private var maxReconnectAttempts = 5
     
     private init() {}
+    
+    // MARK: - Connection State
+    
+    func connectionState(for serverId: String) -> ConnectionState {
+        switch connectionStates[serverId] ?? .disconnected {
+        case .disconnected:
+            return .disconnected
+        case .connecting:
+            return .connecting
+        case .connected:
+            return .connected
+        case .reconnecting:
+            return .reconnecting
+        case .failed:
+            return .failed(error: IRCError.maxReconnectAttemptsReached)
+        }
+    }
     
     // MARK: - Connection Management
     
@@ -45,7 +53,7 @@ final class IRCClientManager: ObservableObject {
         
         client.onError = { [weak self] error in
             Task { @MainActor in
-                self?.connectionStates[server.id] = .failed(error)
+                self?.connectionStates[server.id] = .failed(IRCError.connectionFailed(error.localizedDescription))
             }
         }
         
@@ -70,7 +78,7 @@ final class IRCClientManager: ObservableObject {
             }
             
         } catch {
-            connectionStates[server.id] = .failed(error)
+            connectionStates[server.id] = .failed(IRCError.connectionFailed(error.localizedDescription))
             throw error
         }
     }
@@ -218,8 +226,17 @@ final class IRCClientManager: ObservableObject {
             try await client.send(command: "WHO", parameters: [args.isEmpty ? channel : args])
             
         default:
-            try await client.sendRaw(command)
+            try await sendRawCommand(command, client: client)
         }
+    }
+    
+    private func sendRawCommand(_ command: String, client: IRCClient) async throws {
+        let trimmed = command.trimmingCharacters(in: .whitespacesAndNewlines)
+        var parts = trimmed.split(separator: " ", maxSplits: 1)
+        let cmd = String(parts.first ?? "")
+        let params = parts.count > 1 ? String(parts[1]) : ""
+        let paramsArray = params.isEmpty ? [] : params.split(separator: " ").map(String.init)
+        try await client.send(command: cmd, parameters: paramsArray)
     }
     
     // MARK: - Event Listeners
@@ -228,7 +245,9 @@ final class IRCClientManager: ObservableObject {
         guard let client = connections[serverId] else { return }
         
         client.onMessage = { message in
-            handler(message)
+            Task { @MainActor in
+                handler(message)
+            }
         }
     }
     
@@ -236,7 +255,9 @@ final class IRCClientManager: ObservableObject {
         guard let client = connections[serverId] else { return }
         
         client.onJoin = { channel, nick in
-            handler(channel, nick)
+            Task { @MainActor in
+                handler(channel, nick)
+            }
         }
     }
     
@@ -244,7 +265,9 @@ final class IRCClientManager: ObservableObject {
         guard let client = connections[serverId] else { return }
         
         client.onPart = { channel, nick, message in
-            handler(channel, nick, message)
+            Task { @MainActor in
+                handler(channel, nick, message)
+            }
         }
     }
     
@@ -252,7 +275,9 @@ final class IRCClientManager: ObservableObject {
         guard let client = connections[serverId] else { return }
         
         client.onQuit = { nick, message in
-            handler(nick, message)
+            Task { @MainActor in
+                handler(nick, message)
+            }
         }
     }
     
@@ -260,7 +285,9 @@ final class IRCClientManager: ObservableObject {
         guard let client = connections[serverId] else { return }
         
         client.onNickChange = { oldNick, newNick in
-            handler(oldNick, newNick)
+            Task { @MainActor in
+                handler(oldNick, newNick)
+            }
         }
     }
     
@@ -268,7 +295,9 @@ final class IRCClientManager: ObservableObject {
         guard let client = connections[serverId] else { return }
         
         client.onTopicChange = { channel, topic, nick in
-            handler(channel, topic, nick)
+            Task { @MainActor in
+                handler(channel, topic, nick)
+            }
         }
     }
     
@@ -276,24 +305,9 @@ final class IRCClientManager: ObservableObject {
         guard let client = connections[serverId] else { return }
         
         client.onNamesList = { channel, nicks in
-            handler(channel, nicks)
-        }
-    }
-}
-
-enum IRCError: LocalizedError {
-    case notConnected
-    case maxReconnectAttemptsReached
-    case authenticationFailed
-    
-    var errorDescription: String? {
-        switch self {
-        case .notConnected:
-            return "Not connected to server"
-        case .maxReconnectAttemptsReached:
-            return "Maximum reconnection attempts reached"
-        case .authenticationFailed:
-            return "Authentication failed"
+            Task { @MainActor in
+                handler(channel, nicks)
+            }
         }
     }
 }

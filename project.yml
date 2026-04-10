@@ -23,18 +23,9 @@ settings:
       CODE_SIGNING_ALLOWED: YES
 
 packages:
-  IRCKit:
-    url: https://github.com/FuelRats/IRCKit
-    from: "0.16.0"
-    settings:
-      base:
-        IPHONEOS_DEPLOYMENT_TARGET: "13.0"
   SQLite:
     url: https://github.com/stephencelis/SQLite.swift
     from: "0.15.0"
-    settings:
-      base:
-        IPHONEOS_DEPLOYMENT_TARGET: "13.0"
 
 targets:
   ParsoIRC:
@@ -59,7 +50,6 @@ targets:
         CODE_SIGN_STYLE: Automatic
         ENABLE_PREVIEWS: YES
     dependencies:
-      - package: IRCKit
       - package: SQLite
 
 schemes:
