@@ -40,6 +40,7 @@ targets:
   ParsoIRC:
     type: application
     platform: iOS
+    deploymentTarget: "16.0"
     sources:
       - path: ParsoIRC
         excludes:
@@ -64,6 +65,7 @@ targets:
   ParsoIRCTests:
     type: bundle.unit-test
     platform: iOS
+    deploymentTarget: "16.0"
     sources:
       - path: ParsoIRCTests
     dependencies:
