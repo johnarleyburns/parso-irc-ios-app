@@ -107,7 +107,7 @@ struct ServerListView: View {
 
 struct ServerCell: View {
     let server: Server
-    let connectionState: IRCClientManager.ConnectionState
+    let connectionState: ConnectionState
     
     var body: some View {
         HStack(spacing: 12) {

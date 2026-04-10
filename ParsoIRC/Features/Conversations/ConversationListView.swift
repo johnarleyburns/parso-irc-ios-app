@@ -78,7 +78,7 @@ struct ConversationListView: View {
 
 struct ConversationCell: View {
     let channel: Channel
-    let connectionState: IRCClientManager.ConnectionState
+    let connectionState: ConnectionState
     
     var body: some View {
         HStack(spacing: 12) {
