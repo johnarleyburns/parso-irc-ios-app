@@ -6,63 +6,10 @@ on:
   release:
     types: [created]
   workflow_dispatch:
-    inputs:
-      build_type:
-        description: 'Build Type'
-        required: true
-        default: 'both'
-        type: choice
-        options:
-          - both
-          - simulator
-          - testflight
 
 jobs:
-  simulator-build:
-    runs-on: macos-15
-    if: github.event_name != 'workflow_dispatch' || github.inputs.build_type == 'both' || github.inputs.build_type == 'simulator'
-    
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      
-      - name: Select Xcode
-        run: |
-          if [ -d "/Applications/Xcode_16.app" ]; then
-            sudo xcode-select -s /Applications/Xcode_16.app/Contents/Developer
-          fi
-      
-      - name: Install XcodeGen
-        run: |
-          curl -sL https://github.com/yonaskolb/XcodeGen/releases/download/2.45.3/xcodegen.zip -o xcodegen.zip
-          unzip -o xcodegen.zip
-          echo "${GITHUB_WORKSPACE}/xcodegen/bin" >> $GITHUB_PATH
-      
-      - name: Generate Xcode project
-        run: xcodegen generate
-      
-      - name: Download iOS Simulator
-        run: xcodebuild -downloadPlatform iOS 2>/dev/null || true
-      
-      - name: Build for iOS Simulator
-        run: |
-          xcodebuild -project ParsoIRC.xcodeproj \
-            -scheme ParsoIRC \
-            -configuration Debug \
-            -destination 'platform=iOS Simulator,name=iPhone 16' \
-            build
-      
-      - name: Run Tests
-        run: |
-          xcodebuild test -project ParsoIRC.xcodeproj \
-            -scheme ParsoIRC \
-            -configuration Debug \
-            -destination 'platform=iOS Simulator,name=iPhone 16'
-  
   testflight-build:
     runs-on: macos-15
-    needs: simulator-build
-    if: github.event_name != 'workflow_dispatch' || github.inputs.build_type == 'both' || github.inputs.build_type == 'testflight'
     
     steps:
       - name: Checkout
@@ -80,15 +27,10 @@ jobs:
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
         run: |
-          # Create temporary keychain
           security create-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
           security set-keychain-settings -lut 21600 build.keychain
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
-          
-          # Decode certificate
           echo -n "$APPLE_CERTIFICATE" | base64 --decode -o certificate.p12
-          
-          # Import certificate
           security import certificate.p12 -P "$APPLE_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k build.keychain
           security set-keychain-settings -lut 21600 build.keychain
       
@@ -109,7 +51,7 @@ jobs:
       - name: Generate Xcode project
         run: xcodegen generate
       
-      - name: Build for iOS Device (TestFlight)
+      - name: Build for iOS Device
         env:
           TEAM_ID: ${{ secrets.TEAM_ID }}
         run: |
@@ -123,6 +65,19 @@ jobs:
             PROVISIONING_PROFILE_SPECIFIER="Parso IRC" \
             DEVELOPMENT_TEAM="$TEAM_ID" \
             build
+      
+      - name: Run Tests
+        env:
+          TEAM_ID: ${{ secrets.TEAM_ID }}
+        run: |
+          xcodebuild test -project ParsoIRC.xcodeproj \
+            -scheme ParsoIRC \
+            -configuration Debug \
+            -destination 'generic/platform=iOS' \
+            CODE_SIGN_IDENTITY="-" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            DEVELOPMENT_TEAM="$TEAM_ID"
       
       - name: Export IPA
         run: |
