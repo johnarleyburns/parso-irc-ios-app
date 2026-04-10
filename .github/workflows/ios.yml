@@ -18,7 +18,7 @@ jobs:
       - name: Select Xcode
         uses: maxim-lobanov/setup-xcode@v1
         with:
-          xcode-version: '16.1'
+          xcode-version: '16.2'
       
       - name: Import Certificate
         env:
@@ -59,16 +59,17 @@ jobs:
         env:
           TEAM_ID: ${{ secrets.TEAM_ID }}
         run: |
-          xcodebuild -project ParsoIRC.xcodeproj \
+          xcodebuild archive \
+            -project ParsoIRC.xcodeproj \
             -scheme ParsoIRC \
             -configuration Release \
-            -destination 'generic/platform=iOS' \
+            -destination "generic/platform=iOS" \
+            -archivePath ./build/ParsoIRC.xcarchive \
             CODE_SIGN_IDENTITY="-" \
             CODE_SIGNING_REQUIRED=YES \
             CODE_SIGNING_ALLOWED=YES \
             PROVISIONING_PROFILE_SPECIFIER="Parso IRC" \
-            DEVELOPMENT_TEAM="$TEAM_ID" \
-            build
+            DEVELOPMENT_TEAM="$TEAM_ID"
       
       - name: Run Tests
         env:
@@ -86,7 +87,7 @@ jobs:
       - name: Export IPA
         run: |
           xcodebuild -exportArchive \
-            -archivePath build/Build/Products/Release-iphoneos/ParsoIRC.xcarchive \
+            -archivePath ./build/ParsoIRC.xcarchive \
             -exportPath output \
             -exportOptionsPlist ExportOptions.plist
       
