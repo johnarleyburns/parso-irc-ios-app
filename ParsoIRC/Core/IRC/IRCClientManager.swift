@@ -14,8 +14,12 @@ final class IRCClientManager: ObservableObject {
     static let shared = IRCClientManager()
     
     private var connections: [String: IRCClient] = [:]
-    private var connectionStates: [String: IRCConnectionState] = [:]
+    private var connectionStates: [String: ConnectionState] = [:]
     @Published var currentNicknames: [String: String] = [:]
+    
+    var connectionStatesPublisher: [String: ConnectionState] {
+        connectionStates
+    }
     
     private var reconnectTimers: [String: Timer] = [:]
     private var maxReconnectAttempts = 5

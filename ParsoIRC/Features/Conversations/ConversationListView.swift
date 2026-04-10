@@ -51,7 +51,7 @@ struct ConversationListView: View {
                             ForEach(group.conversations, id: \.channel.id) { conversation in
                                 ConversationCell(
                                     channel: conversation.channel,
-                                    connectionState: ircManager.connectionStates[conversation.server.id] ?? .disconnected
+                                    connectionState: ircManager.connectionStatesPublisher[conversation.server.id] ?? .disconnected
                                 )
                                 .accessibilityIdentifier("channel-\(conversation.channel.id)")
                                 .contentShape(Rectangle())

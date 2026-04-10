@@ -30,12 +30,3 @@ enum IRCError: LocalizedError {
             return "Failed to encode message"
         }
     }
-}
-
-enum IRCConnectionState: Sendable {
-    case disconnected
-    case connecting
-    case connected
-    case reconnecting
-    case failed(IRCError)
-}

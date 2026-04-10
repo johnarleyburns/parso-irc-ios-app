@@ -12,7 +12,7 @@ struct ServerListView: View {
                 ForEach(appState.servers) { server in
                     ServerCell(
                         server: server,
-                        connectionState: ircManager.connectionStates[server.id] ?? .disconnected
+                        connectionState: ircManager.connectionStatesPublisher[server.id] ?? .disconnected
                     )
                     .accessibilityIdentifier("server-\(server.id)")
                     .contentShape(Rectangle())
@@ -48,7 +48,7 @@ struct ServerListView: View {
                 }
                 
                 ToolbarItem(placement: .topBarLeading) {
-                    if appState.servers.contains(where: { ircManager.connectionStates[$0.id] == .connected }) {
+                    if appState.servers.contains(where: { ircManager.connectionStatesPublisher[$0.id] == .connected }) {
                         Button("Disconnect All") {
                             ircManager.disconnectAll()
                         }
