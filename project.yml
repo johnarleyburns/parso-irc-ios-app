@@ -14,6 +14,7 @@ settings:
     INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
     INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait
     INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
+    CODE_SIGNING_ALLOWED: NO
 
 packages:
   IRCKit:
@@ -33,6 +34,9 @@ targets:
           - "**/.DS_Store"
     settings:
       base:
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleShortVersionString: "1.0.0"
+        INFOPLIST_KEY_CFBundleVersion: "1"
         PRODUCT_BUNDLE_IDENTIFIER: com.parso.irc
         INFOPLIST_KEY_CFBundleDisplayName: Parso IRC
         MARKETING_VERSION: "1.0.0"
