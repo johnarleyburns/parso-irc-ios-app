@@ -35,7 +35,7 @@ final class IRCClientManager: ObservableObject {
         case .reconnecting:
             return .reconnecting
         case .failed:
-            return .failed(error: IRCError.maxReconnectAttemptsReached)
+            return .failed(IRCError.maxReconnectAttemptsReached)
         }
     }
     

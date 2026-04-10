@@ -113,7 +113,9 @@ actor IRCClient {
             Task { @MainActor in
                 self.onError?(error)
             }
-            await disconnect()
+            Task {
+                await disconnect()
+            }
         case .cancelled:
             isConnected = false
             Task { @MainActor in

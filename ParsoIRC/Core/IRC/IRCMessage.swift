@@ -123,7 +123,7 @@ struct IRCMessage: Sendable {
         var source: IRCUser? = nil
         if remaining.hasPrefix(":") {
             if let spaceIndex = remaining.firstIndex(of: " ") {
-                let sourceString = String(remaining[1..<remaining.index(after: spaceIndex)])
+                let sourceString = String(remaining[..<spaceIndex].dropFirst())
                 source = IRCUser(prefix: sourceString)
                 remaining = String(remaining[remaining.index(after: spaceIndex)...])
             }
