@@ -49,6 +49,12 @@ jobs:
       - name: Generate Xcode project
         run: xcodegen generate
       
+      - name: Initialize Xcode
+        run: sudo xcodebuild -runFirstLaunch
+      
+      - name: Download iOS Platform
+        run: xcodebuild -downloadPlatform iOS -buildVersion 18.1 || true
+      
       - name: Build for iOS Device
         env:
           TEAM_ID: ${{ secrets.TEAM_ID }}
