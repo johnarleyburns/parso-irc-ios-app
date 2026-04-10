@@ -34,7 +34,7 @@ jobs:
         run: |
           curl -sL https://github.com/yonaskolb/XcodeGen/releases/download/2.45.3/xcodegen.zip -o xcodegen.zip
           unzip -o xcodegen.zip
-          sudo mv xcodegen /usr/local/bin/
+          echo "${GITHUB_WORKSPACE}/xcodegen/bin" >> $GITHUB_PATH
       
       - name: Generate Xcode project
         run: xcodegen generate
