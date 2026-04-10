@@ -11,16 +11,16 @@ actor IRCClient {
     private let queue = DispatchQueue(label: "irc.client", qos: .userInitiated)
 
     // Event handlers (IRCKit-compatible API)
-    nonisolated var onWelcome: ((String) -> Void)?
-    nonisolated var onDisconnect: (() -> Void)?
-    nonisolated var onError: ((Error) -> Void)?
-    nonisolated var onMessage: ((IRCMessage) -> Void)?
-    nonisolated var onJoin: ((String, String) -> Void)?
-    nonisolated var onPart: ((String, String, String?) -> Void)?
-    nonisolated var onQuit: ((String, String?) -> Void)?
-    nonisolated var onNickChange: ((String, String) -> Void)?
-    nonisolated var onTopicChange: ((String, String, String) -> Void)?
-    nonisolated var onNamesList: ((String, [String]) -> Void)?
+    nonisolated(unsafe) var onWelcome: ((String) -> Void)?
+    nonisolated(unsafe) var onDisconnect: (() -> Void)?
+    nonisolated(unsafe) var onError: ((Error) -> Void)?
+    nonisolated(unsafe) var onMessage: ((IRCMessage) -> Void)?
+    nonisolated(unsafe) var onJoin: ((String, String) -> Void)?
+    nonisolated(unsafe) var onPart: ((String, String, String?) -> Void)?
+    nonisolated(unsafe) var onQuit: ((String, String?) -> Void)?
+    nonisolated(unsafe) var onNickChange: ((String, String) -> Void)?
+    nonisolated(unsafe) var onTopicChange: ((String, String, String) -> Void)?
+    nonisolated(unsafe) var onNamesList: ((String, [String]) -> Void)?
 
     private var readStream: InputStream?
     private var writeStream: OutputStream?
