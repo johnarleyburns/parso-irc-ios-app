@@ -30,3 +30,4 @@ enum IRCError: LocalizedError {
             return "Failed to encode message"
         }
     }
+}
