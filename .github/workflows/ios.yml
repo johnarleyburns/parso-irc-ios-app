@@ -67,13 +67,20 @@ jobs:
       # ==========================================================================
       # SIMULATOR BUILD (no code signing required)
       # ==========================================================================
+      - name: Find available simulator
+        id: simulator
+        run: |
+          # Find any available iOS simulator
+          SIMULATOR=$(xcrun simctl list devices available | grep -E "iPhone|iPad" | head -1 | sed 's/.*(\([^)]*\)).*/\1/')
+          echo "name=$SIMULATOR" >> $GITHUB_OUTPUT
+      
       - name: Build for iOS Simulator
         if: github.event_name != 'release' && (github.inputs.build_type != 'testflight' || github.inputs.build_type == '')
         run: |
           xcodebuild -project ParsoIRC.xcodeproj \
             -scheme ParsoIRC \
             -configuration Debug \
-            -destination 'platform=iOS Simulator,name=iPhone 16' \
+            -destination 'platform=iOS Simulator,name=${{ steps.simulator.outputs.name }}' \
             -derivedDataPath ./build \
             build
       
@@ -208,9 +215,15 @@ jobs:
       - name: Generate project
         run: xcodegen generate
       
+      - name: Find available simulator
+        id: simulator
+        run: |
+          SIMULATOR=$(xcrun simctl list devices available | grep -E "iPhone|iPad" | head -1 | sed 's/.*(\([^)]*\)).*/\1/')
+          echo "name=$SIMULATOR" >> $GITHUB_OUTPUT
+      
       - name: Run Tests
         run: |
           xcodebuild test -project ParsoIRC.xcodeproj \
             -scheme ParsoIRC \
-            -destination 'platform=iOS Simulator,name=iPhone 16' \
+            -destination 'platform=iOS Simulator,name=${{ steps.simulator.outputs.name }}' \
             -derivedDataPath ./test_build
