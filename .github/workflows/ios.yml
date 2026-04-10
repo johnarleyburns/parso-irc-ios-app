@@ -67,6 +67,12 @@ jobs:
       # ==========================================================================
       # SIMULATOR BUILD (no code signing required)
       # ==========================================================================
+      - name: Download iOS Simulator Platform
+        run: |
+          echo "Downloading iOS Simulator platform..."
+          xcodebuild -downloadPlatform iOS 2>/dev/null || xcodebuild -downloadAllPlatforms 2>/dev/null || true
+          xcrun simctl list devices available || true
+      
       - name: Build for iOS Simulator
         if: github.event_name != 'release' && (github.inputs.build_type != 'testflight' || github.inputs.build_type == '')
         run: |
@@ -207,6 +213,12 @@ jobs:
       
       - name: Generate project
         run: xcodegen generate
+      
+      - name: Download iOS Simulator Platform
+        run: |
+          echo "Downloading iOS Simulator platform..."
+          xcodebuild -downloadPlatform iOS 2>/dev/null || xcodebuild -downloadAllPlatforms 2>/dev/null || true
+          xcrun simctl list devices available || true
       
       - name: Run Tests
         run: |
