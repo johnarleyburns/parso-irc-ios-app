@@ -51,7 +51,7 @@ jobs:
         run: xcodegen generate
       
       - name: Download iOS Platform
-        run: xcodebuild -downloadPlatform iOS
+        run: xcodebuild -project ParsoIRC.xcodeproj -downloadPlatform iOS
       
       - name: Build for iOS Device
         env:
