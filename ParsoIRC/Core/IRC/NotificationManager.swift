@@ -1,6 +1,10 @@
 import Foundation
+#if canImport(UserNotifications)
 import UserNotifications
+#endif
+#if canImport(UIKit)
 import UIKit
+#endif
 
 @MainActor
 class NotificationManager: NSObject, ObservableObject {
