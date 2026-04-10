@@ -67,34 +67,13 @@ jobs:
       # ==========================================================================
       # SIMULATOR BUILD (no code signing required)
       # ==========================================================================
-      - name: Find available simulator
-        id: simulator
-        run: |
-          # List available simulators and find a booted iPhone
-          xcrun simctl list devices available | head -30
-          # Try to find any available iPhone simulator
-          SIMULATOR=$(xcrun simctl list devices available 2>/dev/null | grep -E "iPhone" | grep -v "Shutdown" | head -3 | tail -1)
-          if [ -z "$SIMULATOR" ]; then
-            SIMULATOR=$(xcrun simctl list devices available 2>/dev/null | grep -E "iPhone|iPad" | head -1)
-          fi
-          echo "$SIMULATOR"
-          # Extract just the name before the parenthesis
-          SIM_NAME=$(echo "$SIMULATOR" | sed 's/[[:space:]]*(.*//' | xargs)
-          echo "name=$SIM_NAME" >> $GITHUB_OUTPUT
-          echo "Using simulator: $SIM_NAME"
-      
-      - name: Boot simulator
-        run: |
-          xcrun simctl boot "${{ steps.simulator.outputs.name }}" 2>/dev/null || true
-          xcrun simctl list devices | grep "${{ steps.simulator.outputs.name }}"
-      
       - name: Build for iOS Simulator
         if: github.event_name != 'release' && (github.inputs.build_type != 'testflight' || github.inputs.build_type == '')
         run: |
           xcodebuild -project ParsoIRC.xcodeproj \
             -scheme ParsoIRC \
             -configuration Debug \
-            -destination 'platform=iOS Simulator,name=${{ steps.simulator.outputs.name }}' \
+            -destination 'generic/platform=iOS Simulator' \
             -derivedDataPath ./build \
             build
       
@@ -229,27 +208,9 @@ jobs:
       - name: Generate project
         run: xcodegen generate
       
-      - name: Find available simulator
-        id: simulator
-        run: |
-          xcrun simctl list devices available | head -30
-          SIMULATOR=$(xcrun simctl list devices available 2>/dev/null | grep -E "iPhone" | grep -v "Shutdown" | head -3 | tail -1)
-          if [ -z "$SIMULATOR" ]; then
-            SIMULATOR=$(xcrun simctl list devices available 2>/dev/null | grep -E "iPhone|iPad" | head -1)
-          fi
-          echo "$SIMULATOR"
-          SIM_NAME=$(echo "$SIMULATOR" | sed 's/[[:space:]]*(.*//' | xargs)
-          echo "name=$SIM_NAME" >> $GITHUB_OUTPUT
-          echo "Using simulator: $SIM_NAME"
-      
-      - name: Boot simulator
-        run: |
-          xcrun simctl boot "${{ steps.simulator.outputs.name }}" 2>/dev/null || true
-          xcrun simctl list devices | grep "${{ steps.simulator.outputs.name }}"
-      
       - name: Run Tests
         run: |
           xcodebuild test -project ParsoIRC.xcodeproj \
             -scheme ParsoIRC \
-            -destination 'platform=iOS Simulator,name=${{ steps.simulator.outputs.name }}' \
+            -destination 'generic/platform=iOS Simulator' \
             -derivedDataPath ./test_build
