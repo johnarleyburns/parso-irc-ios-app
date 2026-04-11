@@ -62,3 +62,6 @@ fastlane/screenshots/**/*.png
 fastlane/test_output
 
 tags
+
+# iOS Provisioning Profiles (sensitive)
+*.mobileprovision

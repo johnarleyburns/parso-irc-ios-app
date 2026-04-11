@@ -47,7 +47,7 @@ jobs:
         run: |
           mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
           echo -n "$PROVISIONING_PROFILE_BASE64" | base64 --decode \
-            -o "$HOME/Library/MobileDevice/Provisioning Profiles/ParsoIRC.mobileprovision"
+            -o "$HOME/Library/MobileDevice/Provisioning Profiles/Parso_IRC_Chat_Client_App_Store.mobileprovision"
 
       - name: Install XcodeGen
         run: |
@@ -60,8 +60,6 @@ jobs:
         run: xcodegen generate
 
       - name: Archive
-        env:
-          TEAM_ID: ${{ secrets.TEAM_ID }}
         run: |
           xcodebuild archive \
             -project ParsoIRC.xcodeproj \
@@ -69,12 +67,7 @@ jobs:
             -configuration Release \
             -destination "generic/platform=iOS" \
             -archivePath ./build/ParsoIRC.xcarchive \
-            ONLY_ACTIVE_ARCH=NO \
-            ARCHS=arm64 \
-            DEVELOPMENT_TEAM="$TEAM_ID" \
-            CODE_SIGN_STYLE=Manual \
-            CODE_SIGN_IDENTITY="iPhone Distribution" \
-            PROVISIONING_PROFILE_SPECIFIER="Parso IRC"
+            CODE_SIGN_STYLE=Automatic
 
       - name: Export IPA
         run: |
