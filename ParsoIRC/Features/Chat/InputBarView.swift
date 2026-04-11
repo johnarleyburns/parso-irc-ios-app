@@ -34,7 +34,7 @@ struct InputBarView: View {
                     .lineLimit(1...5)
                     .frame(minHeight: minHeight, maxHeight: textHeight)
                     .focused($isFocused)
-                    .onChange(of: text) { newValue in
+                    .onChange(of: text) { _, newValue in
                         updateHeight(for: newValue)
                     }
             }
@@ -63,7 +63,7 @@ struct InputBarView: View {
 }
 
 #Preview {
-    @State var text = ""
+    @Previewable @State var text = ""
     
     VStack {
         Spacer()

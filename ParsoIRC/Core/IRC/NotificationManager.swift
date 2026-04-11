@@ -158,7 +158,7 @@ extension NotificationManager: UNUserNotificationCenterDelegate {
         _ center: UNUserNotificationCenter,
         didReceive response: UNNotificationResponse
     ) async {
-        await MainActor.run {
+        _ = await MainActor.run {
             Task {
                 await handleNotificationResponse(response)
             }
