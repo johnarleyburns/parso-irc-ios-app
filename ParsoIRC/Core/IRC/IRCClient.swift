@@ -139,11 +139,9 @@ actor IRCClient {
         data.append(contentsOf: [0x0D, 0x0A])
 
         connection.send(content: data, completion: .contentProcessed { error in
-            if let error = error {
-                let err = error
-                Task { @MainActor in
-                    self.onError?(err)
-                }
+            let err = error
+            Task { @MainActor in
+                self.onError?(err)
             }
         })
     }
