@@ -112,10 +112,8 @@ actor IRCClient {
         case .ready:
             isConnected = true
         case .failed(let error):
-            if let error = error {
-                Task { @MainActor in
-                    self.onError?(error)
-                }
+            Task { @MainActor in
+                self.onError?(error)
             }
             Task {
                 await disconnect()

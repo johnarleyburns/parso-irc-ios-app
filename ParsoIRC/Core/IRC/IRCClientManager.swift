@@ -264,7 +264,7 @@ final class IRCClientManager: ObservableObject {
     
     private func sendRawCommand(_ command: String, client: IRCClient) async throws {
         let trimmed = command.trimmingCharacters(in: .whitespacesAndNewlines)
-        var parts = trimmed.split(separator: " ", maxSplits: 1)
+        let parts = trimmed.split(separator: " ", maxSplits: 1)
         let cmd = String(parts.first ?? "")
         let params = parts.count > 1 ? String(parts[1]) : ""
         let paramsArray = params.isEmpty ? [] : params.split(separator: " ").map(String.init)

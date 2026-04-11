@@ -127,7 +127,7 @@ class NotificationManager: NSObject, ObservableObject {
     }
     
     func handleNotificationResponse(_ response: UNNotificationResponse) async {
-        let userInfo = response.notification.request.content.userInfo
+        _ = response.notification.request.content.userInfo
         
         switch response.actionIdentifier {
         case viewAction, UNNotificationDefaultActionIdentifier:

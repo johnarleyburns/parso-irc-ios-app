@@ -1,6 +1,6 @@
 import Foundation
 
-struct Server: Identifiable, Codable, Equatable {
+struct Server: Identifiable, Codable, Equatable, Hashable {
     let id: String
     var name: String
     var host: String
@@ -156,7 +156,7 @@ struct Server: Identifiable, Codable, Equatable {
     ]
 }
 
-struct Channel: Identifiable, Codable, Equatable {
+struct Channel: Identifiable, Codable, Equatable, Hashable {
     let id: String
     var serverId: String
     var name: String
