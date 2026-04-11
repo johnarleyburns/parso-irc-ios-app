@@ -2,14 +2,18 @@ import SwiftUI
 import Combine
 
 struct ConversationDestination: Hashable, Identifiable {
-    let id: String
     let server: Server
     let channel: Channel
-    
-    init(server: Server, channel: Channel) {
-        self.id = "\(server.id)-\(channel.id)"
-        self.server = server
-        self.channel = channel
+
+    var id: String { "\(server.id)-\(channel.id)" }
+
+    static func == (lhs: ConversationDestination, rhs: ConversationDestination) -> Bool {
+        lhs.server.id == rhs.server.id && lhs.channel.id == rhs.channel.id
+    }
+
+    func hash(into hasher: inout Hasher) {
+        hasher.combine(server.id)
+        hasher.combine(channel.id)
     }
 }
 
