@@ -225,7 +225,7 @@ struct Channel: Identifiable, Codable, Equatable, Hashable {
     }
 }
 
-struct ChannelMember: Identifiable, Codable, Equatable {
+struct ChannelMember: Identifiable, Codable, Equatable, Hashable {
     let id: String
     var nick: String
     var username: String?
@@ -233,7 +233,7 @@ struct ChannelMember: Identifiable, Codable, Equatable {
     var mode: MemberMode
     var isAway: Bool
 
-    enum MemberMode: String, Codable {
+    enum MemberMode: String, Codable, Hashable {
         case none = ""
         case voice = "+"
         case operator_ = "@"
