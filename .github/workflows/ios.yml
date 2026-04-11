@@ -71,7 +71,6 @@ jobs:
             -archivePath ./build/ParsoIRC.xcarchive \
             ARCHS=arm64 \
             IPHONEOS_DEPLOYMENT_TARGET=16.0 \
-            CODE_SIGN_STYLE=Manual \
             CI_TEAM="$TEAM_ID" \
             CI_CERT="iPhone Distribution" \
             CI_PROFILE="Parso IRC Chat Client App Store"

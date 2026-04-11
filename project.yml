@@ -18,7 +18,7 @@ settings:
     Debug:
       CODE_SIGNING_ALLOWED: NO
     Release:
-      CODE_SIGN_IDENTITY: "-"
+      # Removed global signing overrides to prevent affecting Swift Packages
       CODE_SIGNING_REQUIRED: YES
       CODE_SIGNING_ALLOWED: YES
 
@@ -51,8 +51,16 @@ targets:
         CURRENT_PROJECT_VERSION: "1"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
-        CODE_SIGN_STYLE: Automatic
         ENABLE_PREVIEWS: YES
+      configs:
+        Debug:
+          CODE_SIGN_STYLE: Automatic
+        Release:
+          # Injects the variables passed from the GitHub Actions Archive step
+          CODE_SIGN_STYLE: Manual
+          CODE_SIGN_IDENTITY: "$(CI_CERT)"
+          DEVELOPMENT_TEAM: "$(CI_TEAM)"
+          PROVISIONING_PROFILE_SPECIFIER: "$(CI_PROFILE)"
     dependencies:
       - package: SQLite
 
