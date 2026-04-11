@@ -359,10 +359,11 @@ final class DatabaseManager {
         
         let cutoffDate = dateFormatter.string(from: date)
         
-        // Get all channel IDs
-        let channelIds = try db.prepare(messages.select(messageChannelId).distinct()).map { $0[messageChannelId] }
+        // Get all channel IDs - use a subquery approach
+        let allChannelIds = try db.prepare(messages.select(messageChannelId)).map { $0[messageChannelId] }
+        let uniqueChannelIds = Array(Set(allChannelIds))
         
-        for channelId in channelIds {
+        for channelId in uniqueChannelIds {
             let channelMessages = messages
                 .filter(messageChannelId == channelId)
                 .order(messageTimestamp.desc)

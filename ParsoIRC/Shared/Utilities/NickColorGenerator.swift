@@ -34,7 +34,6 @@ struct NickColorGenerator {
 
 extension Color {
     func uiColor() -> UIColor {
-        let components = NSColor(self).cgColor.components ?? [0, 0, 0, 1]
-        return UIColor(red: components[0], green: components[1], blue: components[2], alpha: components.count > 3 ? components[3] : 1)
+        return UIColor(self)
     }
 }

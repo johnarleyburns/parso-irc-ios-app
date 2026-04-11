@@ -1,13 +1,31 @@
 #if canImport(Combine)
 import Combine
 #endif
+#if canImport(Foundation)
+import Foundation
+#endif
 
-enum ConnectionState {
+#if canImport(Darwin)
+import Darwin
+#endif
+
+enum ConnectionState: Equatable {
     case disconnected
     case connecting
     case connected
     case reconnecting
     case failed(Error)
+    
+    static func == (lhs: ConnectionState, rhs: ConnectionState) -> Bool {
+        switch (lhs, rhs) {
+        case (.disconnected, .disconnected): return true
+        case (.connecting, .connecting): return true
+        case (.connected, .connected): return true
+        case (.reconnecting, .reconnecting): return true
+        case (.failed, .failed): return true
+        default: return false
+        }
+    }
 }
 
 @MainActor

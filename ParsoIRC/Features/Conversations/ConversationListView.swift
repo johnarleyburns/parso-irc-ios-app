@@ -1,11 +1,23 @@
 import SwiftUI
 import Combine
 
+struct ConversationDestination: Hashable, Identifiable {
+    let id: String
+    let server: Server
+    let channel: Channel
+    
+    init(server: Server, channel: Channel) {
+        self.id = "\(server.id)-\(channel.id)"
+        self.server = server
+        self.channel = channel
+    }
+}
+
 struct ConversationListView: View {
     @EnvironmentObject var ircManager: IRCClientManager
     @EnvironmentObject var appState: AppState
     @State private var searchText = ""
-    @State private var selectedConversation: (server: Server, channel: Channel)?
+    @State private var selectedConversation: ConversationDestination?
     
     var filteredConversations: [(server: Server, channel: Channel)] {
         var result: [(server: Server, channel: Channel)] = []
@@ -56,7 +68,7 @@ struct ConversationListView: View {
                                 .accessibilityIdentifier("channel-\(conversation.channel.id)")
                                 .contentShape(Rectangle())
                                 .onTapGesture {
-                                    selectedConversation = conversation
+                                    selectedConversation = ConversationDestination(server: conversation.server, channel: conversation.channel)
                                 }
                             }
                         }
@@ -113,12 +125,12 @@ struct ConversationCell: View {
                 if let topic = channel.topic, !topic.isEmpty {
                     Text(topic)
                         .font(.subheadline)
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.secondary)
                         .lineLimit(1)
                 } else {
                     Text("No topic")
                         .font(.subheadline)
-                        .foregroundColor(.tertiary)
+                        .foregroundStyle(.tertiary)
                         .italic()
                 }
             }

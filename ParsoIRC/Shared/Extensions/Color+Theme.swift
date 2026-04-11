@@ -18,13 +18,13 @@ struct ThemeColors {
     
     var receivedBubble: Color {
         Color(uiColor: UIColor { traitCollection in
-            traitCollection.userInterfaceStyle == .dark ? receivedBubbleDark : receivedBubbleLight
+            traitCollection.userInterfaceStyle == .dark ? UIColor(receivedBubbleDark) : UIColor(receivedBubbleLight)
         })
     }
     
     var inputBarBackground: Color {
         Color(uiColor: UIColor { traitCollection in
-            traitCollection.userInterfaceStyle == .dark ? receivedBubbleDark : receivedBubbleLight
+            traitCollection.userInterfaceStyle == .dark ? UIColor(receivedBubbleDark) : UIColor(receivedBubbleLight)
         })
     }
 }

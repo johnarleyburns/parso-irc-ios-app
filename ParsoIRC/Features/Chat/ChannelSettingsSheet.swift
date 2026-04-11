@@ -77,7 +77,7 @@ struct ChannelSettingsSheet: View {
                 }
                 
                 if isWatched {
-                    Section("Notification Type") {
+                    Section {
                         Picker("Notify me about", selection: $notifyOnAnyMessage) {
                             Text("Mentions only").tag(false)
                             Text("All messages").tag(true)
@@ -86,6 +86,8 @@ struct ChannelSettingsSheet: View {
                         .onChange(of: notifyOnAnyMessage) { _, newValue in
                             updatedChannel.notifyOnAnyMessage = newValue
                         }
+                    } header: {
+                        Text("Notification Type")
                     } footer: {
                         Text(notifyOnAnyMessage ? "You'll be notified about every message." : "You'll only be notified when someone mentions your nickname.")
                     }
