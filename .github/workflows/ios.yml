@@ -70,7 +70,7 @@ jobs:
             -destination "generic/platform=iOS" \
             -archivePath ./build/ParsoIRC.xcarchive \
             ARCHS=arm64 \
-            IPHONEOS_DEPLOYMENT_TARGET=16.0 \
+            IPHONEOS_DEPLOYMENT_TARGET=17.0 \
             CI_TEAM="$TEAM_ID" \
             CI_CERT="iPhone Distribution" \
             CI_PROFILE="Parso IRC Chat Client App Store"
