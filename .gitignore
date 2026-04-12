@@ -65,3 +65,7 @@ tags
 
 # iOS Provisioning Profiles (sensitive)
 *.mobileprovision
+
+# IRC Test Credentials
+IRCTest.env
+IRCTest.env.local
