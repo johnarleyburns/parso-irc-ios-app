@@ -143,13 +143,11 @@ jobs:
           # Strip any accidental whitespace/newlines from secret values
           CLEAN_APPLE_ID=$(echo "$APPLE_ID" | tr -d '[:space:]')
           CLEAN_PASSWORD=$(echo "$APPLE_APP_SPECIFIC_PASSWORD" | tr -d '[:space:]')
-          xcrun altool --upload-app \
-            --type ios \
-            --file output/ParsoIRC.ipa \
-            --username "$CLEAN_APPLE_ID" \
+          xcrun notarytool submit output/ParsoIRC.ipa \
+            --apple-id "$CLEAN_APPLE_ID" \
             --password "$CLEAN_PASSWORD" \
             --team-id "$TEAM_ID" \
-            --output-format xml
+            --wait
 
       - name: Upload Build Log on Failure
         if: failure()
