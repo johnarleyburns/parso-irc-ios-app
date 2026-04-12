@@ -115,23 +115,43 @@ jobs:
             -exportPath ./output \
             -exportOptionsPlist ExportOptions.plist
 
-      - name: Upload to TestFlight
+      - name: Validate Apple Credentials
         env:
-          APPSTORE_API_KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
-          APPSTORE_API_ISSUER_ID: ${{ secrets.APPSTORE_API_ISSUER_ID }}
-          APPSTORE_API_PRIVATE_KEY: ${{ secrets.APPSTORE_API_PRIVATE_KEY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
         run: |
           set -eo pipefail
-          mkdir -p ~/.appstoreconnect/private_keys
-          echo "$APPSTORE_API_PRIVATE_KEY" \
-            > ~/.appstoreconnect/private_keys/AuthKey_${APPSTORE_API_KEY_ID}.p8
+          echo "Apple ID length: ${#APPLE_ID}"
+          echo "App-specific password length: ${#APPLE_APP_SPECIFIC_PASSWORD}"
+          if [ -z "$APPLE_ID" ] || [ -z "$APPLE_APP_SPECIFIC_PASSWORD" ]; then
+            echo "ERROR: APPLE_ID or APPLE_APP_SPECIFIC_PASSWORD secret is missing or empty."
+            exit 1
+          fi
+          # App-specific passwords are always xxxx-xxxx-xxxx-xxxx (16 lowercase letters + 3 dashes)
+          if ! echo "$APPLE_APP_SPECIFIC_PASSWORD" | grep -qE '^[a-z]{4}-[a-z]{4}-[a-z]{4}-[a-z]{4}$'; then
+            echo "WARNING: Password does not match app-specific password format (xxxx-xxxx-xxxx-xxxx)."
+            echo "Regenerate at appleid.apple.com -> App-Specific Passwords."
+          fi
+
+      - name: Upload to TestFlight
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          TEAM_ID: ${{ secrets.TEAM_ID }}
+        run: |
+          set -eo pipefail
+          # Strip any accidental whitespace/newlines from secret values
+          CLEAN_APPLE_ID=$(echo "$APPLE_ID" | tr -d '[:space:]')
+          CLEAN_PASSWORD=$(echo "$APPLE_APP_SPECIFIC_PASSWORD" | tr -d '[:space:]')
           xcrun altool --upload-app \
             --type ios \
             --file output/ParsoIRC.ipa \
-            --apiKey "$APPSTORE_API_KEY_ID" \
-            --apiIssuer "$APPSTORE_API_ISSUER_ID"
+            --username "$CLEAN_APPLE_ID" \
+            --password "$CLEAN_PASSWORD" \
+            --team-id "$TEAM_ID" \
+            --output-format xml
 
-      - name: Upload build log on failure
+      - name: Upload Build Log on Failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
