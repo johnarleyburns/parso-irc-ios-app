@@ -1,3 +1,6 @@
+// Linux-only mock tests (not compiled on Darwin/iOS)
+#if !canImport(Darwin)
+
 import Foundation
 
 print("=== Mock IRC Server Tests ===\n")
@@ -194,3 +197,5 @@ print("Total:  \(passed + failed)")
 if failed > 0 {
     exit(1)
 }
+
+#endif // !canImport(Darwin)

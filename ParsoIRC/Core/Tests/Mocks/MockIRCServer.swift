@@ -1,4 +1,8 @@
+// Linux-only mock IRC server (not compiled on Darwin/iOS)
+#if !canImport(Darwin)
+
 import Foundation
+import Darwin
 
 final class MockIRCServer {
     private let port: UInt16
@@ -132,7 +136,7 @@ final class MockIRCServer {
             let userParts = params.split(separator: " ")
             if userParts.count >= 4 {
                 clientUsers[client] = String(userParts[0])
-                clientRealnames[client] = userParts.last ?? ""
+                clientRealnames[client] = String(userParts.last ?? "")
             }
             
         case "JOIN":
@@ -151,8 +155,14 @@ final class MockIRCServer {
             
         case "PRIVMSG":
             let content = params.hasPrefix(":") ? String(params.dropFirst()) : params
-            let channel = content.split(separator: " ").first.map(String.init) ?? content
-            let message = content.contains(" ") ? String(content.dropFirst(content.firstIndex(of: " ")! + 1)) : ""
+            let channelParts = content.split(separator: " ")
+            let channel = String(channelParts.first ?? Substring(""))
+            let message: String
+            if let spaceIdx = content.firstIndex(of: " ") {
+                message = String(content[content.index(after: spaceIdx)...])
+            } else {
+                message = ""
+            }
             let nick = clientNicks[client] ?? "*"
             broadcast(":\(nick)!~\(nick)@localhost PRIVMSG \(channel) :\(message)")
             
@@ -171,7 +181,7 @@ final class MockIRCServer {
     }
     
     private func sendReply(to client: Int32, message: String) {
-        var data = (message + "\r\n").data(using: .utf8) ?? Data()
+        let data = (message + "\r\n").data(using: .utf8) ?? Data()
         _ = data.withUnsafeBytes { ptr in
             send(client, ptr.baseAddress, data.count, 0)
         }
@@ -323,7 +333,7 @@ final class MockIRCClient {
     
     func sendCommand(_ command: String) {
         guard isConnected else { return }
-        var data = (command + "\r\n").data(using: .utf8) ?? Data()
+        let data = (command + "\r\n").data(using: .utf8) ?? Data()
         _ = data.withUnsafeBytes { ptr in
             send(socket, ptr.baseAddress, data.count, 0)
         }
@@ -368,3 +378,5 @@ final class MockIRCClient {
         disconnect()
     }
 }
+
+#endif // !canImport(Darwin)
