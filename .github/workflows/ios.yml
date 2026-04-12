@@ -115,18 +115,28 @@ jobs:
             -exportPath ./output \
             -exportOptionsPlist ExportOptions.plist
 
+      - name: Write App Store Connect API Key
+        env:
+          APPSTORE_API_KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
+          APPSTORE_API_PRIVATE_KEY: ${{ secrets.APPSTORE_API_PRIVATE_KEY }}
+        run: |
+          set -eo pipefail
+          mkdir -p ~/.appstoreconnect/private_keys
+          echo "$APPSTORE_API_PRIVATE_KEY" \
+            > ~/.appstoreconnect/private_keys/AuthKey_${APPSTORE_API_KEY_ID}.p8
+          chmod 600 ~/.appstoreconnect/private_keys/AuthKey_${APPSTORE_API_KEY_ID}.p8
+
       - name: Upload to TestFlight
         env:
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-          TEAM_ID: ${{ secrets.TEAM_ID }}
+          APPSTORE_API_KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
+          APPSTORE_API_ISSUER_ID: ${{ secrets.APPSTORE_API_ISSUER_ID }}
         run: |
+          set -eo pipefail
           xcrun altool --upload-app \
-            --file output/ParsoIRC.ipa \
             --type ios \
-            --username "$APPLE_ID" \
-            --password "$APPLE_APP_SPECIFIC_PASSWORD" \
-            --team-id "$TEAM_ID"
+            --file output/ParsoIRC.ipa \
+            --apiKey "$APPSTORE_API_KEY_ID" \
+            --apiIssuer "$APPSTORE_API_ISSUER_ID"
 
       - name: Upload Build Log on Failure
         if: failure()
@@ -136,6 +146,8 @@ jobs:
           path: build.log
           retention-days: 7
 
-      - name: Cleanup Keychain
+      - name: Cleanup
         if: always()
-        run: security delete-keychain build.keychain
+        run: |
+          security delete-keychain build.keychain
+          rm -f ~/.appstoreconnect/private_keys/AuthKey_*.p8
