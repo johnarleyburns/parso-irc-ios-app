@@ -119,16 +119,14 @@ jobs:
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          TEAM_ID: ${{ secrets.TEAM_ID }}
         run: |
-          set -eo pipefail
-          CLEAN_APPLE_ID=$(echo "$APPLE_ID" | tr -d '[:space:]')
-          CLEAN_PASSWORD=$(echo "$APPLE_APP_SPECIFIC_PASSWORD" | tr -d '[:space:]')
-          /Applications/Xcode_16.4.app/Contents/Developer/usr/bin/iTMSTransporter \
-            -m upload \
-            -f output/ParsoIRC.ipa \
-            -u "$CLEAN_APPLE_ID" \
-            -p "$CLEAN_PASSWORD" \
-            -v detailed
+          xcrun altool --upload-app \
+            --file output/ParsoIRC.ipa \
+            --type ios \
+            --username "$APPLE_ID" \
+            --password "$APPLE_APP_SPECIFIC_PASSWORD" \
+            --team-id "$TEAM_ID"
 
       - name: Upload Build Log on Failure
         if: failure()
