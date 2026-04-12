@@ -115,30 +115,15 @@ jobs:
             -exportPath ./output \
             -exportOptionsPlist ExportOptions.plist
 
-      - name: Install Transporter
-        run: |
-          # Transporter is a free Mac App Store app — the CLI is bundled with Xcode
-          # but we can also install it directly via mas or use the bundled iTMSTransporter
-          TRANSPORTER_PATH="/Applications/Xcode_16.4.app/Contents/SharedFrameworks/ContentDeliveryServices.framework/Versions/A/itms/bin/iTMSTransporter"
-          if [ ! -f "$TRANSPORTER_PATH" ]; then
-            echo "iTMSTransporter not found at expected path, searching..."
-            find /Applications/Xcode_16.4.app -name "iTMSTransporter" 2>/dev/null | head -5
-            exit 1
-          fi
-          echo "Found iTMSTransporter at: $TRANSPORTER_PATH"
-          echo "$(dirname $TRANSPORTER_PATH)" >> $GITHUB_PATH
-
-      - name: Upload to TestFlight via iTMSTransporter
+      - name: Upload to TestFlight
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-          TEAM_ID: ${{ secrets.TEAM_ID }}
         run: |
           set -eo pipefail
           CLEAN_APPLE_ID=$(echo "$APPLE_ID" | tr -d '[:space:]')
           CLEAN_PASSWORD=$(echo "$APPLE_APP_SPECIFIC_PASSWORD" | tr -d '[:space:]')
-
-          iTMSTransporter \
+          /Applications/Xcode_16.4.app/Contents/Developer/usr/bin/iTMSTransporter \
             -m upload \
             -f output/ParsoIRC.ipa \
             -u "$CLEAN_APPLE_ID" \
