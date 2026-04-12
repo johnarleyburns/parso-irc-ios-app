@@ -1,6 +1,5 @@
-// Stub for UserNotifications (Linux)
-#if canImport(UserNotifications)
-#else
+// Stub for UserNotifications (Linux only)
+#if os(Linux)
 import Foundation
 public class UNUserNotificationCenter {
     public static func current() -> UNUserNotificationCenter { UNUserNotificationCenter() }

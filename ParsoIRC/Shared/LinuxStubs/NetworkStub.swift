@@ -1,6 +1,5 @@
-// Stub for Network framework (Linux)
-#if canImport(Network)
-#else
+// Stub for Network framework (Linux only)
+#if os(Linux)
 import Foundation
 
 public class NWConnection {

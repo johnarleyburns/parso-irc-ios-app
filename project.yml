@@ -40,6 +40,10 @@ targets:
       - path: ParsoIRC
         excludes:
           - "**/.DS_Store"
+          - "**/Tests/**"
+          - "**/*Tests.swift"
+          - "**/*Mock*.swift"
+          - "**/LinuxStubs/**"
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
@@ -66,6 +70,22 @@ targets:
     dependencies:
       - package: SQLite
 
+  ParsoIRCTests:
+    type: bundle
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: ParsoIRC/Core/Tests
+        excludes:
+          - "**/Mocks/**"
+    dependencies:
+      - target: ParsoIRC
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleShortVersionString: "1.0.0"
+        INFOPLIST_KEY_CFBundleVersion: "1"
+
 schemes:
   ParsoIRC:
     build:
@@ -79,5 +99,18 @@ schemes:
       config: Release
     analyze:
       config: Debug
+    archive:
+      config: Release
+
+  ParsoIRCTests:
+    build:
+      targets:
+        ParsoIRCTests: all
+    run:
+      config: Debug
+    test:
+      config: Debug
+    profile:
+      config: Release
     archive:
       config: Release

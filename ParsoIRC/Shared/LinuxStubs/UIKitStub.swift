@@ -1,6 +1,5 @@
-// Stub for UIKit (Linux)
-#if canImport(UIKit)
-#else
+// Stub for UIKit (Linux only)
+#if os(Linux)
 import Foundation
 public class UIColor: NSObject {}
 public struct CGRect: Hashable {

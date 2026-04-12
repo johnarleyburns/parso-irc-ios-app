@@ -1,6 +1,5 @@
-// Minimal Combine stub for type-checking only
-#if canImport(Combine)
-#else
+// Minimal Combine stub for Linux type-checking only
+#if os(Linux)
 import Foundation
 
 public func pow(_ base: Double, _ exp: Double) -> Double {

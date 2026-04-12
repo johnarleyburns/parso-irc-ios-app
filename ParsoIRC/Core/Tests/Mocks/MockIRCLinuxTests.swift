@@ -1,5 +1,5 @@
 // Linux-only mock tests (not compiled on Darwin/iOS)
-#if !canImport(Darwin)
+#if os(Linux)
 
 import Foundation
 
@@ -198,4 +198,4 @@ if failed > 0 {
     exit(1)
 }
 
-#endif // !canImport(Darwin)
+#endif // os(Linux)

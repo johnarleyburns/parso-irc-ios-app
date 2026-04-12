@@ -1,3 +1,4 @@
+#if !os(Linux)
 import XCTest
 
 final class IRCErrorTests: XCTestCase {
@@ -56,3 +57,5 @@ final class IRCErrorTests: XCTestCase {
         XCTAssertNotNil(error.localizedDescription)
     }
 }
+
+#endif // !os(Linux)

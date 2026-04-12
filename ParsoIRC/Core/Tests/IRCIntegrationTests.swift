@@ -1,3 +1,4 @@
+#if !os(Linux)
 import XCTest
 #if canImport(Network)
 @testable import ParsoIRC
@@ -230,3 +231,5 @@ final class IRCIntegrationTests: XCTestCase {
     }
 }
 #endif
+
+#endif // !os(Linux)

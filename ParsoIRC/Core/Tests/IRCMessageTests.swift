@@ -1,3 +1,4 @@
+#if !os(Linux)
 import XCTest
 @testable import ParsoIRC
 
@@ -91,3 +92,5 @@ final class IRCMessageTests: XCTestCase {
         XCTAssertEqual(message.parameters.last ?? "", "")
     }
 }
+
+#endif // !os(Linux)

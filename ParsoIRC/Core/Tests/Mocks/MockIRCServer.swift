@@ -1,5 +1,5 @@
 // Linux-only mock IRC server (not compiled on Darwin/iOS)
-#if !canImport(Darwin)
+#if os(Linux)
 
 import Foundation
 import Darwin
@@ -379,4 +379,4 @@ final class MockIRCClient {
     }
 }
 
-#endif // !canImport(Darwin)
+#endif // os(Linux)
