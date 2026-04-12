@@ -115,39 +115,35 @@ jobs:
             -exportPath ./output \
             -exportOptionsPlist ExportOptions.plist
 
-      - name: Validate Apple Credentials
-        env:
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+      - name: Install Transporter
         run: |
-          set -eo pipefail
-          echo "Apple ID length: ${#APPLE_ID}"
-          echo "App-specific password length: ${#APPLE_APP_SPECIFIC_PASSWORD}"
-          if [ -z "$APPLE_ID" ] || [ -z "$APPLE_APP_SPECIFIC_PASSWORD" ]; then
-            echo "ERROR: APPLE_ID or APPLE_APP_SPECIFIC_PASSWORD secret is missing or empty."
+          # Transporter is a free Mac App Store app — the CLI is bundled with Xcode
+          # but we can also install it directly via mas or use the bundled iTMSTransporter
+          TRANSPORTER_PATH="/Applications/Xcode_16.4.app/Contents/SharedFrameworks/ContentDeliveryServices.framework/Versions/A/itms/bin/iTMSTransporter"
+          if [ ! -f "$TRANSPORTER_PATH" ]; then
+            echo "iTMSTransporter not found at expected path, searching..."
+            find /Applications/Xcode_16.4.app -name "iTMSTransporter" 2>/dev/null | head -5
             exit 1
           fi
-          # App-specific passwords are always xxxx-xxxx-xxxx-xxxx (16 lowercase letters + 3 dashes)
-          if ! echo "$APPLE_APP_SPECIFIC_PASSWORD" | grep -qE '^[a-z]{4}-[a-z]{4}-[a-z]{4}-[a-z]{4}$'; then
-            echo "WARNING: Password does not match app-specific password format (xxxx-xxxx-xxxx-xxxx)."
-            echo "Regenerate at appleid.apple.com -> App-Specific Passwords."
-          fi
+          echo "Found iTMSTransporter at: $TRANSPORTER_PATH"
+          echo "$(dirname $TRANSPORTER_PATH)" >> $GITHUB_PATH
 
-      - name: Upload to TestFlight
+      - name: Upload to TestFlight via iTMSTransporter
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           TEAM_ID: ${{ secrets.TEAM_ID }}
         run: |
           set -eo pipefail
-          # Strip any accidental whitespace/newlines from secret values
           CLEAN_APPLE_ID=$(echo "$APPLE_ID" | tr -d '[:space:]')
           CLEAN_PASSWORD=$(echo "$APPLE_APP_SPECIFIC_PASSWORD" | tr -d '[:space:]')
-          xcrun notarytool submit output/ParsoIRC.ipa \
-            --apple-id "$CLEAN_APPLE_ID" \
-            --password "$CLEAN_PASSWORD" \
-            --team-id "$TEAM_ID" \
-            --wait
+
+          iTMSTransporter \
+            -m upload \
+            -f output/ParsoIRC.ipa \
+            -u "$CLEAN_APPLE_ID" \
+            -p "$CLEAN_PASSWORD" \
+            -v detailed
 
       - name: Upload Build Log on Failure
         if: failure()
