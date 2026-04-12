@@ -11,7 +11,7 @@ final class IRCMessageTests: XCTestCase {
         XCTAssertEqual(message.source?.user, "user")
         XCTAssertEqual(message.source?.host, "host")
         XCTAssertEqual(message.parameters.first, "#channel")
-        XCTAssertEqual(message.trailing, "Hello world")
+        XCTAssertEqual(message.parameters.last ?? "", "Hello world")
     }
     
     func testParseJoin() {
@@ -27,21 +27,21 @@ final class IRCMessageTests: XCTestCase {
         
         XCTAssertEqual(message.command, "PART")
         XCTAssertEqual(message.parameters.first, "#channel")
-        XCTAssertEqual(message.trailing, "Goodbye")
+        XCTAssertEqual(message.parameters.last ?? "", "Goodbye")
     }
     
     func testParseQuit() {
         let message = IRCMessage(rawLine: ":nick!user@host QUIT :Leaving")
         
         XCTAssertEqual(message.command, "QUIT")
-        XCTAssertEqual(message.trailing, "Leaving")
+        XCTAssertEqual(message.parameters.last ?? "", "Leaving")
     }
     
     func testParsePing() {
         let message = IRCMessage(rawLine: "PING :server")
         
         XCTAssertEqual(message.command, "PING")
-        XCTAssertEqual(message.trailing, "server")
+        XCTAssertEqual(message.parameters.last ?? "", "server")
     }
     
     func testParseNick() {
@@ -49,7 +49,7 @@ final class IRCMessageTests: XCTestCase {
         
         XCTAssertEqual(message.command, "NICK")
         XCTAssertEqual(message.source?.nick, "oldnick")
-        XCTAssertEqual(message.trailing, "newnick")
+        XCTAssertEqual(message.parameters.last ?? "", "newnick")
     }
     
     func testParseMode() {
@@ -64,7 +64,7 @@ final class IRCMessageTests: XCTestCase {
         
         XCTAssertEqual(message.command, "TOPIC")
         XCTAssertEqual(message.parameters.first, "#channel")
-        XCTAssertEqual(message.trailing, "New topic")
+        XCTAssertEqual(message.parameters.last ?? "", "New topic")
     }
     
     func testParseNumeric() {
@@ -73,14 +73,14 @@ final class IRCMessageTests: XCTestCase {
         XCTAssertEqual(message.command, "353")
         XCTAssertEqual(message.parameters[1], "=")
         XCTAssertEqual(message.parameters[2], "#channel")
-        XCTAssertEqual(message.trailing, "user1 user2 user3")
+        XCTAssertEqual(message.parameters.last ?? "", "user1 user2 user3")
     }
     
     func testParseMessageWithoutPrefix() {
         let message = IRCMessage(rawLine: "QUOTE :test message")
         
         XCTAssertEqual(message.command, "QUOTE")
-        XCTAssertEqual(message.trailing, "test message")
+        XCTAssertEqual(message.parameters.last ?? "", "test message")
         XCTAssertNil(message.source)
     }
     
@@ -88,6 +88,6 @@ final class IRCMessageTests: XCTestCase {
         let message = IRCMessage(rawLine: ":nick PRIVMSG #channel")
         
         XCTAssertEqual(message.command, "PRIVMSG")
-        XCTAssertEqual(message.trailing, "")
+        XCTAssertEqual(message.parameters.last ?? "", "")
     }
 }

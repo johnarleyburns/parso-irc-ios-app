@@ -12,11 +12,11 @@ actor IRCClientMock {
     private var shouldFail = false
     private var failError: Error?
     
-    var onWelcome: ((String) -> Void)?
-    var onMessage: ((IRCMessage) -> Void)?
-    var onJoin: ((String, String) -> Void)?
-    var onDisconnect: (() -> Void)?
-    var onError: ((Error) -> Void)?
+    nonisolated(unsafe) var onWelcome: ((String) -> Void)?
+    nonisolated(unsafe) var onMessage: ((IRCMessage) -> Void)?
+    nonisolated(unsafe) var onJoin: ((String, String) -> Void)?
+    nonisolated(unsafe) var onDisconnect: (() -> Void)?
+    nonisolated(unsafe) var onError: ((Error) -> Void)?
     
     func setFailOnConnect(_ error: Error) {
         self.shouldFail = true
@@ -44,18 +44,14 @@ actor IRCClientMock {
         self.nickname = nickname
         
         let welcome = IRCMessage(rawLine: "001 \(nickname)")
-        await MainActor.run {
-            self.onWelcome?(nickname)
-        }
+        self.onWelcome?(nickname)
         messages.append(welcome)
     }
     
     func disconnect() {
         connected = false
         channels.removeAll()
-        Task { @MainActor in
-            self.onDisconnect?()
-        }
+        self.onDisconnect?()
     }
     
     func sendMessage(_ text: String, to channel: String) async throws {
@@ -67,9 +63,7 @@ actor IRCClientMock {
         messages.append(message)
         
         let echo = IRCMessage(rawLine: ":\(nickname)!~\(nickname)@localhost PRIVMSG \(channel) :\(text)")
-        Task { @MainActor in
-            self.onMessage?(echo)
-        }
+        self.onMessage?(echo)
     }
     
     func join(channel: String) async throws {
@@ -82,9 +76,7 @@ actor IRCClientMock {
         let joinMsg = IRCMessage(rawLine: ":\(nickname)!~\(nickname)@localhost JOIN \(channel)")
         messages.append(joinMsg)
         
-        Task { @MainActor in
-            self.onJoin?(channel, nickname)
-        }
+        self.onJoin?(channel, nickname)
     }
     
     func leave(channel: String, message: String? = nil) async throws {

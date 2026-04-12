@@ -9,10 +9,9 @@ let package = Package(
     dependencies: [],
     targets: [
         .executableTarget(
-            name: "IRCStandaloneTests",
+            name: "IRCTests",
             dependencies: [],
-            path: ".",
-            sources: ["Tests/LinuxStandaloneTests.swift"]
+            path: "Tests"
         ),
     ]
 )

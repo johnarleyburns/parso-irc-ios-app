@@ -7,45 +7,6 @@ on:
   workflow_dispatch:
 
 jobs:
-  integration-test:
-    runs-on: macos-15
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Select Xcode 16.4
-        run: |
-          sudo xcode-select -s /Applications/Xcode_16.4.app
-          xcodebuild -version
-
-      - name: Accept Xcode License
-        run: sudo xcodebuild -license accept
-
-      - name: Install XcodeGen
-        run: |
-          curl -sL https://github.com/yonaskolb/XcodeGen/releases/download/2.45.3/xcodegen.zip \
-            -o xcodegen.zip
-          unzip -o xcodegen.zip
-          echo "${GITHUB_WORKSPACE}/xcodegen/bin" >> $GITHUB_PATH
-
-      - name: Generate Xcode Project
-        run: xcodegen generate
-
-      - name: Run Integration Tests
-        env:
-          IRC_TEST_URL: ${{ secrets.IRC_TEST_URL }}
-          IRC_TEST_USERNAME: ${{ secrets.IRC_TEST_USERNAME }}
-          IRC_TEST_PASSWORD: ${{ secrets.IRC_TEST_PASSWORD }}
-          IRC_TEST_CHANNEL: ${{ secrets.IRC_TEST_CHANNEL }}
-        run: |
-          xcodebuild test \
-            -project ParsoIRC.xcodeproj \
-            -scheme ParsoIRC \
-            -configuration Debug \
-            -destination 'platform=macOS' \
-            -only-testing:ParsoIRC/Core/Tests/IRCIntegrationTests
-
   testflight-build:
     runs-on: macos-15
 

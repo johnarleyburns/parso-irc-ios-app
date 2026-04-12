@@ -140,8 +140,8 @@ final class IRCIntegrationTests: XCTestCase {
             client.onMessage = { message in
                 if message.command == "PRIVMSG",
                    message.parameters.first == channel,
-                   message.trailing == uniqueMessage {
-                    receivedMessage = message.trailing
+                   message.parameters.last ?? "" == uniqueMessage {
+                    receivedMessage = message.parameters.last ?? ""
                 }
             }
         }
@@ -194,8 +194,8 @@ final class IRCIntegrationTests: XCTestCase {
             client.onMessage = { message in
                 if message.command == "PRIVMSG",
                    message.parameters.first == channel {
-                    receivedMessage = message.trailing
-                    print("Received: \(message.trailing)")
+                    receivedMessage = message.parameters.last ?? ""
+                    print("Received: \(message.parameters.last ?? "")")
                 }
             }
         }
