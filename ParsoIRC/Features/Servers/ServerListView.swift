@@ -5,6 +5,8 @@ struct ServerListView: View {
     @EnvironmentObject var appState: AppState
     @State private var showingAddServer = false
     @State private var serverToEdit: Server?
+    @State private var serverToQuickConnect: Server?
+    @State private var isFirstTimeConnect = false
     
     var body: some View {
         NavigationStack {
@@ -17,7 +19,8 @@ struct ServerListView: View {
                     .accessibilityIdentifier("server-\(server.id)")
                     .contentShape(Rectangle())
                     .onTapGesture {
-                        connectToServer(server)
+                        serverToQuickConnect = server
+                        isFirstTimeConnect = false
                     }
                     .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                         Button(role: .destructive) {
@@ -63,18 +66,11 @@ struct ServerListView: View {
             .sheet(item: $serverToEdit) { server in
                 AddServerSheet(server: server)
             }
+            .sheet(item: $serverToQuickConnect) { server in
+                QuickConnectSheet(server: server, isFirstTime: isFirstTimeConnect)
+            }
             .refreshable {
                 await reconnectAllServers()
-            }
-        }
-    }
-    
-    private func connectToServer(_ server: Server) {
-        Task {
-            do {
-                try await ircManager.connect(to: server)
-            } catch {
-                print("Connection failed: \(error)")
             }
         }
     }

@@ -1,10 +1,11 @@
 import SwiftUI
 
 struct ContentView: View {
-    @State private var selectedTab = 1
+    @EnvironmentObject var appState: AppState
+    @EnvironmentObject var ircManager: IRCClientManager
     
     var body: some View {
-        TabView(selection: $selectedTab) {
+        TabView(selection: $appState.selectedTab) {
             ServerListView()
                 .tabItem {
                     Label("Servers", systemImage: "server.rack")
@@ -27,6 +28,14 @@ struct ContentView: View {
                 .accessibilityIdentifier("settingsTab")
         }
         .tint(Color.theme.sentBubble)
+        .sheet(isPresented: $appState.showReconnectingSheet) {
+            if let info = appState.reconnectInfo {
+                ReconnectingSheet(serverId: info.serverId, channelName: info.channelName)
+                    .onDisappear {
+                        appState.reconnectInfo = nil
+                    }
+            }
+        }
     }
 }
 

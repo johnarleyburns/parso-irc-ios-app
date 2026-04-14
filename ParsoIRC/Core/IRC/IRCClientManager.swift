@@ -62,6 +62,10 @@ final class IRCClientManager: ObservableObject {
         }
     }
     
+    func isConnected(serverId: String) -> Bool {
+        return connectionStates[serverId] == .connected
+    }
+    
     // MARK: - Connection Management
     
     func connect(to server: Server) async throws {
@@ -89,23 +93,91 @@ final class IRCClientManager: ObservableObject {
         }
         
         do {
+            let nickname = server.nickname.isEmpty ? "ParsoUser\(Int.random(in: 1000...9999))" : server.nickname
+            
             try await client.connect(
                 host: server.host,
                 port: server.port,
                 tls: server.ssl,
-                nickname: server.nickname.isEmpty ? "ParsoUser\(Int.random(in: 1000...9999))" : server.nickname,
+                nickname: nickname,
                 username: server.realname.isEmpty ? "parso" : server.realname,
-                realname: server.realname.isEmpty ? "Parso IRC" : server.realname
+                realname: server.realname.isEmpty ? "Parso IRC" : server.realname,
+                serverPassword: server.password,
+                useSASL: server.saslEnabled,
+                saslPassword: server.password
             )
-            
-            if server.saslEnabled, let password = server.password {
-                try await client.authenticateSASL(username: server.nickname, password: password)
-            }
             
             connections[server.id] = client
             
             for channel in server.channels {
                 try await client.join(channel: channel.name)
+            }
+            
+        } catch {
+            connectionStates[server.id] = .failed(IRCError.connectionFailed(error.localizedDescription))
+            throw error
+        }
+    }
+    
+    func connectWithHistory(to server: Server, onConnected: ((String, String) -> Void)? = nil) async throws {
+        connectionStates[server.id] = .connecting
+        
+        let client = IRCClient()
+        
+        client.onWelcome = { [weak self] nick in
+            Task { @MainActor in
+                guard let self = self else { return }
+                self.currentNicknames[server.id] = nick
+                self.connectionStates[server.id] = .connected
+            }
+        }
+        
+        client.onDisconnect = { [weak self] in
+            Task { @MainActor in
+                self?.handleDisconnect(serverId: server.id)
+            }
+        }
+        
+        client.onError = { [weak self] error in
+            Task { @MainActor in
+                self?.connectionStates[server.id] = .failed(IRCError.connectionFailed(error.localizedDescription))
+            }
+        }
+        
+        do {
+            let nickname = server.nickname.isEmpty ? "ParsoUser\(Int.random(in: 1000...9999))" : server.nickname
+            
+            try await client.connect(
+                host: server.host,
+                port: server.port,
+                tls: server.ssl,
+                nickname: nickname,
+                username: server.realname.isEmpty ? "parso" : server.realname,
+                realname: server.realname.isEmpty ? "Parso IRC" : server.realname,
+                serverPassword: server.password,
+                useSASL: server.saslEnabled,
+                saslPassword: server.password
+            )
+            
+            connections[server.id] = client
+            
+            for channel in server.channels {
+                try await client.join(channel: channel.name)
+            }
+            
+            try await Task.sleep(nanoseconds: 500_000_000)
+            
+            if client.hasChathistorySupport() {
+                let targetChannel = server.lastActiveChannel ?? server.channels.first?.name ?? ""
+                if !targetChannel.isEmpty {
+                    let limit = client.getChathistoryLimit()
+                    try await client.requestHistory(target: targetChannel, limit: limit)
+                }
+            }
+            
+            if let callback = onConnected {
+                let targetChannel = server.lastActiveChannel ?? server.channels.first?.name ?? ""
+                callback(server.id, targetChannel)
             }
             
         } catch {

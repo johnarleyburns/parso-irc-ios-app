@@ -9,9 +9,13 @@ actor IRCClient {
     private var isConnected = false
     private var currentNick: String = ""
     private var serverInfo: (host: String, port: UInt16)?
-
+    
+    var chathistoryEnabled: Bool = false
+    var chathistoryMaxLimit: Int = 100
+    var serverTimeEnabled: Bool = false
+    
     private let queue = DispatchQueue(label: "irc.client", qos: .userInitiated)
-
+    
     // Event handlers (IRCKit-compatible API)
     nonisolated(unsafe) var onWelcome: ((String) -> Void)?
     nonisolated(unsafe) var onDisconnect: (() -> Void)?
@@ -23,11 +27,17 @@ actor IRCClient {
     nonisolated(unsafe) var onNickChange: ((String, String) -> Void)?
     nonisolated(unsafe) var onTopicChange: ((String, String, String) -> Void)?
     nonisolated(unsafe) var onNamesList: ((String, [String]) -> Void)?
-
+    nonisolated(unsafe) var onHistoryMessage: ((IRCMessage) -> Void)?
+    
     private var readStream: InputStream?
     private var writeStream: OutputStream?
     private var useTLS = false
-
+    
+    private var pendingCapabilities: Set<String> = []
+    private var acknowledgedCapabilities: Set<String> = []
+    private var isCapNegotiationComplete = false
+    private var saslRequested = false
+    
     init() {}
 
     // MARK: - Connection
@@ -38,7 +48,10 @@ actor IRCClient {
         tls: Bool,
         nickname: String,
         username: String,
-        realname: String
+        realname: String,
+        serverPassword: String? = nil,
+        useSASL: Bool = false,
+        saslPassword: String? = nil
     ) async throws {
         guard !isConnected else { return }
 
@@ -72,10 +85,9 @@ actor IRCClient {
                     try await self.waitForConnection(timeout: 30)
                     self.isConnected = true
                     self.currentNick = nickname
-
-                    try await self.send_raw("NICK :\(nickname)")
-                    try await self.send_raw("USER \(username) 8 * :\(realname)")
-
+                    
+                    try await self.send_raw("CAP LS 302")
+                    
                     continuation.resume()
                 } catch {
                     continuation.resume(throwing: error)
@@ -84,6 +96,52 @@ actor IRCClient {
         }
 
         startReceiving()
+        
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            Task {
+                do {
+                    try await self.waitForCapNegotiation(timeout: 10)
+                    
+                    var capsToRequest = ["batch", "server-time", "message-tags"]
+                    if useSASL {
+                        capsToRequest.append("sasl")
+                    }
+                    try await self.send_raw("CAP REQ :\(capsToRequest.joined(separator: " "))")
+                    
+                    try await Task.sleep(nanoseconds: 500_000_000)
+                    
+                    self.isCapNegotiationComplete = true
+                    
+                    if useSASL && self.acknowledgedCapabilities.contains("sasl") {
+                        try await self.send_raw("CAP REQ :sasl")
+                        try await self.send_raw("AUTHENTICATE +")
+                        self.saslRequested = true
+                    }
+                    
+                    try await self.send_raw("NICK :\(nickname)")
+                    try await self.send_raw("USER \(username) 8 * :\(realname)")
+                    
+                    if let password = serverPassword, !password.isEmpty {
+                        try await self.send_raw("PASS \(password)")
+                    }
+                    
+                    continuation.resume()
+                } catch {
+                    continuation.resume(throwing: error)
+                }
+            }
+        }
+    }
+    
+    private func waitForCapNegotiation(timeout: Int) async throws {
+        let startTime = Date()
+        while !isCapNegotiationComplete {
+            try await Task.sleep(nanoseconds: 100_000_000)
+            if Date().timeIntervalSince(startTime) > Double(timeout) {
+                isCapNegotiationComplete = true
+                return
+            }
+        }
     }
 
     func disconnect() {
@@ -185,6 +243,18 @@ actor IRCClient {
     func quit(message: String = "Parso IRC") async throws {
         try await send(command: "QUIT", parameters: [message])
     }
+    
+    func isConnectedToServer() -> Bool {
+        return isConnected
+    }
+    
+    func getChathistoryLimit() -> Int {
+        return chathistoryMaxLimit
+    }
+    
+    func hasChathistorySupport() -> Bool {
+        return chathistoryEnabled
+    }
 
     func authenticateSASL(username: String, password: String) async throws {
         try await send_raw("CAP LS 302")
@@ -234,6 +304,24 @@ actor IRCClient {
         case "PING":
             let param = message.parameters.first.map { ":\($0)" } ?? ":"
             try? await send_raw("PONG \(param)")
+
+        case "CAP":
+            await handleCapMessage(message)
+            
+        case "005", "RPL_ISUPPORT":
+            handleISupportMessage(message)
+            
+        case "903", "RPL_SASLSUCCESS":
+            if saslRequested {
+                try? await send_raw("CAP END")
+                saslRequested = false
+            }
+            
+        case "904", "RPL_SASLFAILURE":
+            if saslRequested {
+                try? await send_raw("CAP END")
+                saslRequested = false
+            }
 
         case "001", "RPL_WELCOME":
             let nick = message.parameters.first ?? ""
@@ -292,8 +380,12 @@ actor IRCClient {
             }
 
         case "PRIVMSG", "NOTICE":
-            await MainActor.run {
-                self.onMessage?(message)
+            if chathistoryEnabled && isHistoryBatch(message) {
+                await handleHistoryMessage(message)
+            } else {
+                await MainActor.run {
+                    self.onMessage?(message)
+                }
             }
 
         case "ERROR":
@@ -306,5 +398,82 @@ actor IRCClient {
         default:
             break
         }
+    }
+    
+    private func handleCapMessage(_ message: IRCMessage) async {
+        guard message.parameters.count >= 3 else { return }
+        
+        let subcommand = message.parameters[1]
+        
+        switch subcommand {
+        case "LS":
+            if let caps = message.parameters.last {
+                let capabilities = caps.split(separator: " ").map(String.init)
+                for cap in capabilities {
+                    if cap.hasPrefix("batch") {
+                        pendingCapabilities.insert("batch")
+                    } else if cap.hasPrefix("server-time") {
+                        pendingCapabilities.insert("server-time")
+                    } else if cap.hasPrefix("message-tags") {
+                        pendingCapabilities.insert("message-tags")
+                    } else if cap.hasPrefix("draft/chathistory") || cap.hasPrefix("chathistory") {
+                        pendingCapabilities.insert("chathistory")
+                    } else if cap.hasPrefix("sasl") {
+                        pendingCapabilities.insert("sasl")
+                    }
+                }
+            }
+            
+        case "ACK":
+            if let caps = message.parameters.last {
+                let acknowledged = caps.split(separator: " ").map(String.init)
+                for cap in acknowledged {
+                    acknowledgedCapabilities.insert(cap)
+                    
+                    if cap == "batch" || cap.hasPrefix("batch") {
+                        chathistoryEnabled = true
+                    } else if cap == "server-time" || cap.hasPrefix("server-time") {
+                        serverTimeEnabled = true
+                    } else if cap.hasPrefix("chathistory") {
+                        chathistoryEnabled = true
+                    }
+                }
+            }
+            
+        case "NAK":
+            break
+            
+        case "END":
+            isCapNegotiationComplete = true
+            
+        default:
+            break
+        }
+    }
+    
+    private func handleISupportMessage(_ message: IRCMessage) {
+        for param in message.parameters {
+            if param.hasPrefix("CHATHISTORY=") {
+                let limitStr = param.replacingOccurrences(of: "CHATHISTORY=", with: "")
+                if let limit = Int(limitStr) {
+                    chathistoryMaxLimit = limit
+                }
+            }
+        }
+    }
+    
+    private func isHistoryBatch(_ message: IRCMessage) -> Bool {
+        return message.tags?["batch"]?.contains("chathistory") ?? false
+    }
+    
+    private func handleHistoryMessage(_ message: IRCMessage) async {
+        await MainActor.run {
+            self.onHistoryMessage?(message)
+        }
+    }
+    
+    func requestHistory(target: String, limit: Int) async throws {
+        let effectiveLimit = min(limit, chathistoryMaxLimit)
+        try await send(command: "CHATHISTORY", parameters: ["LATEST", target, "*", String(effectiveLimit)])
     }
 }

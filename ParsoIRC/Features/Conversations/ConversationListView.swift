@@ -73,6 +73,16 @@ struct ConversationListView: View {
                                 .contentShape(Rectangle())
                                 .onTapGesture {
                                     selectedConversation = ConversationDestination(server: conversation.server, channel: conversation.channel)
+                                    appState.lastServerId = conversation.server.id
+                                    appState.lastChannelName = conversation.channel.name
+                                    appState.lastTabIndex = 1
+                                    
+                                    Task {
+                                        try? DatabaseManager.shared.updateLastActiveChannel(
+                                            serverId: conversation.server.id,
+                                            channelName: conversation.channel.name
+                                        )
+                                    }
                                 }
                             }
                         }

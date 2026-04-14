@@ -2,12 +2,15 @@ import SwiftUI
 import Combine
 import BackgroundTasks
 import UserNotifications
+import Network
 
 @main
 struct ParsoIRCApp: App {
     @StateObject private var ircManager = IRCClientManager.shared
     @StateObject private var appState = AppState()
     @StateObject private var watchManager = WatchManager.shared
+    @State private var networkMonitor = NetworkMonitor()
+    @State private var showNetworkError = false
     
     init() {
         setupAppearance()
@@ -21,9 +24,50 @@ struct ParsoIRCApp: App {
                 .environmentObject(appState)
                 .environmentObject(watchManager)
                 .onAppear {
+                    networkMonitor.startMonitoring()
                     loadInitialData()
                     setupNotifications()
+                    handleAppLaunch()
                 }
+                .onChange(of: networkMonitor.isConnected) { _, isConnected in
+                    if !isConnected && appState.hasLaunchedBefore {
+                        showNetworkError = true
+                    }
+                }
+                .alert("No Internet Connection", isPresented: $showNetworkError) {
+                    Button("Retry") {
+                        if networkMonitor.isConnected {
+                            handleAppLaunch()
+                        } else {
+                            showNetworkError = true
+                        }
+                    }
+                    Button("Cancel", role: .cancel) {}
+                } message: {
+                    Text("IRC requires an internet connection to connect to servers.")
+                }
+        }
+    }
+    
+    private func handleAppLaunch() {
+        if !appState.hasLaunchedBefore {
+            appState.hasLaunchedBefore = true
+            appState.showFirstTimeConnect = true
+        } else {
+            let lastTab = appState.lastTabIndex
+            let lastServerId = appState.lastServerId
+            let lastChannel = appState.lastChannelName
+            
+            appState.selectedTab = lastTab
+            
+            if lastTab == 1, let serverId = lastServerId, let channel = lastChannel {
+                if !ircManager.isConnected(serverId: serverId) {
+                    appState.reconnectInfo = (serverId, channel)
+                    appState.showReconnectingSheet = true
+                } else {
+                    appState.navigateToChannel(serverId: serverId, channelName: channel)
+                }
+            }
         }
     }
     
@@ -134,12 +178,23 @@ struct ParsoIRCApp: App {
 
 @MainActor
 class AppState: ObservableObject {
+    @AppStorage("hasLaunchedBefore") var hasLaunchedBefore = false
+    @AppStorage("lastTabIndex") var lastTabIndex = 1
+    @AppStorage("lastServerId") var lastServerId: String?
+    @AppStorage("lastChannelName") var lastChannelName: String?
+    @AppStorage("lastUsername") var lastUsername: String?
+    
     @Published var servers: [Server] = []
     @Published var selectedServerId: String?
     @Published var selectedChannel: Channel?
     @Published var showingServerSheet = false
     @Published var showingAddChannel = false
     @Published var currentViewingChannelId: String?
+    @Published var selectedTab: Int = 1
+    
+    @Published var showFirstTimeConnect = false
+    @Published var reconnectInfo: (serverId: String, channelName: String)?
+    @Published var showReconnectingSheet = false
     
     var currentNick: String {
         guard let serverId = selectedServerId else { return "" }
@@ -148,5 +203,18 @@ class AppState: ObservableObject {
     
     func isViewingChannel(_ channelId: String) -> Bool {
         return currentViewingChannelId == channelId
+    }
+    
+    func navigateToChannel(serverId: String, channelName: String) {
+        lastServerId = serverId
+        lastChannelName = channelName
+        selectedServerId = serverId
+        
+        if let server = servers.first(where: { $0.id == serverId }),
+           let channel = server.channels.first(where: { $0.name == channelName }) {
+            selectedChannel = channel
+        }
+        
+        selectedTab = 1
     }
 }

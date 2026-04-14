@@ -27,6 +27,7 @@ final class DatabaseManager {
     private let serverAutoConnect = Expression<Int>("auto_connect")
     private let serverCreatedAt = Expression<String>("created_at")
     private let serverLastConnected = Expression<String?>("last_connected")
+    private let serverLastActiveChannel = Expression<String?>("last_active_channel")
     
     // Channel columns
     private let channelId = Expression<String>("id")
@@ -93,6 +94,7 @@ final class DatabaseManager {
                 t.column(serverAutoConnect, defaultValue: 1)
                 t.column(serverCreatedAt)
                 t.column(serverLastConnected)
+                t.column(serverLastActiveChannel)
             })
             
             try db.run(channels.create(ifNotExists: true) { t in
@@ -152,7 +154,8 @@ final class DatabaseManager {
             serverSaslMechanism <- server.saslMechanism,
             serverAutoConnect <- server.autoConnect ? 1 : 0,
             serverCreatedAt <- dateFormatter.string(from: server.createdAt),
-            serverLastConnected <- server.lastConnected.map { dateFormatter.string(from: $0) }
+            serverLastConnected <- server.lastConnected.map { dateFormatter.string(from: $0) },
+            serverLastActiveChannel <- server.lastActiveChannel
         )
         
         try db.run(insert)
@@ -185,7 +188,8 @@ final class DatabaseManager {
                 createdAt: dateFormatter.date(from: row[serverCreatedAt]) ?? Date(),
                 lastConnected: row[serverLastConnected].flatMap { dateFormatter.date(from: $0) },
                 isConnected: false,
-                channels: serverChannels
+                channels: serverChannels,
+                lastActiveChannel: row[serverLastActiveChannel]
             )
             result.append(server)
         }
@@ -203,6 +207,13 @@ final class DatabaseManager {
         try db.run(serverChannels.delete())
         
         // Messages will be deleted via cascade or manually
+    }
+    
+    func updateLastActiveChannel(serverId: String, channelName: String) throws {
+        guard let db = db else { return }
+        
+        let server = servers.filter(self.serverId == serverId)
+        try db.run(server.update(serverLastActiveChannel <- channelName))
     }
     
     // MARK: - Channel Operations

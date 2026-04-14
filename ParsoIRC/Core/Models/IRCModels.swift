@@ -16,6 +16,7 @@ struct Server: Identifiable, Codable, Equatable, Hashable {
     var lastConnected: Date?
     var isConnected: Bool
     var channels: [Channel]
+    var lastActiveChannel: String?
 
     init(
         id: String = UUID().uuidString,
@@ -32,7 +33,8 @@ struct Server: Identifiable, Codable, Equatable, Hashable {
         createdAt: Date = Date(),
         lastConnected: Date? = nil,
         isConnected: Bool = false,
-        channels: [Channel] = []
+        channels: [Channel] = [],
+        lastActiveChannel: String? = nil
     ) {
         self.id = id
         self.name = name
@@ -49,6 +51,7 @@ struct Server: Identifiable, Codable, Equatable, Hashable {
         self.lastConnected = lastConnected
         self.isConnected = isConnected
         self.channels = channels
+        self.lastActiveChannel = lastActiveChannel
     }
 
     static let defaultNetworks: [Server] = [
@@ -75,7 +78,8 @@ struct Server: Identifiable, Codable, Equatable, Hashable {
                 Channel(name: "#gentoo"),
                 Channel(name: "#fedora"),
                 Channel(name: "#lxc")
-            ]
+            ],
+            lastActiveChannel: "#libera"
         ),
         Server(
             name: "OFTC",
