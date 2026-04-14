@@ -71,8 +71,30 @@ final class DatabaseManager {
         do {
             db = try Connection(dbPath)
             createTables()
+            migrateIfNeeded()
         } catch {
             print("Database connection failed: \(error)")
+        }
+    }
+    
+    private func migrateIfNeeded() {
+        guard let db = db else { return }
+        
+        do {
+            let tableInfo = try db.prepare("PRAGMA table_info(servers)")
+            var hasLastActiveChannel = false
+            for row in tableInfo {
+                if let name = row[1] as? String, name == "last_active_channel" {
+                    hasLastActiveChannel = true
+                    break
+                }
+            }
+            
+            if !hasLastActiveChannel {
+                try db.run(servers.addColumn(serverLastActiveChannel, defaultValue: nil))
+            }
+        } catch {
+            print("Migration failed: \(error)")
         }
     }
     
