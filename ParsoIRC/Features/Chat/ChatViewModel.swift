@@ -140,7 +140,7 @@ class ChatViewModel: ObservableObject {
             Task { @MainActor in
                 if channelName == self?.channel.name {
                     self?.channelMembers = nicks.map { nick in
-                        var mode: ChannelMember.MemberMode = .none
+                        let mode: ChannelMember.MemberMode = .none
                         if nick.hasPrefix("@") {
                             mode = .operator_
                         } else if nick.hasPrefix("+") {

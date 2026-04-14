@@ -167,10 +167,10 @@ final class IRCClientManager: ObservableObject {
             
             try await Task.sleep(nanoseconds: 500_000_000)
             
-            if client.hasChathistorySupport() {
+            if await client.hasChathistorySupport() {
                 let targetChannel = server.lastActiveChannel ?? server.channels.first?.name ?? ""
                 if !targetChannel.isEmpty {
-                    let limit = client.getChathistoryLimit()
+                    let limit = await client.getChathistoryLimit()
                     try await client.requestHistory(target: targetChannel, limit: limit)
                 }
             }

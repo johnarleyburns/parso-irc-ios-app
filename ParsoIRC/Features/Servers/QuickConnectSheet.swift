@@ -238,8 +238,6 @@ struct QuickConnectSheet: View {
             }
         }
         
-        let targetChannel = isFirstTime ? "#libera" : (server.lastActiveChannel ?? server.channels.first?.name ?? "")
-        
         connectionTask = Task {
             var serverToConnect = server
             

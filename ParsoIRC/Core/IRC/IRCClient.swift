@@ -174,7 +174,7 @@ actor IRCClient {
                 self.onError?(error)
             }
             Task {
-                await disconnect()
+                disconnect()
             }
         case .cancelled:
             isConnected = false
