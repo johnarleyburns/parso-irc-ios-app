@@ -20,6 +20,8 @@ final class IRCMessageTests: XCTestCase {
         
         XCTAssertEqual(message.command, "JOIN")
         XCTAssertEqual(message.source?.nick, "nick")
+        XCTAssertEqual(message.source?.user, "~user")
+        XCTAssertEqual(message.source?.host, "host")
         XCTAssertEqual(message.parameters.first, "#channel")
     }
     
@@ -90,6 +92,7 @@ final class IRCMessageTests: XCTestCase {
         
         XCTAssertEqual(message.command, "PRIVMSG")
         XCTAssertEqual(message.parameters.last ?? "", "")
+        XCTAssertEqual(message.parameters.first, "#channel")
     }
 }
 
