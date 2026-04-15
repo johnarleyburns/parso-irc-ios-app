@@ -7,10 +7,16 @@ import Network
 @main
 struct ParsoIRCApp: App {
     @StateObject private var ircManager = IRCClientManager.shared
-    @StateObject private var appState = AppState()
+    @StateObject private var appState = AppState.shared
     @StateObject private var watchManager = WatchManager.shared
     @State private var networkMonitor = NetworkMonitor()
     @State private var showNetworkError = false
+    
+    @State private var showSplash = true
+    @State private var showOnboarding = false
+    @State private var showRegistration = false
+    @State private var showLogin = false
+    @State private var isAuthenticated = false
     
     init() {
         setupAppearance()
@@ -19,74 +25,82 @@ struct ParsoIRCApp: App {
     
     var body: some Scene {
         WindowGroup {
-            ContentView()
-                .environmentObject(ircManager)
-                .environmentObject(appState)
-                .environmentObject(watchManager)
-                .onAppear {
-                    networkMonitor.startMonitoring()
-                    loadInitialData()
-                    setupNotifications()
-                    handleAppLaunch()
-                }
-                .onChange(of: networkMonitor.isConnected) { _, isConnected in
-                    if !isConnected && appState.hasLaunchedBefore {
-                        showNetworkError = true
-                    }
-                }
-                .alert("No Internet Connection", isPresented: $showNetworkError) {
-                    Button("Retry") {
-                        if networkMonitor.isConnected {
-                            handleAppLaunch()
-                        } else {
-                            showNetworkError = true
+            ZStack {
+                if showSplash {
+                    SplashScreenView(isPresented: $showSplash)
+                        .onDisappear {
+                            if !appState.hasSeenOnboarding {
+                                withAnimation {
+                                    showOnboarding = true
+                                }
+                            } else if appState.currentUser != nil {
+                                isAuthenticated = true
+                            }
                         }
-                    }
-                    Button("Cancel", role: .cancel) {}
-                } message: {
-                    Text("IRC requires an internet connection to connect to servers.")
+                } else if showOnboarding {
+                    OnboardingView(
+                        isPresented: $showOnboarding,
+                        showRegistration: $showRegistration,
+                        showLogin: $showLogin
+                    )
+                } else if showRegistration {
+                    RegistrationView(isAuthenticated: $isAuthenticated)
+                } else if showLogin {
+                    LoginView(isAuthenticated: $isAuthenticated)
+                } else if isAuthenticated {
+                    MainTabView()
+                        .environmentObject(ircManager)
+                        .environmentObject(appState)
+                        .environmentObject(watchManager)
                 }
+            }
+            .onAppear {
+                networkMonitor.startMonitoring()
+                loadInitialData()
+                setupNotifications()
+                checkAuthentication()
+            }
+            .onChange(of: networkMonitor.isConnected) { _, isConnected in
+                if !isConnected && appState.hasLaunchedBefore {
+                    showNetworkError = true
+                }
+            }
+            .alert("No Internet Connection", isPresented: $showNetworkError) {
+                Button("Retry") {
+                    if networkMonitor.isConnected {
+                        checkAuthentication()
+                    }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("IRC requires an internet connection to connect to servers.")
+            }
         }
     }
     
-    private func handleAppLaunch() {
-        if !appState.hasLaunchedBefore {
-            appState.hasLaunchedBefore = true
-            appState.showFirstTimeConnect = true
-        } else {
-            let lastTab = appState.lastTabIndex
-            let lastServerId = appState.lastServerId
-            let lastChannel = appState.lastChannelName
-            
-            appState.selectedTab = lastTab
-            
-            if lastTab == 1, let serverId = lastServerId, let channel = lastChannel {
-                if !ircManager.isConnected(serverId: serverId) {
-                    appState.reconnectInfo = (serverId, channel)
-                    appState.showReconnectingSheet = true
-                } else {
-                    appState.navigateToChannel(serverId: serverId, channelName: channel)
+    private func checkAuthentication() {
+        Task {
+            if let user = try? DatabaseManager.shared.getCurrentUser() {
+                await MainActor.run {
+                    appState.currentUser = user
+                    appState.hasLaunchedBefore = true
+                    isAuthenticated = true
+                    showSplash = false
+                    showOnboarding = false
+                }
+            } else {
+                await MainActor.run {
+                    appState.hasLaunchedBefore = true
+                    showSplash = false
                 }
             }
         }
     }
     
-    private func setupAppearance() {
-        let tabBarAppearance = UITabBarAppearance()
-        tabBarAppearance.configureWithDefaultBackground()
-        UITabBar.appearance().scrollEdgeAppearance = tabBarAppearance
-        UITabBar.appearance().standardAppearance = tabBarAppearance
-        
-        let navBarAppearance = UINavigationBarAppearance()
-        navBarAppearance.configureWithDefaultBackground()
-        UINavigationBar.appearance().scrollEdgeAppearance = navBarAppearance
-        UINavigationBar.appearance().standardAppearance = navBarAppearance
-    }
-    
     private func loadInitialData() {
         Task {
             do {
-                try DatabaseManager.shared.cleanupOldData()
+                try DatabaseManager.shared.cleanupOldMessages()
                 
                 let servers = try DatabaseManager.shared.fetchServers()
                 if servers.isEmpty {
@@ -102,6 +116,18 @@ struct ParsoIRCApp: App {
                 print("Failed to load initial data: \(error)")
             }
         }
+    }
+    
+    private func setupAppearance() {
+        let tabBarAppearance = UITabBarAppearance()
+        tabBarAppearance.configureWithDefaultBackground()
+        UITabBar.appearance().scrollEdgeAppearance = tabBarAppearance
+        UITabBar.appearance().standardAppearance = tabBarAppearance
+        
+        let navBarAppearance = UINavigationBarAppearance()
+        navBarAppearance.configureWithDefaultBackground()
+        UINavigationBar.appearance().scrollEdgeAppearance = navBarAppearance
+        UINavigationBar.appearance().standardAppearance = navBarAppearance
     }
     
     private func setupNotifications() {
@@ -178,7 +204,10 @@ struct ParsoIRCApp: App {
 
 @MainActor
 class AppState: ObservableObject {
+    static let shared = AppState()
+    
     @AppStorage("hasLaunchedBefore") var hasLaunchedBefore = false
+    @AppStorage("hasSeenOnboarding") var hasSeenOnboarding = false
     @AppStorage("lastTabIndex") var lastTabIndex = 1
     @AppStorage("lastServerId") var lastServerId: String?
     @AppStorage("lastChannelName") var lastChannelName: String?
@@ -195,6 +224,9 @@ class AppState: ObservableObject {
     @Published var showFirstTimeConnect = false
     @Published var reconnectInfo: (serverId: String, channelName: String)?
     @Published var showReconnectingSheet = false
+    
+    @Published var currentUser: User?
+    @Published var isAuthenticated = false
     
     var currentNick: String {
         guard let serverId = selectedServerId else { return "" }

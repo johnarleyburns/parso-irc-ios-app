@@ -357,10 +357,41 @@ struct MessageReaction: Identifiable, Codable, Equatable {
     let id: String
     var emoji: String
     var users: [String]
-
+    
     init(id: String = UUID().uuidString, emoji: String, users: [String] = []) {
         self.id = id
         self.emoji = emoji
         self.users = users
+    }
+}
+
+struct User: Identifiable, Codable, Equatable {
+    let id: String
+    var username: String
+    var passwordHash: String
+    var nickname: String?
+    var avatarSeed: String?
+    var status: String?
+    var createdAt: Date
+    var lastLogin: Date?
+    
+    init(
+        id: String = UUID().uuidString,
+        username: String,
+        passwordHash: String,
+        nickname: String? = nil,
+        avatarSeed: String? = nil,
+        status: String? = nil,
+        createdAt: Date = Date(),
+        lastLogin: Date? = nil
+    ) {
+        self.id = id
+        self.username = username
+        self.passwordHash = passwordHash
+        self.nickname = nickname
+        self.avatarSeed = avatarSeed
+        self.status = status
+        self.createdAt = createdAt
+        self.lastLogin = lastLogin
     }
 }

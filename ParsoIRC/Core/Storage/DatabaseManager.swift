@@ -58,6 +58,16 @@ final class DatabaseManager {
     private let settingKey = Expression<String>("key")
     private let settingValue = Expression<String?>("value")
     
+    // User columns
+    private let userId = Expression<String>("id")
+    private let userUsername = Expression<String>("username")
+    private let userPasswordHash = Expression<String>("password_hash")
+    private let userNickname = Expression<String?>("nickname")
+    private let userAvatarSeed = Expression<String?>("avatar_seed")
+    private let userStatus = Expression<String?>("status")
+    private let userCreatedAt = Expression<String>("created_at")
+    private let userLastLogin = Expression<String?>("last_login")
+    
     private let dateFormatter: ISO8601DateFormatter = {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
@@ -153,6 +163,19 @@ final class DatabaseManager {
                 t.column(settingKey, primaryKey: true)
                 t.column(settingValue)
             })
+            
+            try db.run("""
+                CREATE TABLE IF NOT EXISTS users (
+                    id TEXT PRIMARY KEY,
+                    username TEXT NOT NULL UNIQUE,
+                    password_hash TEXT NOT NULL,
+                    nickname TEXT,
+                    avatar_seed TEXT,
+                    status TEXT,
+                    created_at TEXT NOT NULL,
+                    last_login TEXT
+                )
+            """)
         } catch {
             print("Table creation failed: \(error)")
         }
@@ -474,5 +497,97 @@ final class DatabaseManager {
     func cleanupOldData() throws {
         let thirtyDaysAgo = Calendar.current.date(byAdding: .day, value: -30, to: Date())!
         try deleteOldMessages(olderThan: thirtyDaysAgo, maxPerChannel: 1000)
+    }
+    
+    func cleanupOldMessages() throws {
+        guard let db = db else { return }
+        
+        let sevenDaysAgo = Calendar.current.date(byAdding: .day, value: -7, to: Date())!
+        let cutoffDate = dateFormatter.string(from: sevenDaysAgo)
+        
+        let joinedChannelIds = channels.filter(channelJoinedAt != nil).select(channelId)
+        var joinedIds: [String] = []
+        for row in try db.prepare(joinedChannelIds) {
+            if let id = try? row.get(channelId) {
+                joinedIds.append(id)
+            }
+        }
+        
+        if !joinedIds.isEmpty {
+            let oldMessages = messages.filter(
+                messageChannelId IN joinedIds &&
+                messageCreatedAt < cutoffDate
+            )
+            try db.run(oldMessages.delete())
+        }
+    }
+    
+    // MARK: - User Operations
+    
+    func saveUser(_ user: User) throws {
+        guard let db = db else { return }
+        
+        try db.run("""
+            INSERT OR REPLACE INTO users (
+                id, username, password_hash, nickname, avatar_seed, status, created_at, last_login
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, user.id, user.username, user.passwordHash, user.nickname, user.avatarSeed, user.status, dateFormatter.string(from: user.createdAt), user.lastLogin.map { dateFormatter.string(from: $0) })
+    }
+    
+    func authenticateUser(username: String, password: String) throws -> User? {
+        guard let db = db else { return nil }
+        
+        let query = "SELECT * FROM users WHERE username = ?"
+        for row in try db.prepare(query, username) {
+            let storedHash = row[2] as? String ?? ""
+            
+            if storedHash == password {
+                let user = User(
+                    id: row[0] as? String ?? "",
+                    username: row[1] as? String ?? "",
+                    passwordHash: storedHash,
+                    nickname: row[3] as? String,
+                    avatarSeed: row[4] as? String,
+                    status: row[5] as? String,
+                    createdAt: dateFormatter.date(from: row[6] as? String ?? "") ?? Date(),
+                    lastLogin: (row[7] as? String).flatMap { dateFormatter.date(from: $0) }
+                )
+                
+                let now = Date()
+                try db.run("UPDATE users SET last_login = ? WHERE username = ?", dateFormatter.string(from: now), username)
+                
+                return user
+            }
+        }
+        
+        return nil
+    }
+    
+    func getCurrentUser() throws -> User? {
+        guard let db = db else { return nil }
+        
+        let query = "SELECT * FROM users ORDER BY last_login DESC LIMIT 1"
+        for row in try db.prepare(query) {
+            return User(
+                id: row[0] as? String ?? "",
+                username: row[1] as? String ?? "",
+                passwordHash: row[2] as? String ?? "",
+                nickname: row[3] as? String,
+                avatarSeed: row[4] as? String,
+                status: row[5] as? String,
+                createdAt: dateFormatter.date(from: row[6] as? String ?? "") ?? Date(),
+                lastLogin: (row[7] as? String).flatMap { dateFormatter.date(from: $0) }
+            )
+        }
+        
+        return nil
+    }
+    
+    func updateUser(_ user: User) throws {
+        guard let db = db else { return }
+        
+        try db.run("""
+            UPDATE users SET nickname = ?, avatar_seed = ?, status = ? WHERE id = ?
+        """, user.nickname, user.avatarSeed, user.status, user.id)
     }
 }
