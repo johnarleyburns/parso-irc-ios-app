@@ -4,6 +4,12 @@ struct RegistrationView: View {
     @Environment(\.dismiss) var dismiss
     @Binding var isAuthenticated: Bool
     
+    @AppStorage("lastServerHost") private var lastServerHost = "irc.libera.chat"
+    @AppStorage("lastServerName") private var lastServerName = "Libera.Chat"
+    @AppStorage("lastUsername") private var savedUsername = ""
+    @AppStorage("lastPassword") private var savedPassword = ""
+    
+    @State private var selectedServer: Server
     @State private var username = ""
     @State private var password = ""
     @State private var confirmPassword = ""
@@ -11,6 +17,15 @@ struct RegistrationView: View {
     @State private var showError = false
     @State private var errorMessage = ""
     @State private var isLoading = false
+    @State private var showPassword = false
+    
+    init(isAuthenticated: Binding<Bool>) {
+        self._isAuthenticated = isAuthenticated
+        self._selectedServer = State(initialValue: Server.defaultNetworks.first { $0.name == "Libera.Chat" } ?? Server.defaultNetworks[0])
+        
+        let defaultUsername = "parso\(Int.random(in: 1000...9999))"
+        self._username = State(initialValue: defaultUsername)
+    }
     
     var body: some View {
         NavigationStack {
@@ -25,14 +40,30 @@ struct RegistrationView: View {
                             .font(.title)
                             .fontWeight(.bold)
                         
-                        Text("Sign up to save your chat history and preferences")
+                        Text("Sign up to connect to IRC")
                             .font(.subheadline)
                             .foregroundColor(.secondary)
                             .multilineTextAlignment(.center)
                     }
-                    .padding(.top, 40)
+                    .padding(.top, 20)
                     
                     VStack(spacing: 16) {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("IRC Server")
+                                .font(.subheadline)
+                                .foregroundColor(.secondary)
+                            
+                            Picker("Server", selection: $selectedServer) {
+                                ForEach(Server.defaultNetworks) { server in
+                                    Text(server.name).tag(server)
+                                }
+                            }
+                            .pickerStyle(.menu)
+                            .padding()
+                            .background(Color(.systemGray6))
+                            .cornerRadius(12)
+                        }
+                        
                         VStack(alignment: .leading, spacing: 8) {
                             Text("Username")
                                 .font(.subheadline)
@@ -47,21 +78,36 @@ struct RegistrationView: View {
                         }
                         
                         VStack(alignment: .leading, spacing: 8) {
-                            Text("Password")
+                            Text("Password (optional)")
                                 .font(.subheadline)
                                 .foregroundColor(.secondary)
-                            SecureField("Create a password", text: $password)
-                                .textContentType(.newPassword)
-                                .padding()
-                                .background(Color(.systemGray6))
-                                .cornerRadius(12)
+                            
+                            HStack {
+                                if showPassword {
+                                    TextField("Password", text: $password)
+                                        .textContentType(.password)
+                                } else {
+                                    SecureField("Password", text: $password)
+                                        .textContentType(.password)
+                                }
+                                
+                                Button {
+                                    showPassword.toggle()
+                                } label: {
+                                    Image(systemName: showPassword ? "eye.slash" : "eye")
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                            .padding()
+                            .background(Color(.systemGray6))
+                            .cornerRadius(12)
                         }
                         
                         VStack(alignment: .leading, spacing: 8) {
                             Text("Confirm Password")
                                 .font(.subheadline)
                                 .foregroundColor(.secondary)
-                            SecureField("Confirm your password", text: $confirmPassword)
+                            SecureField("Confirm password", text: $confirmPassword)
                                 .textContentType(.newPassword)
                                 .padding()
                                 .background(Color(.systemGray6))
@@ -69,7 +115,7 @@ struct RegistrationView: View {
                         }
                         
                         Toggle(isOn: $agreeToTerms) {
-                            Text("I agree to the Terms of Service and Privacy Policy")
+                            Text("I agree to the Terms of Service")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                         }
@@ -123,32 +169,52 @@ struct RegistrationView: View {
                     }
                 }
             }
+            .onAppear {
+                username = savedUsername.isEmpty ? "parso\(Int.random(in: 1000...9999))" : savedUsername
+                
+                if let server = Server.defaultNetworks.first(where: { $0.host == lastServerHost }) {
+                    selectedServer = server
+                }
+            }
         }
     }
     
     private var isFormValid: Bool {
         !username.isEmpty &&
-        !password.isEmpty &&
-        password == confirmPassword &&
-        password.count >= 6 &&
+        (password.isEmpty || (password == confirmPassword && password.count >= 6)) &&
         agreeToTerms
     }
     
     private func register() {
-        guard isFormValid else {
-            if username.isEmpty {
-                errorMessage = "Please enter a username"
-            } else if password.isEmpty {
-                errorMessage = "Please enter a password"
-            } else if password != confirmPassword {
-                errorMessage = "Passwords do not match"
-            } else if password.count < 6 {
-                errorMessage = "Password must be at least 6 characters"
-            } else if !agreeToTerms {
-                errorMessage = "Please agree to the terms"
-            }
+        guard !username.isEmpty else {
+            errorMessage = "Please enter a username"
             showError = true
             return
+        }
+        
+        if !password.isEmpty && password != confirmPassword {
+            errorMessage = "Passwords do not match"
+            showError = true
+            return
+        }
+        
+        if !password.isEmpty && password.count < 6 {
+            errorMessage = "Password must be at least 6 characters"
+            showError = true
+            return
+        }
+        
+        if !agreeToTerms {
+            errorMessage = "Please agree to the terms"
+            showError = true
+            return
+        }
+        
+        lastServerHost = selectedServer.host
+        lastServerName = selectedServer.name
+        savedUsername = username
+        if !password.isEmpty {
+            savedPassword = password
         }
         
         isLoading = true
@@ -158,11 +224,26 @@ struct RegistrationView: View {
             do {
                 let user = User(
                     username: username.lowercased(),
-                    passwordHash: password,
+                    passwordHash: password.isEmpty ? "" : password,
                     nickname: username,
                     avatarSeed: username.lowercased()
                 )
                 try DatabaseManager.shared.saveUser(user)
+                
+                let serverToSave = Server(
+                    id: selectedServer.id,
+                    name: selectedServer.name,
+                    host: selectedServer.host,
+                    port: selectedServer.port,
+                    ssl: selectedServer.ssl,
+                    nickname: username,
+                    realname: username,
+                    password: password.isEmpty ? nil : password,
+                    saslEnabled: selectedServer.saslEnabled,
+                    autoConnect: false,
+                    channels: selectedServer.channels
+                )
+                try DatabaseManager.shared.saveServer(serverToSave)
                 
                 await MainActor.run {
                     AppState.shared.currentUser = user
