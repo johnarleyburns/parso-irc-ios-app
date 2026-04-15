@@ -192,6 +192,10 @@ actor IRCClient {
         guard let connection = connection, isConnected else {
             throw IRCError.notConnected
         }
+        
+        if AppState.shared.debugModeEnabled {
+            print("[DEBUG SEND] \(message)")
+        }
 
         var data = message.data(using: .utf8) ?? Data()
         data.append(contentsOf: [0x0D, 0x0A])
@@ -292,6 +296,9 @@ actor IRCClient {
 
         let lines = string.components(separatedBy: "\r\n")
         for line in lines where !line.isEmpty {
+            if AppState.shared.debugModeEnabled {
+                print("[DEBUG RECV] \(line)")
+            }
             let message = IRCMessage(rawLine: line)
             await handleMessage(message)
         }

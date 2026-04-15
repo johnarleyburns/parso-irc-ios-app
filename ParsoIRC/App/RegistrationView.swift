@@ -12,8 +12,6 @@ struct RegistrationView: View {
     @State private var selectedServer: Server
     @State private var username = ""
     @State private var password = ""
-    @State private var confirmPassword = ""
-    @State private var agreeToTerms = false
     @State private var showError = false
     @State private var errorMessage = ""
     @State private var isLoading = false
@@ -102,24 +100,6 @@ struct RegistrationView: View {
                             .background(Color(.systemGray6))
                             .cornerRadius(12)
                         }
-                        
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Confirm Password")
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
-                            SecureField("Confirm password", text: $confirmPassword)
-                                .textContentType(.newPassword)
-                                .padding()
-                                .background(Color(.systemGray6))
-                                .cornerRadius(12)
-                        }
-                        
-                        Toggle(isOn: $agreeToTerms) {
-                            Text("I agree to the Terms of Service")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                        .padding(.top, 8)
                     }
                     .padding(.horizontal)
                     
@@ -180,32 +160,12 @@ struct RegistrationView: View {
     }
     
     private var isFormValid: Bool {
-        !username.isEmpty &&
-        (password.isEmpty || (password == confirmPassword && password.count >= 6)) &&
-        agreeToTerms
+        !username.isEmpty
     }
     
     private func register() {
         guard !username.isEmpty else {
             errorMessage = "Please enter a username"
-            showError = true
-            return
-        }
-        
-        if !password.isEmpty && password != confirmPassword {
-            errorMessage = "Passwords do not match"
-            showError = true
-            return
-        }
-        
-        if !password.isEmpty && password.count < 6 {
-            errorMessage = "Password must be at least 6 characters"
-            showError = true
-            return
-        }
-        
-        if !agreeToTerms {
-            errorMessage = "Please agree to the terms"
             showError = true
             return
         }

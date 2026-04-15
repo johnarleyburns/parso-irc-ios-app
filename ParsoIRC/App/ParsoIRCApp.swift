@@ -219,6 +219,7 @@ class AppState: ObservableObject {
     @AppStorage("lastServerId") var lastServerId: String?
     @AppStorage("lastChannelName") var lastChannelName: String?
     @AppStorage("lastUsername") var lastUsername: String?
+    @AppStorage("debugModeEnabled") var debugModeEnabled = true
     
     @Published var servers: [Server] = []
     @Published var selectedServerId: String?
