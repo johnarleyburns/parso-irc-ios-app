@@ -11,6 +11,8 @@ struct LoginView: View {
     @AppStorage("lastUsername") private var savedUsername = ""
     @AppStorage("lastPassword") private var savedPassword = ""
     
+    @StateObject private var ircManager = IRCClientManager.shared
+    
     @State private var selectedServer: Server
     @State private var selectedChannel: Channel
     @State private var username = ""
@@ -258,6 +260,29 @@ struct LoginView: View {
                     isAuthenticated = true
                     isLoading = false
                     DebugMessages.shared.addMessage("=== LOGIN COMPLETE ===")
+                    
+                    DebugMessages.shared.addMessage("Step 8: Connecting to IRC server...")
+                    var serverConfig = serverToSave
+                    serverConfig.lastActiveChannel = selectedChannel.name
+                    if serverConfig.channels.first(where: { $0.name == selectedChannel.name }) == nil {
+                        serverConfig.channels.insert(selectedChannel, at: 0)
+                    }
+                    
+                    do {
+                        try await ircManager.connectWithHistory(to: serverConfig) { serverId, channelName in
+                            DebugMessages.shared.addMessage("=== IRC CONNECTED to \(channelName) ===")
+                            Task { @MainActor in
+                                AppState.shared.navigateToChannel(serverId: serverId, channelName: channelName)
+                            }
+                        }
+                    } catch {
+                        DebugMessages.shared.addMessage("ERROR: IRC connection failed - \(error.localizedDescription)")
+                        await MainActor.run {
+                            errorMessage = "Connection failed: \(error.localizedDescription)"
+                            showError = true
+                            isLoading = false
+                        }
+                    }
                 } else {
                     DebugMessages.shared.addMessage("ERROR: Invalid credentials")
                     await MainActor.run {
