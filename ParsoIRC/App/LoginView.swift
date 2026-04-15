@@ -176,11 +176,6 @@ struct LoginView: View {
                         dismiss()
                     }
                 }
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Debug") {
-                        showDebug = true
-                    }
-                }
             }
             .sheet(isPresented: $showDebug) {
                 DebugSheetView(isPresented: $showDebug)
