@@ -91,6 +91,7 @@ struct OnboardingView: View {
                                     .background(Color.white)
                                     .cornerRadius(12)
                             }
+                            .accessibilityIdentifier("onboardingSignUpButton")
                             
                             Button {
                                 onSignIn()
@@ -103,6 +104,7 @@ struct OnboardingView: View {
                                     .background(Color.white.opacity(0.2))
                                     .cornerRadius(12)
                             }
+                            .accessibilityIdentifier("onboardingSignInButton")
                         }
                         .padding(.horizontal, 40)
                     } else {
@@ -121,6 +123,7 @@ struct OnboardingView: View {
                                 .background(Color.white)
                                 .cornerRadius(12)
                         }
+                        .accessibilityIdentifier("nextButton")
                         .padding(.horizontal, 40)
                     }
                 }

@@ -107,6 +107,7 @@ struct LoginView: View {
                                     .padding()
                                     .background(Color(.systemGray6))
                                     .cornerRadius(12)
+                                    .accessibilityIdentifier("usernameField")
                             }
                             
                             VStack(alignment: .leading, spacing: 8) {
@@ -126,6 +127,7 @@ struct LoginView: View {
                                 .padding()
                                 .background(Color(.systemGray6))
                                 .cornerRadius(12)
+                                .accessibilityIdentifier("passwordField")
                             }
                         }
                         .padding(.horizontal)
@@ -154,6 +156,7 @@ struct LoginView: View {
                         .background(Color.theme.sentBubble)
                         .cornerRadius(12)
                         .disabled(username.isEmpty || isLoading)
+                        .accessibilityIdentifier("signInButton")
                         .padding(.horizontal)
                         
                         Button {
@@ -175,6 +178,7 @@ struct LoginView: View {
                     Button("Cancel") {
                         isAuthenticated = true
                     }
+                    .accessibilityIdentifier("cancelButton")
                 }
             }
             .sheet(isPresented: $showDebug) {

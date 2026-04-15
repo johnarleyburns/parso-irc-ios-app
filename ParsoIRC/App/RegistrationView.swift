@@ -130,6 +130,7 @@ struct RegistrationView: View {
                                 .padding()
                                 .background(Color(.systemGray6))
                                 .cornerRadius(12)
+                                .accessibilityIdentifier("serverPicker")
                                 .onChange(of: selectedServer) { _, newServer in
                                     if let firstChannel = newServer.channels.first {
                                         selectedChannel = firstChannel
@@ -148,6 +149,7 @@ struct RegistrationView: View {
                                 .padding()
                                 .background(Color(.systemGray6))
                                 .cornerRadius(12)
+                                .accessibilityIdentifier("channelPicker")
                             }
                             
                             VStack(alignment: .leading, spacing: 8) {
@@ -158,6 +160,7 @@ struct RegistrationView: View {
                                     .padding()
                                     .background(Color(.systemGray6))
                                     .cornerRadius(12)
+                                    .accessibilityIdentifier("usernameField")
                             }
                             
                             VStack(alignment: .leading, spacing: 8) {
@@ -177,6 +180,7 @@ struct RegistrationView: View {
                                 .padding()
                                 .background(Color(.systemGray6))
                                 .cornerRadius(12)
+                                .accessibilityIdentifier("passwordField")
                             }
                         }
                         .padding(.horizontal)
@@ -205,6 +209,7 @@ struct RegistrationView: View {
                         .background(Color.theme.sentBubble)
                         .cornerRadius(12)
                         .disabled(username.isEmpty || isLoading)
+                        .accessibilityIdentifier("signUpButton")
                         .padding(.horizontal)
                         
                         Button {
@@ -226,6 +231,7 @@ struct RegistrationView: View {
                     Button("Cancel") {
                         isAuthenticated = true
                     }
+                    .accessibilityIdentifier("cancelButton")
                 }
             }
             .sheet(isPresented: $showDebug) {
