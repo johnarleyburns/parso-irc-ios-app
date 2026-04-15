@@ -3,7 +3,7 @@ import SwiftUI
 struct LoginView: View {
     @Environment(\.dismiss) var dismiss
     @Binding var isAuthenticated: Bool
-    @State private var showDebug = true
+    @State private var showDebug = false
     
     @AppStorage("lastServerHost") private var lastServerHost = "irc.libera.chat"
     @AppStorage("lastServerName") private var lastServerName = "Libera.Chat"
@@ -173,7 +173,7 @@ struct LoginView: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("Cancel") {
-                        dismiss()
+                        isAuthenticated = true
                     }
                 }
             }
@@ -206,7 +206,6 @@ struct LoginView: View {
             return
         }
         
-        showDebug = true
         DebugMessages.shared.addMessage("=== STARTING LOGIN ===")
         DebugMessages.shared.addMessage("Username: \(username)")
         

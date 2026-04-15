@@ -56,7 +56,7 @@ struct DebugSheetView: View {
 struct RegistrationView: View {
     @Environment(\.dismiss) var dismiss
     @Binding var isAuthenticated: Bool
-    @State private var showDebug = true
+    @State private var showDebug = false
     
     @AppStorage("lastServerHost") private var lastServerHost = "irc.libera.chat"
     @AppStorage("lastServerName") private var lastServerName = "Libera.Chat"
@@ -224,7 +224,7 @@ struct RegistrationView: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("Cancel") {
-                        dismiss()
+                        isAuthenticated = true
                     }
                 }
             }
@@ -257,7 +257,7 @@ struct RegistrationView: View {
         DebugMessages.shared.addMessage("Channel: \(selectedChannel.name)")
         
         isLoading = true
-        showError = false
+showError = false
         
         lastServerHost = selectedServer.host
         lastServerName = selectedServer.name
