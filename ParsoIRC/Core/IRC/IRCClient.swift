@@ -195,7 +195,7 @@ actor IRCClient {
         }
         
         if debugEnabled {
-            print("[DEBUG SEND] \(message)")
+            DebugMessages.shared.addMessage("SEND: \(message)")
         }
 
         var data = message.data(using: .utf8) ?? Data()
@@ -298,7 +298,7 @@ actor IRCClient {
         let lines = string.components(separatedBy: "\r\n")
         for line in lines where !line.isEmpty {
             if debugEnabled {
-                print("[DEBUG RECV] \(line)")
+                DebugMessages.shared.addMessage("RECV: \(line)")
             }
             let message = IRCMessage(rawLine: line)
             await handleMessage(message)

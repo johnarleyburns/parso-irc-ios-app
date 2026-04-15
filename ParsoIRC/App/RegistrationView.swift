@@ -180,6 +180,8 @@ struct RegistrationView: View {
         isLoading = true
         showError = false
         
+        DebugMessages.shared.addMessage("Starting registration for \(username)")
+        
         Task {
             do {
                 let user = User(
@@ -188,7 +190,9 @@ struct RegistrationView: View {
                     nickname: username,
                     avatarSeed: username.lowercased()
                 )
+                DebugMessages.shared.addMessage("Created user object")
                 try DatabaseManager.shared.saveUser(user)
+                DebugMessages.shared.addMessage("Saved user to database")
                 
                 let serverToSave = Server(
                     id: selectedServer.id,
@@ -204,12 +208,14 @@ struct RegistrationView: View {
                     channels: selectedServer.channels
                 )
                 try DatabaseManager.shared.saveServer(serverToSave)
+                DebugMessages.shared.addMessage("Saved server to database")
                 
-                await MainActor.run {
-                    AppState.shared.currentUser = user
-                    isAuthenticated = true
-                }
+                AppState.shared.currentUser = user
+                DebugMessages.shared.addMessage("Set current user, completing...")
+                isAuthenticated = true
+                DebugMessages.shared.addMessage("Registration complete!")
             } catch {
+                DebugMessages.shared.addMessage("ERROR: \(error.localizedDescription)")
                 await MainActor.run {
                     errorMessage = "Registration failed: \(error.localizedDescription)"
                     showError = true

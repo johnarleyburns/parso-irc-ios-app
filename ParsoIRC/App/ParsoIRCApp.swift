@@ -48,7 +48,10 @@ struct ParsoIRCApp: App {
                             showOnboarding = false
                             isAuthenticated = true
                         },
-                        showLogin: $showLogin
+                        onSignIn: {
+                            showOnboarding = false
+                            showLogin = true
+                        }
                     )
                 } else if showRegistration {
                     RegistrationView(isAuthenticated: $isAuthenticated)
@@ -59,6 +62,7 @@ struct ParsoIRCApp: App {
                         .environmentObject(ircManager)
                         .environmentObject(appState)
                         .environmentObject(watchManager)
+                        .overlay(DebugToastView())
                 }
             }
             .onAppear {

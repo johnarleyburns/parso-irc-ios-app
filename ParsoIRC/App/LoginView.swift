@@ -175,11 +175,15 @@ struct LoginView: View {
         isLoading = true
         showError = false
         
+        DebugMessages.shared.addMessage("Starting login for \(username)")
+        
         Task {
             do {
                 let user = try DatabaseManager.shared.authenticateUser(username: username.lowercased(), password: password)
                 
                 if let user = user {
+                    DebugMessages.shared.addMessage("User authenticated")
+                    
                     let serverToSave = Server(
                         id: selectedServer.id,
                         name: selectedServer.name,
@@ -194,12 +198,13 @@ struct LoginView: View {
                         channels: selectedServer.channels
                     )
                     try DatabaseManager.shared.saveServer(serverToSave)
+                    DebugMessages.shared.addMessage("Saved server")
                     
-                    await MainActor.run {
-                        AppState.shared.currentUser = user
-                        isAuthenticated = true
-                    }
+                    AppState.shared.currentUser = user
+                    isAuthenticated = true
+                    DebugMessages.shared.addMessage("Login complete!")
                 } else {
+                    DebugMessages.shared.addMessage("Login failed: invalid credentials")
                     await MainActor.run {
                         errorMessage = "Invalid username or password"
                         showError = true
@@ -207,6 +212,7 @@ struct LoginView: View {
                     }
                 }
             } catch {
+                DebugMessages.shared.addMessage("ERROR: \(error.localizedDescription)")
                 await MainActor.run {
                     errorMessage = "Login failed: \(error.localizedDescription)"
                     showError = true

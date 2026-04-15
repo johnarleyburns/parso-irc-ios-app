@@ -4,7 +4,7 @@ struct OnboardingView: View {
     @Binding var isPresented: Bool
     var onSignUp: () -> Void
     var onSkip: () -> Void
-    @Binding var showLogin: Bool
+    var onSignIn: () -> Void
     
     @State private var currentPage = 0
     
@@ -93,7 +93,7 @@ struct OnboardingView: View {
                             }
                             
                             Button {
-                                showLogin = true
+                                onSignIn()
                             } label: {
                                 Text("Sign In")
                                     .font(.headline)
@@ -156,6 +156,6 @@ struct PageIndicator: View {
         isPresented: .constant(true),
         onSignUp: {},
         onSkip: {},
-        showLogin: .constant(false)
+        onSignIn: {}
     )
 }
