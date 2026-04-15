@@ -242,6 +242,7 @@ class AppState: ObservableObject {
     
     @Published var currentUser: User?
     @Published var isAuthenticated = false
+    @Published var showChat = false
     
     var currentNick: String {
         guard let serverId = selectedServerId else { return "" }
@@ -263,5 +264,6 @@ class AppState: ObservableObject {
         }
         
         selectedTab = 1
+        showChat = true
     }
 }
