@@ -202,9 +202,9 @@ struct LoginView: View {
                 DebugMessages.shared.addMessage("Last channel: \(lastChannelName)")
             }
         }
-    }
+}
     
-private func login() {
+    private func login() {
         guard !username.isEmpty else {
             errorMessage = "Please enter a username"
             showError = true
@@ -212,11 +212,8 @@ private func login() {
         }
         
         showDebug = true
-        
         DebugMessages.shared.addMessage("=== STARTING LOGIN ===")
         DebugMessages.shared.addMessage("Username: \(username)")
-        DebugMessages.shared.addMessage("Server: \(selectedServer.name) (\(selectedServer.host))")
-        DebugMessages.shared.addMessage("Channel: \(selectedChannel.name)")
         
         isLoading = true
         showError = false
@@ -229,22 +226,21 @@ private func login() {
         
         Task {
             do {
-                DebugMessages.shared.addMessage("Step 1: Authenticating user...")
+                DebugMessages.shared.addMessage("Step 1: Authenticating...")
                 let user = try DatabaseManager.shared.authenticateUser(username: username.lowercased(), password: password)
                 
                 guard let user = user else {
                     DebugMessages.shared.addMessage("ERROR: Invalid credentials")
                     await MainActor.run {
-                        errorMessage = "Invalid username or password"
+                        errorMessage = "Invalid credentials"
                         showError = true
                         isLoading = false
                     }
                     return
                 }
                 
-                DebugMessages.shared.addMessage("Step 2: User authenticated")
+                DebugMessages.shared.addMessage("Step 2: User OK")
                 
-                DebugMessages.shared.addMessage("Step 3: Creating server config...")
                 let serverToSave = Server(
                     id: selectedServer.id,
                     name: selectedServer.name,
@@ -260,13 +256,11 @@ private func login() {
                     lastActiveChannel: selectedChannel.name
                 )
                 
-                DebugMessages.shared.addMessage("Step 4: Saving server...")
+                DebugMessages.shared.addMessage("Step 3: Saving server...")
                 try DatabaseManager.shared.saveServer(serverToSave)
-                DebugMessages.shared.addMessage("Step 5: Server saved!")
+                DebugMessages.shared.addMessage("Step 4: Done")
                 
-                DebugMessages.shared.addMessage("Step 6: Setting current user...")
                 AppState.shared.currentUser = user
-                
                 DebugMessages.shared.addMessage("=== LOGIN COMPLETE ===")
                 DebugMessages.shared.addMessage("Connecting to IRC...")
                 
@@ -274,10 +268,10 @@ private func login() {
                 serverConfig.lastActiveChannel = selectedChannel.name
                 serverConfig.channels = [selectedChannel]
                 
-                DebugMessages.shared.addMessage("Calling ircManager.connectWithHistory...")
+                DebugMessages.shared.addMessage("Calling connectWithHistory...")
                 
                 try await ircManager.connectWithHistory(to: serverConfig) { serverId, channelName in
-                    DebugMessages.shared.addMessage("IRC CONNECTED to \(channelName)")
+                    DebugMessages.shared.addMessage("IRC CONNECTED")
                     Task { @MainActor in
                         isLoading = false
                         isAuthenticated = true
@@ -285,7 +279,7 @@ private func login() {
                     }
                 }
                 
-                DebugMessages.shared.addMessage("IRC connection done")
+                DebugMessages.shared.addMessage("IRC connection complete")
             } catch {
                 DebugMessages.shared.addMessage("ERROR: \(error.localizedDescription)")
                 await MainActor.run {
