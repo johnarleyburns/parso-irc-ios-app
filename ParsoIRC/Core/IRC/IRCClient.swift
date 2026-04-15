@@ -186,6 +186,12 @@ actor IRCClient {
         }
     }
 
+    private let debugEnabled: Bool
+    
+    init() {
+        self.debugEnabled = AppState.shared.debugModeEnabled
+    }
+    
     // MARK: - Sending
 
     func send_raw(_ message: String) async throws {
@@ -193,7 +199,7 @@ actor IRCClient {
             throw IRCError.notConnected
         }
         
-        if AppState.shared.debugModeEnabled {
+        if debugEnabled {
             print("[DEBUG SEND] \(message)")
         }
 
@@ -296,7 +302,7 @@ actor IRCClient {
 
         let lines = string.components(separatedBy: "\r\n")
         for line in lines where !line.isEmpty {
-            if AppState.shared.debugModeEnabled {
+            if debugEnabled {
                 print("[DEBUG RECV] \(line)")
             }
             let message = IRCMessage(rawLine: line)
