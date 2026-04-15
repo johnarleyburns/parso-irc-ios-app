@@ -148,7 +148,7 @@ struct TutorialView: View {
         Task {
             if let server = appState.servers.first(where: { $0.name == "Libera.Chat" }),
                let client = ircManager.getClient(for: server.id) {
-                try? await client.send(message: messageText, to: "#linux")
+                try? await client.sendMessage(messageText, to: "#linux")
             }
         }
         
