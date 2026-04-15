@@ -89,9 +89,8 @@ jobs:
           xcodebuild test \
             -project ParsoIRC.xcodeproj \
             -scheme ParsoIRC \
-            -destination 'platform=iOS Simulator' \
-            -enableCodeCoverage YES \
-            ONLY_ACTIVE_ARCH=YES
+            -destination 'platform=iOS Simulator,name=iPhone 16,OS=26.0' \
+            -enableCodeCoverage YES
 
       - name: Archive
         env:
