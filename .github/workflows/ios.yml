@@ -8,9 +8,145 @@ on:
   workflow_dispatch:
 
 jobs:
+  # ─── NEW: Run tests before building ───────────────────────────────────────
+  test:
+    name: Unit & UI Tests
+    runs-on: macos-15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode 16.4
+        run: |
+          sudo xcode-select -s /Applications/Xcode_16.4.app
+          xcodebuild -version
+
+      - name: Accept Xcode License
+        run: sudo xcodebuild -license accept
+
+      # XcodeGen must run before xcodebuild can see any targets
+      - name: Cache XcodeGen
+        id: cache-xcodegen
+        uses: actions/cache@v4
+        with:
+          path: xcodegen
+          key: xcodegen-2.45.3
+
+      - name: Install XcodeGen
+        if: steps.cache-xcodegen.outputs.cache-hit != 'true'
+        run: |
+          curl -sL https://github.com/yonaskolb/XcodeGen/releases/download/2.45.3/xcodegen.zip \
+            -o xcodegen.zip
+          unzip -o xcodegen.zip
+
+      - name: Add XcodeGen to PATH
+        run: echo "${GITHUB_WORKSPACE}/xcodegen/bin" >> $GITHUB_PATH
+
+      - name: Generate Xcode Project
+        run: xcodegen generate
+
+      - name: Cache SPM
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.swiftpm
+            ~/Library/Developer/Xcode/DerivedData/*/SourcePackages
+          key: spm-${{ hashFiles('**/Package.resolved') }}
+          restore-keys: spm-
+
+      # Dynamically find the best available iPhone simulator — avoids
+      # hardcoded names like "iPhone 16" that break when Apple renames devices
+      - name: Resolve simulator UDID
+        id: simulator
+        run: |
+          UDID=$(xcrun simctl list devices available --json \
+            | python3 -c "
+          import json, sys
+          data = json.load(sys.stdin)
+          devices = []
+          for runtime, device_list in data['devices'].items():
+              if 'iOS' not in runtime:
+                  continue
+              for d in device_list:
+                  if d['isAvailable'] and 'iPhone' in d['name']:
+                      devices.append((runtime, d['udid'], d['name']))
+          devices.sort(key=lambda x: x[0], reverse=True)
+          if devices:
+              print(devices[0][1])
+          else:
+              sys.exit(1)
+          ")
+          NAME=$(xcrun simctl list devices available --json \
+            | python3 -c "
+          import json, sys
+          data = json.load(sys.stdin)
+          for runtime, device_list in data['devices'].items():
+              for d in device_list:
+                  if d['udid'] == '$UDID':
+                      print(d['name']); sys.exit(0)
+          ")
+          echo "Using simulator: $NAME ($UDID)"
+          echo "udid=$UDID" >> $GITHUB_OUTPUT
+
+      - name: Boot simulator
+        run: |
+          UDID="${{ steps.simulator.outputs.udid }}"
+          xcrun simctl boot "$UDID" || true
+          for i in $(seq 1 12); do
+            STATE=$(xcrun simctl list devices | grep "$UDID" | grep -o 'Booted' || true)
+            [ "$STATE" = "Booted" ] && echo "Simulator booted." && break
+            echo "Waiting... ($i/12)"; sleep 5
+          done
+
+      - name: Run unit tests
+        run: |
+          set -o pipefail
+          xcodebuild test \
+            -project ParsoIRC.xcodeproj \
+            -scheme ParsoIRC \
+            -destination "platform=iOS Simulator,id=${{ steps.simulator.outputs.udid }}" \
+            -only-testing:ParsoIRCTests \
+            -resultBundlePath TestResults/unit-tests.xcresult \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            2>&1 | tee test.log
+
+      - name: Run UI tests
+        # UI tests are kept separate so a flaky UI test doesn't hide unit test failures
+        run: |
+          set -o pipefail
+          xcodebuild test \
+            -project ParsoIRC.xcodeproj \
+            -scheme ParsoIRC \
+            -destination "platform=iOS Simulator,id=${{ steps.simulator.outputs.udid }}" \
+            -only-testing:ParsoIRCUITests \
+            -resultBundlePath TestResults/ui-tests.xcresult \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            2>&1 | tee -a test.log
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: TestResults/
+          retention-days: 7
+
+      - name: Upload test log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-log
+          path: test.log
+          retention-days: 7
+
+  # ─── EXISTING: TestFlight build — only runs if tests pass ─────────────────
   testflight-build:
     runs-on: macos-15
-
+    needs: test   # ← only change to this job's config
     steps:
       - name: Checkout
         uses: actions/checkout@v4
