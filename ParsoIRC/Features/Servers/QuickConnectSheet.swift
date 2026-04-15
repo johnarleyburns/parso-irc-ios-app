@@ -174,7 +174,7 @@ struct QuickConnectSheet: View {
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.borderedProminent)
-                    .disabled(hostname.isEmpty || username.isEmpty)
+                    .disabled(hostname.isEmpty)
                 }
             }
             .padding()

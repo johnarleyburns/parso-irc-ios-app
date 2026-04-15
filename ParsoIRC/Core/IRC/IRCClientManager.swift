@@ -93,7 +93,7 @@ final class IRCClientManager: ObservableObject {
         }
         
         do {
-            let nickname = server.nickname.isEmpty ? "ParsoUser\(Int.random(in: 1000...9999))" : server.nickname
+            let nickname = server.nickname.isEmpty ? "parso\(Int.random(in: 1000...9999))" : server.nickname
             
             try await client.connect(
                 host: server.host,
@@ -145,7 +145,7 @@ final class IRCClientManager: ObservableObject {
         }
         
         do {
-            let nickname = server.nickname.isEmpty ? "ParsoUser\(Int.random(in: 1000...9999))" : server.nickname
+            let nickname = server.nickname.isEmpty ? "parso\(Int.random(in: 1000...9999))" : server.nickname
             
             try await client.connect(
                 host: server.host,

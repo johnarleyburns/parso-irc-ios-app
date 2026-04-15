@@ -67,6 +67,7 @@ targets:
           CODE_SIGN_IDENTITY: "$(CI_CERT)"
           DEVELOPMENT_TEAM: "$(CI_TEAM)"
           PROVISIONING_PROFILE_SPECIFIER: "$(CI_PROFILE)"
+          INFOPLIST_KEY_ITSAppUsesNonExemptEncryption: NO
     dependencies:
       - package: SQLite
 
