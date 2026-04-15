@@ -258,7 +258,6 @@ struct LoginView: View {
                     AppState.shared.currentUser = user
                     DebugMessages.shared.addMessage("Step 7: Setting isAuthenticated = true...")
                     isAuthenticated = true
-                    isLoading = false
                     DebugMessages.shared.addMessage("=== LOGIN COMPLETE ===")
                     
                     DebugMessages.shared.addMessage("Step 8: Connecting to IRC server...")
@@ -272,6 +271,7 @@ struct LoginView: View {
                         try await ircManager.connectWithHistory(to: serverConfig) { serverId, channelName in
                             DebugMessages.shared.addMessage("=== IRC CONNECTED to \(channelName) ===")
                             Task { @MainActor in
+                                isLoading = false
                                 AppState.shared.navigateToChannel(serverId: serverId, channelName: channelName)
                             }
                         }
