@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ProfileView: View {
     @EnvironmentObject var appState: AppState
+    @EnvironmentObject var ircManager: IRCClientManager
     
     @State private var nickname: String = ""
     @State private var status: String = ""

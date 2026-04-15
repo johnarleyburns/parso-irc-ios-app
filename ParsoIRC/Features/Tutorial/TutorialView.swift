@@ -130,7 +130,7 @@ struct TutorialView: View {
                 
                 try await Task.sleep(nanoseconds: 500_000_000)
                 
-                if let client = ircManager.connections[libera.id] {
+                if let client = ircManager.getClient(for: libera.id) {
                     try await client.join(channel: "#linux")
                     tutorialManager.nextStep()
                 }
@@ -147,7 +147,7 @@ struct TutorialView: View {
         
         Task {
             if let server = appState.servers.first(where: { $0.name == "Libera.Chat" }),
-               let client = ircManager.connections[server.id] {
+               let client = ircManager.getClient(for: server.id) {
                 try? await client.send(message: messageText, to: "#linux")
             }
         }

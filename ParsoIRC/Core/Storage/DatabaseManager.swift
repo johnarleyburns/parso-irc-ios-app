@@ -514,11 +514,11 @@ final class DatabaseManager {
         }
         
         if !joinedIds.isEmpty {
-            let oldMessages = messages.filter(
-                messageChannelId IN joinedIds &&
-                messageCreatedAt < cutoffDate
-            )
-            try db.run(oldMessages.delete())
+            let placeholders = joinedIds.map { _ in "?" }.joined(separator: ", ")
+            let query = "DELETE FROM messages WHERE channel_id IN (\(placeholders)) AND created_at < ?"
+            var args: [Binding?] = joinedIds.map { $0 as Binding? }
+            args.append(cutoffDate as Binding?)
+            try db.run(query, args)
         }
     }
     

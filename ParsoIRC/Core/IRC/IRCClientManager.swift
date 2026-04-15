@@ -40,6 +40,10 @@ final class IRCClientManager: ObservableObject {
         connectionStates
     }
     
+    func getClient(for serverId: String) -> IRCClient? {
+        return connections[serverId]
+    }
+    
     private var reconnectTimers: [String: Timer] = [:]
     private var maxReconnectAttempts = 5
     
