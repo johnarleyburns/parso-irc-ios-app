@@ -37,9 +37,8 @@ actor IRCClient {
     private var acknowledgedCapabilities: Set<String> = []
     private var isCapNegotiationComplete = false
     private var saslRequested = false
+    private var debugEnabled = true
     
-    init() {}
-
     // MARK: - Connection
 
     func connect(
@@ -188,12 +187,6 @@ actor IRCClient {
         }
     }
 
-    private let debugEnabled: Bool
-    
-    init() {
-        self.debugEnabled = AppState.shared.debugModeEnabled
-    }
-    
     // MARK: - Sending
 
     func send_raw(_ message: String) async throws {
