@@ -7,10 +7,12 @@ struct LoginView: View {
     
     @AppStorage("lastServerHost") private var lastServerHost = "irc.libera.chat"
     @AppStorage("lastServerName") private var lastServerName = "Libera.Chat"
+    @AppStorage("lastChannelName") private var lastChannelName = "#linux"
     @AppStorage("lastUsername") private var savedUsername = ""
     @AppStorage("lastPassword") private var savedPassword = ""
     
     @State private var selectedServer: Server
+    @State private var selectedChannel: Channel
     @State private var username = ""
     @State private var password = ""
     @State private var showPassword = false
@@ -20,7 +22,9 @@ struct LoginView: View {
     
     init(isAuthenticated: Binding<Bool>) {
         self._isAuthenticated = isAuthenticated
-        self._selectedServer = State(initialValue: Server.defaultNetworks.first { $0.name == "Libera.Chat" } ?? Server.defaultNetworks[0])
+        let defaultServer = Server.defaultNetworks.first { $0.name == "Libera.Chat" } ?? Server.defaultNetworks[0]
+        self._selectedServer = State(initialValue: defaultServer)
+        self._selectedChannel = State(initialValue: defaultServer.channels.first ?? Channel(name: "#linux"))
     }
     
     var body: some View {
@@ -36,6 +40,7 @@ struct LoginView: View {
                                 .foregroundColor(.red)
                             
                             Text("Server: \(selectedServer.name) (\(selectedServer.host))")
+                            Text("Channel: \(selectedChannel.name)")
                             Text("Username: \(username)")
                             Text("Password: \(password.isEmpty ? "(empty)" : "****")")
                         }
@@ -65,6 +70,24 @@ struct LoginView: View {
                                 Picker("Server", selection: $selectedServer) {
                                     ForEach(Server.defaultNetworks) { server in
                                         Text(server.name).tag(server)
+                                    }
+                                }
+                                .pickerStyle(.menu)
+                                .padding()
+                                .background(Color(.systemGray6))
+                                .cornerRadius(12)
+                                .onChange(of: selectedServer) { _, newServer in
+                                    if let firstChannel = newServer.channels.first {
+                                        selectedChannel = firstChannel
+                                    }
+                                }
+                            }
+                            
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Default Channel")
+                                Picker("Channel", selection: $selectedChannel) {
+                                    ForEach(selectedServer.channels) { channel in
+                                        Text(channel.name).tag(channel)
                                     }
                                 }
                                 .pickerStyle(.menu)
@@ -164,10 +187,16 @@ struct LoginView: View {
                 password = savedPassword
                 if let server = Server.defaultNetworks.first(where: { $0.host == lastServerHost }) {
                     selectedServer = server
+                    if let lastChannel = savedUsername.isEmpty ? nil : server.channels.first(where: { $0.name == lastChannelName }) {
+                        selectedChannel = lastChannel
+                    } else {
+                        selectedChannel = server.channels.first ?? Channel(name: "#linux")
+                    }
                 }
                 DebugMessages.shared.addMessage("=== Login View Opened ===")
                 DebugMessages.shared.addMessage("Saved username: \(savedUsername)")
                 DebugMessages.shared.addMessage("Saved password: \(savedPassword.isEmpty ? "(empty)" : "****")")
+                DebugMessages.shared.addMessage("Last channel: \(lastChannelName)")
             }
         }
     }
@@ -179,15 +208,19 @@ struct LoginView: View {
             return
         }
         
+        showDebug = true
+        
         DebugMessages.shared.addMessage("=== STARTING LOGIN ===")
         DebugMessages.shared.addMessage("Username: \(username)")
         DebugMessages.shared.addMessage("Server: \(selectedServer.name) (\(selectedServer.host))")
+        DebugMessages.shared.addMessage("Channel: \(selectedChannel.name)")
         
         isLoading = true
         showError = false
         
         lastServerHost = selectedServer.host
         lastServerName = selectedServer.name
+        lastChannelName = selectedChannel.name
         savedUsername = username
         savedPassword = password
         
@@ -211,7 +244,8 @@ struct LoginView: View {
                         password: password.isEmpty ? nil : password,
                         saslEnabled: selectedServer.saslEnabled,
                         autoConnect: false,
-                        channels: selectedServer.channels
+                        channels: [selectedChannel],
+                        lastActiveChannel: selectedChannel.name
                     )
                     
                     DebugMessages.shared.addMessage("Step 4: Saving server to database...")

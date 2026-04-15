@@ -102,6 +102,52 @@ struct ParsoIRCApp: App {
                     showSplash = false
                     showOnboarding = false
                 }
+                
+                let lastServerHost = UserDefaults.standard.string(forKey: "lastServerHost") ?? "irc.libera.chat"
+                let lastChannelName = UserDefaults.standard.string(forKey: "lastChannelName") ?? "#linux"
+                
+                if let server = appState.servers.first(where: { $0.host == lastServerHost }) {
+                    DebugMessages.shared.addMessage("=== AUTO-CONNECTING to saved server ===")
+                    DebugMessages.shared.addMessage("Server: \(server.name) (\(server.host))")
+                    DebugMessages.shared.addMessage("Channel: \(lastChannelName)")
+                    
+                    var serverToConnect = server
+                    serverToConnect.lastActiveChannel = lastChannelName
+                    if let channelIndex = serverToConnect.channels.firstIndex(where: { $0.name == lastChannelName }) {
+                        serverToConnect.channels[channelIndex] = Channel(name: lastChannelName)
+                    } else {
+                        serverToConnect.channels.insert(Channel(name: lastChannelName), at: 0)
+                    }
+                    
+                    do {
+                        try await ircManager.connectWithHistory(to: serverToConnect) { serverId, channelName in
+                            DebugMessages.shared.addMessage("=== AUTO-CONNECT SUCCESS ===")
+                            Task { @MainActor in
+                                appState.navigateToChannel(serverId: serverId, channelName: channelName)
+                            }
+                        }
+                    } catch {
+                        DebugMessages.shared.addMessage("ERROR: Auto-connect failed: \(error.localizedDescription)")
+                    }
+                } else {
+                    let libera = Server.defaultNetworks.first { $0.name == "Libera.Chat" }!
+                    var serverToConnect = libera
+                    serverToConnect.lastActiveChannel = "#linux"
+                    serverToConnect.channels = [Channel(name: "#linux")]
+                    
+                    DebugMessages.shared.addMessage("=== AUTO-CONNECTING to #linux (first time) ===")
+                    
+                    do {
+                        try await ircManager.connectWithHistory(to: serverToConnect) { serverId, channelName in
+                            DebugMessages.shared.addMessage("=== AUTO-CONNECT SUCCESS ===")
+                            Task { @MainActor in
+                                appState.navigateToChannel(serverId: serverId, channelName: channelName)
+                            }
+                        }
+                    } catch {
+                        DebugMessages.shared.addMessage("ERROR: Auto-connect failed: \(error.localizedDescription)")
+                    }
+                }
             } else {
                 await MainActor.run {
                     appState.hasLaunchedBefore = true
