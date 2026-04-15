@@ -3,6 +3,7 @@ import SwiftUI
 struct LoginView: View {
     @Environment(\.dismiss) var dismiss
     @Binding var isAuthenticated: Bool
+    @State private var showDebug = true
     
     @AppStorage("lastServerHost") private var lastServerHost = "irc.libera.chat"
     @AppStorage("lastServerName") private var lastServerName = "Libera.Chat"
@@ -12,10 +13,10 @@ struct LoginView: View {
     @State private var selectedServer: Server
     @State private var username = ""
     @State private var password = ""
+    @State private var showPassword = false
     @State private var showError = false
     @State private var errorMessage = ""
     @State private var isLoading = false
-    @State private var showPassword = false
     
     init(isAuthenticated: Binding<Bool>) {
         self._isAuthenticated = isAuthenticated
@@ -24,119 +25,122 @@ struct LoginView: View {
     
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(spacing: 24) {
-                    VStack(spacing: 8) {
-                        Image(systemName: "bubble.left.and.bubble.right.fill")
-                            .font(.system(size: 60))
-                            .foregroundColor(Color.theme.sentBubble)
-                        
-                        Text("Welcome Back")
-                            .font(.title)
-                            .fontWeight(.bold)
-                        
-                        Text("Sign in to continue")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                            .multilineTextAlignment(.center)
-                    }
-                    .padding(.top, 60)
-                    
-                    VStack(spacing: 16) {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("IRC Server")
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
+            ZStack {
+                ScrollView {
+                    VStack(spacing: 24) {
+                        // Debug info at top
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("DEBUG INFO")
+                                .font(.caption)
+                                .fontWeight(.bold)
+                                .foregroundColor(.red)
                             
-                            Picker("Server", selection: $selectedServer) {
-                                ForEach(Server.defaultNetworks) { server in
-                                    Text(server.name).tag(server)
-                                }
-                            }
-                            .pickerStyle(.menu)
-                            .padding()
-                            .background(Color(.systemGray6))
-                            .cornerRadius(12)
+                            Text("Server: \(selectedServer.name) (\(selectedServer.host))")
+                            Text("Username: \(username)")
+                            Text("Password: \(password.isEmpty ? "(empty)" : "****")")
                         }
+                        .font(.caption)
+                        .padding()
+                        .background(Color.red.opacity(0.1))
+                        .cornerRadius(8)
                         
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Username")
+                        VStack(spacing: 8) {
+                            Image(systemName: "bubble.left.and.bubble.right.fill")
+                                .font(.system(size: 60))
+                                .foregroundColor(Color.theme.sentBubble)
+                            
+                            Text("Welcome Back")
+                                .font(.title)
+                                .fontWeight(.bold)
+                            
+                            Text("Sign in to continue")
                                 .font(.subheadline)
                                 .foregroundColor(.secondary)
-                            TextField("Enter your nickname", text: $username)
-                                .textInputAutocapitalization(.never)
-                                .autocorrectionDisabled()
-                                .textContentType(.username)
+                        }
+                        .padding(.top, 40)
+                        
+                        VStack(spacing: 16) {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("IRC Server")
+                                Picker("Server", selection: $selectedServer) {
+                                    ForEach(Server.defaultNetworks) { server in
+                                        Text(server.name).tag(server)
+                                    }
+                                }
+                                .pickerStyle(.menu)
                                 .padding()
                                 .background(Color(.systemGray6))
                                 .cornerRadius(12)
+                            }
+                            
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Username")
+                                TextField("Enter your nickname", text: $username)
+                                    .textInputAutocapitalization(.never)
+                                    .autocorrectionDisabled()
+                                    .padding()
+                                    .background(Color(.systemGray6))
+                                    .cornerRadius(12)
+                            }
+                            
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("Password")
+                                HStack {
+                                    if showPassword {
+                                        TextField("Password", text: $password)
+                                    } else {
+                                        SecureField("Password", text: $password)
+                                    }
+                                    Button {
+                                        showPassword.toggle()
+                                    } label: {
+                                        Image(systemName: showPassword ? "eye.slash" : "eye")
+                                    }
+                                }
+                                .padding()
+                                .background(Color(.systemGray6))
+                                .cornerRadius(12)
+                            }
+                        }
+                        .padding(.horizontal)
+                        
+                        if showError {
+                            Text(errorMessage)
+                                .font(.caption)
+                                .foregroundColor(.red)
+                                .padding(.horizontal)
                         }
                         
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Password")
-                                .font(.subheadline)
-                                .foregroundColor(.secondary)
-                            
-                            HStack {
-                                if showPassword {
-                                    TextField("Password", text: $password)
-                                        .textContentType(.password)
-                                } else {
-                                    SecureField("Password", text: $password)
-                                        .textContentType(.password)
-                                }
-                                
-                                Button {
-                                    showPassword.toggle()
-                                } label: {
-                                    Image(systemName: showPassword ? "eye.slash" : "eye")
-                                        .foregroundColor(.secondary)
-                                }
+                        Button {
+                            login()
+                        } label: {
+                            if isLoading {
+                                ProgressView()
+                                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                            } else {
+                                Text("Sign In")
+                                    .font(.headline)
+                                    .foregroundColor(.white)
                             }
-                            .padding()
-                            .background(Color(.systemGray6))
-                            .cornerRadius(12)
                         }
-                    }
-                    .padding(.horizontal)
-                    .padding(.top, 20)
-                    
-                    if showError {
-                        Text(errorMessage)
-                            .font(.caption)
-                            .foregroundColor(.red)
-                            .padding(.horizontal)
-                    }
-                    
-                    Button {
-                        login()
-                    } label: {
-                        if isLoading {
-                            ProgressView()
-                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                        } else {
-                            Text("Sign In")
-                                .font(.headline)
-                                .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(Color.theme.sentBubble)
+                        .cornerRadius(12)
+                        .disabled(username.isEmpty || isLoading)
+                        .padding(.horizontal)
+                        
+                        Button {
+                            dismiss()
+                        } label: {
+                            Text("Don't have an account? Sign Up")
+                                .font(.subheadline)
+                                .foregroundColor(Color.theme.sentBubble)
                         }
+                        .padding(.top)
+                        
+                        Spacer()
                     }
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(isFormValid ? Color.theme.sentBubble : Color.theme.sentBubble.opacity(0.5))
-                    .cornerRadius(12)
-                    .disabled(!isFormValid || isLoading)
-                    .padding(.horizontal)
-                    
-                    Button {
-                        dismiss()
-                    } label: {
-                        Text("Don't have an account? Sign Up")
-                            .font(.subheadline)
-                            .foregroundColor(Color.theme.sentBubble)
-                    }
-                    .padding(.top)
-                    
-                    Spacer()
                 }
             }
             .navigationBarTitleDisplayMode(.inline)
@@ -146,44 +150,56 @@ struct LoginView: View {
                         dismiss()
                     }
                 }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("Debug") {
+                        showDebug = true
+                    }
+                }
+            }
+            .sheet(isPresented: $showDebug) {
+                DebugSheetView(isPresented: $showDebug)
             }
             .onAppear {
                 username = savedUsername
                 password = savedPassword
-                
                 if let server = Server.defaultNetworks.first(where: { $0.host == lastServerHost }) {
                     selectedServer = server
                 }
+                DebugMessages.shared.addMessage("=== Login View Opened ===")
+                DebugMessages.shared.addMessage("Saved username: \(savedUsername)")
+                DebugMessages.shared.addMessage("Saved password: \(savedPassword.isEmpty ? "(empty)" : "****")")
             }
         }
     }
     
-    private var isFormValid: Bool {
-        !username.isEmpty
-    }
-    
     private func login() {
-        guard isFormValid else { return }
-        
-        lastServerHost = selectedServer.host
-        lastServerName = selectedServer.name
-        savedUsername = username
-        if !password.isEmpty {
-            savedPassword = password
+        guard !username.isEmpty else {
+            errorMessage = "Please enter a username"
+            showError = true
+            return
         }
+        
+        DebugMessages.shared.addMessage("=== STARTING LOGIN ===")
+        DebugMessages.shared.addMessage("Username: \(username)")
+        DebugMessages.shared.addMessage("Server: \(selectedServer.name) (\(selectedServer.host))")
         
         isLoading = true
         showError = false
         
-        DebugMessages.shared.addMessage("Starting login for \(username)")
+        lastServerHost = selectedServer.host
+        lastServerName = selectedServer.name
+        savedUsername = username
+        savedPassword = password
         
         Task {
             do {
+                DebugMessages.shared.addMessage("Step 1: Authenticating user...")
                 let user = try DatabaseManager.shared.authenticateUser(username: username.lowercased(), password: password)
                 
                 if let user = user {
-                    DebugMessages.shared.addMessage("User authenticated")
+                    DebugMessages.shared.addMessage("Step 2: User authenticated: \(user.username)")
                     
+                    DebugMessages.shared.addMessage("Step 3: Creating server config...")
                     let serverToSave = Server(
                         id: selectedServer.id,
                         name: selectedServer.name,
@@ -197,14 +213,19 @@ struct LoginView: View {
                         autoConnect: false,
                         channels: selectedServer.channels
                     )
-                    try DatabaseManager.shared.saveServer(serverToSave)
-                    DebugMessages.shared.addMessage("Saved server")
                     
+                    DebugMessages.shared.addMessage("Step 4: Saving server to database...")
+                    try DatabaseManager.shared.saveServer(serverToSave)
+                    DebugMessages.shared.addMessage("Step 5: Server saved!")
+                    
+                    DebugMessages.shared.addMessage("Step 6: Setting current user...")
                     AppState.shared.currentUser = user
+                    DebugMessages.shared.addMessage("Step 7: Setting isAuthenticated = true...")
                     isAuthenticated = true
-                    DebugMessages.shared.addMessage("Login complete!")
+                    isLoading = false
+                    DebugMessages.shared.addMessage("=== LOGIN COMPLETE ===")
                 } else {
-                    DebugMessages.shared.addMessage("Login failed: invalid credentials")
+                    DebugMessages.shared.addMessage("ERROR: Invalid credentials")
                     await MainActor.run {
                         errorMessage = "Invalid username or password"
                         showError = true
@@ -221,8 +242,4 @@ struct LoginView: View {
             }
         }
     }
-}
-
-#Preview {
-    LoginView(isAuthenticated: .constant(false))
 }
