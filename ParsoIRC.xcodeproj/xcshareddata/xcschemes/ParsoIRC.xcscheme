@@ -45,7 +45,7 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "2AB7FC65F825762DA042B6DF"
-               BuildableName = "ParsoIRCTests.bundle"
+               BuildableName = "ParsoIRCTests.xctest"
                BlueprintName = "ParsoIRCTests"
                ReferencedContainer = "container:ParsoIRC.xcodeproj">
             </BuildableReference>

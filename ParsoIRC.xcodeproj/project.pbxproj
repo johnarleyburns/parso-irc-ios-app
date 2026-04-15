@@ -80,7 +80,6 @@
 		090EFD258A710D226C62715D /* Date+Formatting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Date+Formatting.swift"; sourceTree = "<group>"; };
 		0AEC100EA46754BA3DC48FD3 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		19E664E8DE48281DDE12793D /* NetworkMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkMonitor.swift; sourceTree = "<group>"; };
-		1CE0479DE0D003A3CAB2ED94 /* ParsoIRCTests.bundle */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = ParsoIRCTests.bundle; sourceTree = BUILT_PRODUCTS_DIR; };
 		2DEF80BF6A61D335FADFFBAA /* IRCIntegrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IRCIntegrationTests.swift; sourceTree = "<group>"; };
 		2F76C5408EAA601F53F27D94 /* MainTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainTabView.swift; sourceTree = "<group>"; };
 		30CE7E42840DAD51D6330A76 /* IRCClientManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IRCClientManager.swift; sourceTree = "<group>"; };
@@ -116,6 +115,7 @@
 		B003BB7C46E8952092A56CF7 /* RegistrationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegistrationView.swift; sourceTree = "<group>"; };
 		C73FCAD8E5E67FB43D95A3CE /* DatabaseManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DatabaseManager.swift; sourceTree = "<group>"; };
 		C89971396BE51FF48B715A86 /* IRCErrorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IRCErrorTests.swift; sourceTree = "<group>"; };
+		CEE564ECFCA2DD31E229D5CB /* ParsoIRCTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = ParsoIRCTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		D88FA3FECA58097C53677256 /* SignUpWorkflowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignUpWorkflowTests.swift; sourceTree = "<group>"; };
 		DB3B7B159E6462218B722671 /* ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatView.swift; sourceTree = "<group>"; };
 		E77F75ADBC65C87A32C555C1 /* QuickConnectSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickConnectSheet.swift; sourceTree = "<group>"; };
@@ -292,7 +292,7 @@
 			isa = PBXGroup;
 			children = (
 				3523F453C71AD0DE752512DD /* ParsoIRC.app */,
-				1CE0479DE0D003A3CAB2ED94 /* ParsoIRCTests.bundle */,
+				CEE564ECFCA2DD31E229D5CB /* ParsoIRCTests.xctest */,
 				8D7EE5A093FD53954221C764 /* ParsoIRCUITests.xctest */,
 			);
 			name = Products;
@@ -396,8 +396,8 @@
 			packageProductDependencies = (
 			);
 			productName = ParsoIRCTests;
-			productReference = 1CE0479DE0D003A3CAB2ED94 /* ParsoIRCTests.bundle */;
-			productType = "com.apple.product-type.bundle";
+			productReference = CEE564ECFCA2DD31E229D5CB /* ParsoIRCTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
 		};
 		4D75E43C5C2DF2D555182C49 /* ParsoIRC */ = {
 			isa = PBXNativeTarget;
@@ -569,22 +569,26 @@
 		0F0F0F192D7043FF1542A934 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleShortVersionString = 1.0.0;
 				INFOPLIST_KEY_CFBundleVersion = 1;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.parso.ParsoIRCTests;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/ParsoIRC.app/ParsoIRC";
 			};
 			name = Release;
 		};
 		3EADA8A582FC0155C677096E /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleShortVersionString = 1.0.0;
 				INFOPLIST_KEY_CFBundleVersion = 1;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.parso.ParsoIRCTests;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/ParsoIRC.app/ParsoIRC";
 			};
 			name = Debug;
 		};

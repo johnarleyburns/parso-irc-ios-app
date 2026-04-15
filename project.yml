@@ -72,7 +72,7 @@ targets:
       - package: SQLite
 
   ParsoIRCTests:
-    type: bundle
+    type: bundle.unit-test
     platform: iOS
     deploymentTarget: "17.0"
     sources:
@@ -86,6 +86,8 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_CFBundleShortVersionString: "1.0.0"
         INFOPLIST_KEY_CFBundleVersion: "1"
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/ParsoIRC.app/ParsoIRC"
+        BUNDLE_LOADER: "$(TEST_HOST)"
 
   ParsoIRCUITests:
     type: bundle.unit-test
