@@ -82,9 +82,9 @@ struct LoginView: View {
                                 .onChange(of: selectedServer) { _, newServer in
                                     if let firstChannel = newServer.channels.first {
                                         selectedChannel = firstChannel
-                                    }
-                                }
-                            }
+}
+    }
+}
                             
                             VStack(alignment: .leading, spacing: 8) {
                                 Text("Default Channel")
@@ -284,99 +284,6 @@ struct LoginView: View {
                 DebugMessages.shared.addMessage("ERROR: \(error.localizedDescription)")
                 await MainActor.run {
                     errorMessage = "Failed: \(error.localizedDescription)"
-                    showError = true
-                    isLoading = false
-                }
-            }
-        }
-    }
-}
-        
-        showDebug = true
-        
-        DebugMessages.shared.addMessage("=== STARTING LOGIN ===")
-        DebugMessages.shared.addMessage("Username: \(username)")
-        DebugMessages.shared.addMessage("Server: \(selectedServer.name) (\(selectedServer.host))")
-        DebugMessages.shared.addMessage("Channel: \(selectedChannel.name)")
-        
-        isLoading = true
-        showError = false
-        
-        lastServerHost = selectedServer.host
-        lastServerName = selectedServer.name
-        lastChannelName = selectedChannel.name
-        savedUsername = username
-        savedPassword = password
-        
-        Task {
-            do {
-                DebugMessages.shared.addMessage("Step 1: Authenticating user...")
-                let user = try DatabaseManager.shared.authenticateUser(username: username.lowercased(), password: password)
-                
-                if let user = user {
-                    DebugMessages.shared.addMessage("Step 2: User authenticated: \(user.username)")
-                    
-                    DebugMessages.shared.addMessage("Step 3: Creating server config...")
-                    let serverToSave = Server(
-                        id: selectedServer.id,
-                        name: selectedServer.name,
-                        host: selectedServer.host,
-                        port: selectedServer.port,
-                        ssl: selectedServer.ssl,
-                        nickname: username,
-                        realname: username,
-                        password: password.isEmpty ? nil : password,
-                        saslEnabled: selectedServer.saslEnabled,
-                        autoConnect: false,
-                        channels: [selectedChannel],
-                        lastActiveChannel: selectedChannel.name
-                    )
-                    
-                    DebugMessages.shared.addMessage("Step 4: Saving server to database...")
-                    try DatabaseManager.shared.saveServer(serverToSave)
-                    DebugMessages.shared.addMessage("Step 5: Server saved!")
-                    
-                    DebugMessages.shared.addMessage("Step 6: Setting current user...")
-                    AppState.shared.currentUser = user
-                    DebugMessages.shared.addMessage("Step 7: User login complete")
-                    DebugMessages.shared.addMessage("=== LOGIN COMPLETE ===")
-                    
-                    DebugMessages.shared.addMessage("Step 8: Connecting to IRC server...")
-                    var serverConfig = serverToSave
-                    serverConfig.lastActiveChannel = selectedChannel.name
-                    if serverConfig.channels.first(where: { $0.name == selectedChannel.name }) == nil {
-                        serverConfig.channels.insert(selectedChannel, at: 0)
-                    }
-                    
-                    do {
-                        try await ircManager.connectWithHistory(to: serverConfig) { serverId, channelName in
-                            DebugMessages.shared.addMessage("=== IRC CONNECTED to \(channelName) ===")
-                            Task { @MainActor in
-                                isLoading = false
-                                isAuthenticated = true
-                                AppState.shared.navigateToChannel(serverId: serverId, channelName: channelName)
-                            }
-                        }
-                    } catch {
-                        DebugMessages.shared.addMessage("ERROR: IRC connection failed - \(error.localizedDescription)")
-                        await MainActor.run {
-                            errorMessage = "Connection failed: \(error.localizedDescription)"
-                            showError = true
-                            isLoading = false
-                        }
-                    }
-                } else {
-                    DebugMessages.shared.addMessage("ERROR: Invalid credentials")
-                    await MainActor.run {
-                        errorMessage = "Invalid username or password"
-                        showError = true
-                        isLoading = false
-                    }
-                }
-            } catch {
-                DebugMessages.shared.addMessage("ERROR: \(error.localizedDescription)")
-                await MainActor.run {
-                    errorMessage = "Login failed: \(error.localizedDescription)"
                     showError = true
                     isLoading = false
                 }
