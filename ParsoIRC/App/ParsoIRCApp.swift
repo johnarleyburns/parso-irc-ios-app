@@ -260,7 +260,7 @@ class AppState: ObservableObject {
         lastChannelName = channelName
         selectedServerId = serverId
         
-        if let server = appState.servers.first(where: { $0.id == serverId }),
+        if let server = servers.first(where: { $0.id == serverId }),
            let channel = server.channels.first(where: { $0.name == channelName }) {
             selectedChannel = channel
             DebugMessages.shared.addMessage("Found channel: \(channel.name)")
