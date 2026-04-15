@@ -23,6 +23,7 @@
 		45F43AFC6AC55F724F611E57 /* ParsoIRCApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4B86422E8E405D0FE1027DA /* ParsoIRCApp.swift */; };
 		476F8E27EDD759AE1337A880 /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56C28EB7D260E7C30E0D5C9D /* HomeView.swift */; };
 		4AC9FA90B6E5295CD4E9D31A /* AvatarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7812F2E85A5555DB7AE4EB2 /* AvatarView.swift */; };
+		4D6ED41152C047B8FCAFA7BE /* DebugToastView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03BCED6C44044B63C7DA83EC /* DebugToastView.swift */; };
 		4F883B657FE53E8C1954D36D /* NetworkMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19E664E8DE48281DDE12793D /* NetworkMonitor.swift */; };
 		4FA80375CA263B9EF1A3D7EF /* MessageBubbleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BBBAA6732A32F014C0ED97A /* MessageBubbleView.swift */; };
 		519CB04F1CC3AF41E3AB0134 /* TutorialView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95F332C5F1AB216A24EB4FBE /* TutorialView.swift */; };
@@ -34,6 +35,7 @@
 		6B66AEE6B038A0958C16D607 /* SQLite in Frameworks */ = {isa = PBXBuildFile; productRef = B048C700B0D1A78ADC51D3D4 /* SQLite */; };
 		6E6160E878A6124C890E4B5E /* IRCMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9002F82EFDDAFCFC614256F9 /* IRCMessage.swift */; };
 		74164C9BD427A53E32373376 /* Date+Formatting.swift in Sources */ = {isa = PBXBuildFile; fileRef = 090EFD258A710D226C62715D /* Date+Formatting.swift */; };
+		7E76C09122A1C48E7C0461E6 /* SignUpWorkflowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D88FA3FECA58097C53677256 /* SignUpWorkflowTests.swift */; };
 		82B42B20306C0331C985A16F /* Color+Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07E7D04948ED236B84CB1A82 /* Color+Theme.swift */; };
 		85290CC4FD0452CBCD8D7937 /* MainTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F76C5408EAA601F53F27D94 /* MainTabView.swift */; };
 		897BD6D0A5AAE3B77ED59D79 /* ChatViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = ECAFA7366CA3C912F8B4E882 /* ChatViewModel.swift */; };
@@ -55,6 +57,13 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		4EA92B3D07ADB71F77FBC554 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = B3EF558F13059E376E1FFE55 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 4D75E43C5C2DF2D555182C49;
+			remoteInfo = ParsoIRC;
+		};
 		B7F5EC3EB6AE3E9A4558A1EA /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = B3EF558F13059E376E1FFE55 /* Project object */;
@@ -66,6 +75,7 @@
 
 /* Begin PBXFileReference section */
 		030235EB9CF674BD82D84EB6 /* LoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginView.swift; sourceTree = "<group>"; };
+		03BCED6C44044B63C7DA83EC /* DebugToastView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DebugToastView.swift; sourceTree = "<group>"; };
 		07E7D04948ED236B84CB1A82 /* Color+Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Color+Theme.swift"; sourceTree = "<group>"; };
 		090EFD258A710D226C62715D /* Date+Formatting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Date+Formatting.swift"; sourceTree = "<group>"; };
 		0AEC100EA46754BA3DC48FD3 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
@@ -94,6 +104,7 @@
 		81357BD4B36593226304E3AF /* ChannelSettingsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChannelSettingsSheet.swift; sourceTree = "<group>"; };
 		816366BE8D0CB46EE7F7FA86 /* IRCMessageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IRCMessageTests.swift; sourceTree = "<group>"; };
 		8A9E13316FC1467F04022F5D /* IRCModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IRCModels.swift; sourceTree = "<group>"; };
+		8D7EE5A093FD53954221C764 /* ParsoIRCUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = ParsoIRCUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		9002F82EFDDAFCFC614256F9 /* IRCMessage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IRCMessage.swift; sourceTree = "<group>"; };
 		95F332C5F1AB216A24EB4FBE /* TutorialView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TutorialView.swift; sourceTree = "<group>"; };
 		9DE41DE6C169810BB0E00698 /* ConversationListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationListView.swift; sourceTree = "<group>"; };
@@ -105,6 +116,7 @@
 		B003BB7C46E8952092A56CF7 /* RegistrationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegistrationView.swift; sourceTree = "<group>"; };
 		C73FCAD8E5E67FB43D95A3CE /* DatabaseManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DatabaseManager.swift; sourceTree = "<group>"; };
 		C89971396BE51FF48B715A86 /* IRCErrorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IRCErrorTests.swift; sourceTree = "<group>"; };
+		D88FA3FECA58097C53677256 /* SignUpWorkflowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignUpWorkflowTests.swift; sourceTree = "<group>"; };
 		DB3B7B159E6462218B722671 /* ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatView.swift; sourceTree = "<group>"; };
 		E77F75ADBC65C87A32C555C1 /* QuickConnectSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickConnectSheet.swift; sourceTree = "<group>"; };
 		EA310C148C6DA8646DA945E8 /* WatchManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchManager.swift; sourceTree = "<group>"; };
@@ -224,6 +236,7 @@
 			isa = PBXGroup;
 			children = (
 				5D3B2A55E40473FF45984FCD /* ParsoIRC */,
+				DED3B5539FA4DA6274C8EFDC /* ParsoIRCUITests */,
 				B733BCDEEC1CC905A215B595 /* Tests */,
 				985E89B7E6AAE7BB85AF4954 /* Products */,
 			);
@@ -254,6 +267,7 @@
 			isa = PBXGroup;
 			children = (
 				79F387B1DB41E7CD8828DC5B /* ContentView.swift */,
+				03BCED6C44044B63C7DA83EC /* DebugToastView.swift */,
 				56C28EB7D260E7C30E0D5C9D /* HomeView.swift */,
 				030235EB9CF674BD82D84EB6 /* LoginView.swift */,
 				2F76C5408EAA601F53F27D94 /* MainTabView.swift */,
@@ -279,6 +293,7 @@
 			children = (
 				3523F453C71AD0DE752512DD /* ParsoIRC.app */,
 				1CE0479DE0D003A3CAB2ED94 /* ParsoIRCTests.bundle */,
+				8D7EE5A093FD53954221C764 /* ParsoIRCUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -354,6 +369,15 @@
 			path = Resources;
 			sourceTree = "<group>";
 		};
+		DED3B5539FA4DA6274C8EFDC /* ParsoIRCUITests */ = {
+			isa = PBXGroup;
+			children = (
+				D88FA3FECA58097C53677256 /* SignUpWorkflowTests.swift */,
+			);
+			name = ParsoIRCUITests;
+			path = ParsoIRC/ParsoIRCUITests;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -395,6 +419,24 @@
 			productReference = 3523F453C71AD0DE752512DD /* ParsoIRC.app */;
 			productType = "com.apple.product-type.application";
 		};
+		E91E5616C245FC5D2E98FC0B /* ParsoIRCUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C948CC96B671EBB42A944F9F /* Build configuration list for PBXNativeTarget "ParsoIRCUITests" */;
+			buildPhases = (
+				F286E0BD3DE896890F5978D6 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				160979B371D9A23AE6B05C74 /* PBXTargetDependency */,
+			);
+			name = ParsoIRCUITests;
+			packageProductDependencies = (
+			);
+			productName = ParsoIRCUITests;
+			productReference = 8D7EE5A093FD53954221C764 /* ParsoIRCUITests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -425,6 +467,7 @@
 			targets = (
 				4D75E43C5C2DF2D555182C49 /* ParsoIRC */,
 				2AB7FC65F825762DA042B6DF /* ParsoIRCTests */,
+				E91E5616C245FC5D2E98FC0B /* ParsoIRCUITests */,
 			);
 		};
 /* End PBXProject section */
@@ -467,6 +510,7 @@
 				D0C66AD97DB59F93B9AAB5CF /* DatabaseManager.swift in Sources */,
 				74164C9BD427A53E32373376 /* Date+Formatting.swift in Sources */,
 				8EA0BBA948FC671C1BD17516 /* DateSeparatorView.swift in Sources */,
+				4D6ED41152C047B8FCAFA7BE /* DebugToastView.swift in Sources */,
 				E636F1F7F534262C2F61E994 /* HapticManager.swift in Sources */,
 				476F8E27EDD759AE1337A880 /* HomeView.swift in Sources */,
 				ED86B3C872073D3606376341 /* IRCClient.swift in Sources */,
@@ -498,9 +542,22 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		F286E0BD3DE896890F5978D6 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				7E76C09122A1C48E7C0461E6 /* SignUpWorkflowTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		160979B371D9A23AE6B05C74 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 4D75E43C5C2DF2D555182C49 /* ParsoIRC */;
+			targetProxy = 4EA92B3D07ADB71F77FBC554 /* PBXContainerItemProxy */;
+		};
 		CF783542110C67DA30493C3D /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = 4D75E43C5C2DF2D555182C49 /* ParsoIRC */;
@@ -590,6 +647,32 @@
 			};
 			name = Release;
 		};
+		A557D708DEBF5DA85572AF5A /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleShortVersionString = 1.0.0;
+				INFOPLIST_KEY_CFBundleVersion = 1;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.parso.ParsoIRCUITests;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/ParsoIRC.app/ParsoIRC";
+			};
+			name = Release;
+		};
+		AC38F1EEE63E054A7D3FD4EC /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleShortVersionString = 1.0.0;
+				INFOPLIST_KEY_CFBundleVersion = 1;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.parso.ParsoIRCUITests;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/ParsoIRC.app/ParsoIRC";
+			};
+			name = Debug;
+		};
 		ADA74E1339FB52A55AF595DC /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -632,6 +715,15 @@
 			buildConfigurations = (
 				8F225E18F6C8D626A37ED1D1 /* Debug */,
 				9151DAAAACEEA6468CCE8A6E /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		C948CC96B671EBB42A944F9F /* Build configuration list for PBXNativeTarget "ParsoIRCUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AC38F1EEE63E054A7D3FD4EC /* Debug */,
+				A557D708DEBF5DA85572AF5A /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;

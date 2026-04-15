@@ -15,9 +15,9 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "4D75E43C5C2DF2D555182C49"
-               BuildableName = "ParsoIRC.app"
-               BlueprintName = "ParsoIRC"
+               BlueprintIdentifier = "E91E5616C245FC5D2E98FC0B"
+               BuildableName = "ParsoIRCUITests.xctest"
+               BlueprintName = "ParsoIRCUITests"
                ReferencedContainer = "container:ParsoIRC.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
@@ -32,35 +32,13 @@
       <MacroExpansion>
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "4D75E43C5C2DF2D555182C49"
-            BuildableName = "ParsoIRC.app"
-            BlueprintName = "ParsoIRC"
+            BlueprintIdentifier = "E91E5616C245FC5D2E98FC0B"
+            BuildableName = "ParsoIRCUITests.xctest"
+            BlueprintName = "ParsoIRCUITests"
             ReferencedContainer = "container:ParsoIRC.xcodeproj">
          </BuildableReference>
       </MacroExpansion>
       <Testables>
-         <TestableReference
-            skipped = "NO"
-            parallelizable = "NO">
-            <BuildableReference
-               BuildableIdentifier = "primary"
-               BlueprintIdentifier = "2AB7FC65F825762DA042B6DF"
-               BuildableName = "ParsoIRCTests.bundle"
-               BlueprintName = "ParsoIRCTests"
-               ReferencedContainer = "container:ParsoIRC.xcodeproj">
-            </BuildableReference>
-         </TestableReference>
-         <TestableReference
-            skipped = "NO"
-            parallelizable = "NO">
-            <BuildableReference
-               BuildableIdentifier = "primary"
-               BlueprintIdentifier = "E91E5616C245FC5D2E98FC0B"
-               BuildableName = "ParsoIRCUITests.xctest"
-               BlueprintName = "ParsoIRCUITests"
-               ReferencedContainer = "container:ParsoIRC.xcodeproj">
-            </BuildableReference>
-         </TestableReference>
       </Testables>
       <CommandLineArguments>
       </CommandLineArguments>
@@ -75,16 +53,15 @@
       debugDocumentVersioning = "YES"
       debugServiceExtension = "internal"
       allowLocationSimulation = "YES">
-      <BuildableProductRunnable
-         runnableDebuggingMode = "0">
+      <MacroExpansion>
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "4D75E43C5C2DF2D555182C49"
-            BuildableName = "ParsoIRC.app"
-            BlueprintName = "ParsoIRC"
+            BlueprintIdentifier = "E91E5616C245FC5D2E98FC0B"
+            BuildableName = "ParsoIRCUITests.xctest"
+            BlueprintName = "ParsoIRCUITests"
             ReferencedContainer = "container:ParsoIRC.xcodeproj">
          </BuildableReference>
-      </BuildableProductRunnable>
+      </MacroExpansion>
       <CommandLineArguments>
       </CommandLineArguments>
    </LaunchAction>
@@ -94,18 +71,17 @@
       savedToolIdentifier = ""
       useCustomWorkingDirectory = "NO"
       debugDocumentVersioning = "YES">
-      <BuildableProductRunnable
-         runnableDebuggingMode = "0">
-         <BuildableReference
-            BuildableIdentifier = "primary"
-            BlueprintIdentifier = "4D75E43C5C2DF2D555182C49"
-            BuildableName = "ParsoIRC.app"
-            BlueprintName = "ParsoIRC"
-            ReferencedContainer = "container:ParsoIRC.xcodeproj">
-         </BuildableReference>
-      </BuildableProductRunnable>
       <CommandLineArguments>
       </CommandLineArguments>
+      <MacroExpansion>
+         <BuildableReference
+            BuildableIdentifier = "primary"
+            BlueprintIdentifier = "E91E5616C245FC5D2E98FC0B"
+            BuildableName = "ParsoIRCUITests.xctest"
+            BlueprintName = "ParsoIRCUITests"
+            ReferencedContainer = "container:ParsoIRC.xcodeproj">
+         </BuildableReference>
+      </MacroExpansion>
    </ProfileAction>
    <AnalyzeAction
       buildConfiguration = "Debug">

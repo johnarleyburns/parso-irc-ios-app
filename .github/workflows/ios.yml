@@ -84,6 +84,22 @@ jobs:
       - name: Set Build Number
         run: xcrun agvtool new-version -all ${{ github.run_number }}
 
+      - name: Run Unit Tests
+        run: |
+          xcodebuild test \
+            -project ParsoIRC.xcodeproj \
+            -scheme ParsoIRCTests \
+            -destination 'platform=iOS Simulator,name=iPhone 16' \
+            -enableCodeCoverage YES
+
+      - name: Run UI Tests
+        run: |
+          xcodebuild test \
+            -project ParsoIRC.xcodeproj \
+            -scheme ParsoIRCUITests \
+            -destination 'platform=iOS Simulator,name=iPhone 16' \
+            -enableCodeCoverage YES
+
       - name: Archive
         env:
           TEAM_ID: ${{ secrets.TEAM_ID }}
