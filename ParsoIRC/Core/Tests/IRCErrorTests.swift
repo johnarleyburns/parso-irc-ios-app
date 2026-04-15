@@ -1,5 +1,6 @@
 #if !os(Linux)
 import XCTest
+@testable import ParsoIRC
 
 final class IRCErrorTests: XCTestCase {
     
