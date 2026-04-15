@@ -2,7 +2,8 @@ import SwiftUI
 
 struct OnboardingView: View {
     @Binding var isPresented: Bool
-    @Binding var showRegistration: Bool
+    var onSignUp: () -> Void
+    var onSkip: () -> Void
     @Binding var showLogin: Bool
     
     @State private var currentPage = 0
@@ -39,7 +40,7 @@ struct OnboardingView: View {
                 HStack {
                     Spacer()
                     Button("Skip") {
-                        isPresented = false
+                        onSkip()
                     }
                     .font(.subheadline)
                     .foregroundColor(.white.opacity(0.8))
@@ -80,7 +81,7 @@ struct OnboardingView: View {
                     if currentPage == pages.count - 1 {
                         VStack(spacing: 12) {
                             Button {
-                                showRegistration = true
+                                onSignUp()
                             } label: {
                                 Text("Sign Up")
                                     .font(.headline)
@@ -153,7 +154,8 @@ struct PageIndicator: View {
 #Preview {
     OnboardingView(
         isPresented: .constant(true),
-        showRegistration: .constant(false),
+        onSignUp: {},
+        onSkip: {},
         showLogin: .constant(false)
     )
 }

@@ -40,7 +40,14 @@ struct ParsoIRCApp: App {
                 } else if showOnboarding {
                     OnboardingView(
                         isPresented: $showOnboarding,
-                        showRegistration: $showRegistration,
+                        onSignUp: {
+                            showOnboarding = false
+                            showRegistration = true
+                        },
+                        onSkip: {
+                            showOnboarding = false
+                            isAuthenticated = true
+                        },
                         showLogin: $showLogin
                     )
                 } else if showRegistration {
