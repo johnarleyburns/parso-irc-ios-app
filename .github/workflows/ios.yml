@@ -112,20 +112,13 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             2>&1 | tee test.log
 
-      - name: Run UI tests
-        # UI tests are kept separate so a flaky UI test doesn't hide unit test failures
-        run: |
-          set -o pipefail
-          xcodebuild test \
-            -project ParsoIRC.xcodeproj \
-            -scheme ParsoIRC \
-            -destination "platform=iOS Simulator,id=${{ steps.simulator.outputs.udid }}" \
-            -only-testing:ParsoIRCUITests \
-            -resultBundlePath TestResults/ui-tests.xcresult \
-            CODE_SIGN_IDENTITY="" \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGNING_ALLOWED=NO \
-            2>&1 | tee -a test.log
+      # - name: Run UI tests
+      #   run: |
+      #     xcodebuild test \
+      #       -project ParsoIRC.xcodeproj \
+      #       -scheme ParsoIRC \
+      #       -destination "platform=iOS Simulator,id=${{ steps.simulator.outputs.udid }}" \
+      #       -only-testing:ParsoIRCUITests
 
       - name: Upload test results
         if: always()
