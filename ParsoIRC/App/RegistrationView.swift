@@ -270,21 +270,21 @@ struct RegistrationView: View {
         savedUsername = username
         savedPassword = password
         
-        DebugMessages.shared.addMessage("Step 1: Creating User object...")
-        
         Task {
             do {
+                DebugMessages.shared.addMessage("Step 1: Creating User object...")
+                
                 let user = User(
                     username: username.lowercased(),
                     passwordHash: password.isEmpty ? "" : password,
                     nickname: username,
                     avatarSeed: username.lowercased()
                 )
-                DebugMessages.shared.addMessage("Step 2: User object created: \(user.username)")
+                DebugMessages.shared.addMessage("Step 2: User object created")
                 
                 DebugMessages.shared.addMessage("Step 3: Saving user to database...")
                 try DatabaseManager.shared.saveUser(user)
-                DebugMessages.shared.addMessage("Step 4: User saved to database!")
+                DebugMessages.shared.addMessage("Step 4: User saved!")
                 
                 DebugMessages.shared.addMessage("Step 5: Creating server config...")
                 let serverToSave = Server(
@@ -307,42 +307,33 @@ struct RegistrationView: View {
                 try DatabaseManager.shared.saveServer(serverToSave)
                 DebugMessages.shared.addMessage("Step 8: Server saved!")
                 
-                DebugMessages.shared.addMessage("Step 9: Setting current user in AppState...")
+                DebugMessages.shared.addMessage("Step 9: Setting current user...")
                 AppState.shared.currentUser = user
-                DebugMessages.shared.addMessage("Step 10: Current user set!")
+                DebugMessages.shared.addMessage("Step 10: User set in AppState!")
                 
-                DebugMessages.shared.addMessage("Step 11: User registration complete")
                 DebugMessages.shared.addMessage("=== REGISTRATION COMPLETE ===")
+                DebugMessages.shared.addMessage("Connecting to IRC...")
                 
-                DebugMessages.shared.addMessage("Step 12: Connecting to IRC server...")
                 var serverConfig = serverToSave
                 serverConfig.lastActiveChannel = selectedChannel.name
-                if serverConfig.channels.first(where: { $0.name == selectedChannel.name }) == nil {
-                    serverConfig.channels.insert(selectedChannel, at: 0)
-                }
+                serverConfig.channels = [selectedChannel]
                 
-                do {
-                    try await ircManager.connectWithHistory(to: serverConfig) { serverId, channelName in
-                        DebugMessages.shared.addMessage("=== IRC CONNECTED to \(channelName) ===")
-                        Task { @MainActor in
-                            isLoading = false
-                            isAuthenticated = true
-                            AppState.shared.navigateToChannel(serverId: serverId, channelName: channelName)
-                        }
-                    }
-                } catch {
-                    DebugMessages.shared.addMessage("ERROR: IRC connection failed - \(error.localizedDescription)")
-                    await MainActor.run {
-                        errorMessage = "Connection failed: \(error.localizedDescription)"
-                        showError = true
+                DebugMessages.shared.addMessage("Calling ircManager.connectWithHistory...")
+                
+                try await ircManager.connectWithHistory(to: serverConfig) { serverId, channelName in
+                    DebugMessages.shared.addMessage("IRC CONNECTED to \(channelName)")
+                    Task { @MainActor in
                         isLoading = false
+                        isAuthenticated = true
+                        AppState.shared.navigateToChannel(serverId: serverId, channelName: channelName)
                     }
                 }
                 
+                DebugMessages.shared.addMessage("IRC connection done")
             } catch {
                 DebugMessages.shared.addMessage("ERROR: \(error.localizedDescription)")
                 await MainActor.run {
-                    errorMessage = "Registration failed: \(error.localizedDescription)"
+                    errorMessage = "Failed: \(error.localizedDescription)"
                     showError = true
                     isLoading = false
                 }
