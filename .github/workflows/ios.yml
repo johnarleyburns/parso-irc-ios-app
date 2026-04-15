@@ -84,18 +84,13 @@ jobs:
       - name: Set Build Number
         run: xcrun agvtool new-version -all ${{ github.run_number }}
 
-      - name: Boot Simulator
-        run: |
-          xcrun simctl boot "iPhone 16e" || true
-
       - name: Run Tests
         run: |
           xcodebuild test \
             -project ParsoIRC.xcodeproj \
             -scheme ParsoIRC \
-            -destination 'platform=iOS Simulator' \
-            -enableCodeCoverage YES \
-            SUPPORTS_MACCATALYST=NO
+            -destination generic/platform=iOS \
+            -enableCodeCoverage YES
 
       - name: Archive
         env:
