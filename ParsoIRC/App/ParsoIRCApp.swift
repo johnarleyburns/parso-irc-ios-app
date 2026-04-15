@@ -17,6 +17,7 @@ struct ParsoIRCApp: App {
     @State private var showRegistration = false
     @State private var showLogin = false
     @State private var isAuthenticated = false
+    @State private var showDebugSheet = false
     
     init() {
         setupAppearance()
@@ -55,8 +56,10 @@ struct ParsoIRCApp: App {
                     )
                 } else if showRegistration {
                     RegistrationView(isAuthenticated: $isAuthenticated)
+                        .overlay(DebugToastView())
                 } else if showLogin {
                     LoginView(isAuthenticated: $isAuthenticated)
+                        .overlay(DebugToastView())
                 } else if isAuthenticated {
                     MainTabView()
                         .environmentObject(ircManager)
