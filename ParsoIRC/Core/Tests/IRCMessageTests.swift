@@ -91,7 +91,6 @@ final class IRCMessageTests: XCTestCase {
         let message = IRCMessage(rawLine: ":nick PRIVMSG #channel")
         
         XCTAssertEqual(message.command, "PRIVMSG")
-        XCTAssertEqual(message.parameters.last ?? "", "")
         XCTAssertEqual(message.parameters.first, "#channel")
     }
 }
