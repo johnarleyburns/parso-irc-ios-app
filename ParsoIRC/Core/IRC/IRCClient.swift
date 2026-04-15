@@ -102,7 +102,7 @@ actor IRCClient {
                 do {
                     try await self.waitForCapNegotiation(timeout: 10)
                     
-                    var capsToRequest = ["batch", "server-time", "message-tags"]
+                    var capsToRequest = ["batch", "server-time", "message-tags", "draft/chathistory"]
                     if useSASL {
                         capsToRequest.append("sasl")
                     }
@@ -124,6 +124,8 @@ actor IRCClient {
                     if let password = serverPassword, !password.isEmpty {
                         try await self.send_raw("PASS \(password)")
                     }
+                    
+                    try await self.send_raw("CAP END")
                     
                     continuation.resume()
                 } catch {
