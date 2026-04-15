@@ -311,8 +311,7 @@ struct RegistrationView: View {
                 AppState.shared.currentUser = user
                 DebugMessages.shared.addMessage("Step 10: Current user set!")
                 
-                DebugMessages.shared.addMessage("Step 11: Setting isAuthenticated = true...")
-                isAuthenticated = true
+                DebugMessages.shared.addMessage("Step 11: User registration complete")
                 DebugMessages.shared.addMessage("=== REGISTRATION COMPLETE ===")
                 
                 DebugMessages.shared.addMessage("Step 12: Connecting to IRC server...")
@@ -327,6 +326,7 @@ struct RegistrationView: View {
                         DebugMessages.shared.addMessage("=== IRC CONNECTED to \(channelName) ===")
                         Task { @MainActor in
                             isLoading = false
+                            isAuthenticated = true
                             AppState.shared.navigateToChannel(serverId: serverId, channelName: channelName)
                         }
                     }

@@ -256,8 +256,7 @@ struct LoginView: View {
                     
                     DebugMessages.shared.addMessage("Step 6: Setting current user...")
                     AppState.shared.currentUser = user
-                    DebugMessages.shared.addMessage("Step 7: Setting isAuthenticated = true...")
-                    isAuthenticated = true
+                    DebugMessages.shared.addMessage("Step 7: User login complete")
                     DebugMessages.shared.addMessage("=== LOGIN COMPLETE ===")
                     
                     DebugMessages.shared.addMessage("Step 8: Connecting to IRC server...")
@@ -272,6 +271,7 @@ struct LoginView: View {
                             DebugMessages.shared.addMessage("=== IRC CONNECTED to \(channelName) ===")
                             Task { @MainActor in
                                 isLoading = false
+                                isAuthenticated = true
                                 AppState.shared.navigateToChannel(serverId: serverId, channelName: channelName)
                             }
                         }
