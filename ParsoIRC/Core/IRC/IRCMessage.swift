@@ -14,25 +14,23 @@ struct IRCUser: Hashable, Sendable {
     init?(prefix: String) {
         guard !prefix.isEmpty else { return nil }
 
-        if prefix.hasPrefix(":") {
-            let trimmed = String(prefix.dropFirst())
-            if let bangIndex = trimmed.firstIndex(of: "!") {
-                self.nick = String(trimmed[..<bangIndex])
-                let rest = String(trimmed[trimmed.index(after: bangIndex)...])
-                if let atIndex = rest.firstIndex(of: "@") {
-                    self.user = String(rest[..<atIndex])
-                    self.host = String(rest[rest.index(after: atIndex)...])
-                } else {
-                    self.user = rest
-                    self.host = nil
-                }
+        var workingPrefix = prefix
+        if workingPrefix.hasPrefix(":") {
+            workingPrefix = String(workingPrefix.dropFirst())
+        }
+        
+        if let bangIndex = workingPrefix.firstIndex(of: "!") {
+            self.nick = String(workingPrefix[..<bangIndex])
+            let rest = String(workingPrefix[workingPrefix.index(after: bangIndex)...])
+            if let atIndex = rest.firstIndex(of: "@") {
+                self.user = String(rest[..<atIndex])
+                self.host = String(rest[rest.index(after: atIndex)...])
             } else {
-                self.nick = trimmed
-                self.user = nil
+                self.user = rest
                 self.host = nil
             }
         } else {
-            self.nick = prefix
+            self.nick = workingPrefix
             self.user = nil
             self.host = nil
         }
