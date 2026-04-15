@@ -307,9 +307,14 @@ struct RegistrationView: View {
                 try DatabaseManager.shared.saveServer(serverToSave)
                 DebugMessages.shared.addMessage("Step 8: Server saved!")
                 
-                DebugMessages.shared.addMessage("Step 9: Setting current user...")
+                DebugMessages.shared.addMessage("Step 9: Refreshing servers list...")
+                let allServers = try DatabaseManager.shared.fetchServers()
+                AppState.shared.servers = allServers
+                DebugMessages.shared.addMessage("Step 10: Servers refreshed: \(allServers.count) servers")
+                
+                DebugMessages.shared.addMessage("Step 11: Setting current user...")
                 AppState.shared.currentUser = user
-                DebugMessages.shared.addMessage("Step 10: User set in AppState!")
+                DebugMessages.shared.addMessage("Step 12: User set in AppState!")
                 
                 DebugMessages.shared.addMessage("=== REGISTRATION COMPLETE ===")
                 DebugMessages.shared.addMessage("Connecting to IRC...")
@@ -318,10 +323,12 @@ struct RegistrationView: View {
                 serverConfig.lastActiveChannel = selectedChannel.name
                 serverConfig.channels = [selectedChannel]
                 
+                DebugMessages.shared.addMessage("Server config: \(serverConfig.host):\(serverConfig.port)")
+                DebugMessages.shared.addMessage("Channel: \(serverConfig.lastActiveChannel ?? "nil")")
                 DebugMessages.shared.addMessage("Calling ircManager.connectWithHistory...")
                 
                 try await ircManager.connectWithHistory(to: serverConfig) { serverId, channelName in
-                    DebugMessages.shared.addMessage("IRC CONNECTED to \(channelName)")
+                    DebugMessages.shared.addMessage("CALLBACK FIRED - serverId: \(serverId), channel: \(channelName)")
                     Task { @MainActor in
                         isLoading = false
                         isAuthenticated = true

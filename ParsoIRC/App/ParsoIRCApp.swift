@@ -254,13 +254,18 @@ class AppState: ObservableObject {
     }
     
     func navigateToChannel(serverId: String, channelName: String) {
+        DebugMessages.shared.addMessage("navigateToChannel called: \(serverId), \(channelName)")
+        
         lastServerId = serverId
         lastChannelName = channelName
         selectedServerId = serverId
         
-        if let server = servers.first(where: { $0.id == serverId }),
+        if let server = appState.servers.first(where: { $0.id == serverId }),
            let channel = server.channels.first(where: { $0.name == channelName }) {
             selectedChannel = channel
+            DebugMessages.shared.addMessage("Found channel: \(channel.name)")
+        } else {
+            DebugMessages.shared.addMessage("ERROR: Could not find server or channel")
         }
         
         selectedTab = 1
