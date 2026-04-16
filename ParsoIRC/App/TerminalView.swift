@@ -146,21 +146,23 @@ struct TerminalView: View {
         
         addSystemMessage("* Connected, joining \(channel.name)")
         
-        client.onMessage = { [weak self] message in
+        let channelName = channel.name
+        client.onMessage = { message in
+            let line = "\(message.command) \(message.parameters.joined(separator: " "))"
             Task { @MainActor in
-                self?.addReceivedMessage(message.rawLine)
+                self.addReceivedMessage(line)
             }
         }
         
-        client.onWelcome = { [weak self] nick in
+        client.onWelcome = { nick in
             Task { @MainActor in
-                self?.addSystemMessage("* You are now known as \(nick)")
+                self.addSystemMessage("* You are now known as \(nick)")
             }
         }
         
-        client.onDisconnect = { [weak self] in
+        client.onDisconnect = {
             Task { @MainActor in
-                self?.addSystemMessage("* Disconnected")
+                self.addSystemMessage("* Disconnected")
             }
         }
     }
@@ -168,21 +170,22 @@ struct TerminalView: View {
     private func setupIRCCallbacks() {
         guard let client = ircManager.getClient(for: server.id) else { return }
         
-        client.onMessage = { [weak self] message in
+        client.onMessage = { message in
+            let line = "\(message.command) \(message.parameters.joined(separator: " "))"
             Task { @MainActor in
-                self?.addReceivedMessage(message.rawLine)
+                self.addReceivedMessage(line)
             }
         }
         
-        client.onWelcome = { [weak self] nick in
+        client.onWelcome = { nick in
             Task { @MainActor in
-                self?.addSystemMessage("* You are now known as \(nick)")
+                self.addSystemMessage("* You are now known as \(nick)")
             }
         }
         
-        client.onDisconnect = { [weak self] in
+        client.onDisconnect = {
             Task { @MainActor in
-                self?.addSystemMessage("* Disconnected")
+                self.addSystemMessage("* Disconnected")
             }
         }
     }
