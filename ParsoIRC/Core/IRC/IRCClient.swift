@@ -268,7 +268,8 @@ actor IRCClient {
     }
     
     func me(_ message: String, to channel: String) async throws {
-        try await send(command: "PRIVMSG", parameters: [channel, "\u0001ACTION \(message)\u0001"])
+        let action = "\u{0001}ACTION \(message)\u{0001}"
+        try await send(command: "PRIVMSG", parameters: [channel, action])
     }
     
     func isConnectedToServer() -> Bool {

@@ -206,7 +206,8 @@ struct CommandInputSheet: View {
                 preview = "PRIVMSG username :message"
             }
         case "ME":
-            preview = args.isEmpty ? "PRIVMSG \(channel.name) :\u0001ACTION\u0001" : "PRIVMSG \(channel.name) :\u0001ACTION \(args)\u0001"
+            let action = "\u{0001}ACTION\u{0001}"
+            preview = args.isEmpty ? "PRIVMSG \(channel.name) :\(action)" : "PRIVMSG \(channel.name) :\u{0001}ACTION \(args)\u{0001}"
         case "WHOIS":
             preview = args.isEmpty ? "WHOIS" : "WHOIS \(args)"
         case "AWAY":

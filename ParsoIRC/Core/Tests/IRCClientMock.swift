@@ -214,7 +214,8 @@ actor IRCClientMock {
     }
     
     func me(_ message: String, to channel: String) async throws {
-        try await send_raw("PRIVMSG \(channel) :\u0001ACTION \(message)\u0001")
+        let actionMessage = "\u{0001}ACTION \(message)\u{0001}"
+        try await send_raw("PRIVMSG \(channel) :\(actionMessage)")
     }
     
     func getJoinedChannels() -> [String] {
