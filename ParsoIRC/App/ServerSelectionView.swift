@@ -103,18 +103,6 @@ struct ServerSelectionView: View {
         
         connectingServer = serverConfig
         connectingChannel = Channel(name: serverConfig.lastActiveChannel ?? "#linux")
-        
-        Task {
-            do {
-                try await ircManager.connectWithHistory(to: serverConfig)
-            } catch {
-                await MainActor.run {
-                    errorMessage = error.localizedDescription
-                    showError = true
-                    connectingServer = nil
-                }
-            }
-        }
     }
 }
 

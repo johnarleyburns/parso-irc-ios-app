@@ -95,4 +95,245 @@ final class IRCMessageTests: XCTestCase {
     }
 }
 
+final class IRCClientTests: XCTestCase {
+    
+    private var mock: IRCClientMock!
+    private var welcomeReceived: String?
+    private var joinReceived: String?
+    private var nickChangeReceived: (String, String)?
+    private var disconnectReceived: Bool = false
+    
+    override func setUp() async throws {
+        mock = IRCClientMock()
+        
+        await MainActor.run {
+            mock.onWelcome = { [weak self] nick in
+                self?.welcomeReceived = nick
+            }
+            mock.onJoin = { [weak self] channel, nick in
+                self?.joinReceived = channel
+            }
+            mock.onNickChange = { [weak self] oldNick, newNick in
+                self?.nickChangeReceived = (oldNick, newNick)
+            }
+            mock.onDisconnect = { [weak self] in
+                self?.disconnectReceived = true
+            }
+        }
+    }
+    
+    override func tearDown() async throws {
+        await mock.reset()
+        welcomeReceived = nil
+        joinReceived = nil
+        nickChangeReceived = nil
+        disconnectReceived = false
+    }
+    
+    func testConnect() async throws {
+        try await mock.connect(
+            host: "irc.example.com",
+            port: 6697,
+            tls: true,
+            nickname: "testuser",
+            username: "testuser",
+            realname: "Test User"
+        )
+        
+        let isConnected = await mock.isConnected()
+        XCTAssertTrue(isConnected, "Should be connected")
+        
+        let nick = await mock.getNickname()
+        XCTAssertEqual(nick, "testuser", "Nickname should be set")
+        
+        XCTAssertNotNil(welcomeReceived, "Welcome callback should fire")
+        XCTAssertEqual(welcomeReceived, "testuser")
+    }
+    
+    func testNickCommand() async throws {
+        try await mock.connect(
+            host: "irc.example.com",
+            port: 6697,
+            tls: true,
+            nickname: "oldnick",
+            username: "oldnick",
+            realname: "Test"
+        )
+        
+        try await mock.nick("newnick")
+        
+        let messages = await mock.getSentMessages()
+        XCTAssertEqual(messages.count, 2, "Should have 2 messages (CONNECT + NICK)")
+        XCTAssertTrue(messages.contains { $0.hasPrefix("NICK") }, "Should contain NICK command")
+    }
+    
+    func testJoinChannel() async throws {
+        try await mock.connect(
+            host: "irc.example.com",
+            port: 6697,
+            tls: true,
+            nickname: "testuser",
+            username: "testuser",
+            realname: "Test"
+        )
+        
+        try await mock.join(channel: "#linux")
+        
+        let messages = await mock.getSentMessages()
+        XCTAssertTrue(messages.contains { $0.hasPrefix("JOIN") }, "Should contain JOIN command")
+        
+        let channels = await mock.getJoinedChannels()
+        XCTAssertTrue(channels.contains("#linux"), "Should be in #linux channel")
+        
+        XCTAssertNotNil(joinReceived, "Join callback should fire")
+    }
+    
+    func testPartChannel() async throws {
+        try await mock.connect(
+            host: "irc.example.com",
+            port: 6697,
+            tls: true,
+            nickname: "testuser",
+            username: "testuser",
+            realname: "Test"
+        )
+        
+        try await mock.join(channel: "#linux")
+        try await mock.leave(channel: "#linux")
+        
+        let channels = await mock.getJoinedChannels()
+        XCTAssertFalse(channels.contains("#linux"), "Should have left channel")
+    }
+    
+    func testListCommand() async throws {
+        try await mock.connect(
+            host: "irc.example.com",
+            port: 6697,
+            tls: true,
+            nickname: "testuser",
+            username: "testuser",
+            realname: "Test"
+        )
+        
+        try await mock.list()
+        
+        let messages = await mock.getSentMessages()
+        XCTAssertTrue(messages.contains { $0.hasPrefix("LIST") }, "Should contain LIST command")
+    }
+    
+    func testNamesCommand() async throws {
+        try await mock.connect(
+            host: "irc.example.com",
+            port: 6697,
+            tls: true,
+            nickname: "testuser",
+            username: "testuser",
+            realname: "Test"
+        )
+        
+        try await mock.names("#linux")
+        
+        let messages = await mock.getSentMessages()
+        XCTAssertTrue(messages.contains { $0.hasPrefix("NAMES") }, "Should contain NAMES command")
+    }
+    
+    func testPrivmsgCommand() async throws {
+        try await mock.connect(
+            host: "irc.example.com",
+            port: 6697,
+            tls: true,
+            nickname: "testuser",
+            username: "testuser",
+            realname: "Test"
+        )
+        
+        try await mock.sendMessage("Hello", to: "#test")
+        
+        let messages = await mock.getSentMessages()
+        XCTAssertTrue(messages.contains { $0.hasPrefix("PRIVMSG") }, "Should contain PRIVMSG command")
+    }
+    
+    func testMeCommand() async throws {
+        try await mock.connect(
+            host: "irc.example.com",
+            port: 6697,
+            tls: true,
+            nickname: "testuser",
+            username: "testuser",
+            realname: "Test"
+        )
+        
+        try await mock.me("waves", to: "#test")
+        
+        let messages = await mock.getSentMessages()
+        XCTAssertTrue(messages.contains { $0.contains("ACTION") }, "Should contain ACTION in PRIVMSG")
+    }
+    
+    func testWhoisCommand() async throws {
+        try await mock.connect(
+            host: "irc.example.com",
+            port: 6697,
+            tls: true,
+            nickname: "testuser",
+            username: "testuser",
+            realname: "Test"
+        )
+        
+        try await mock.whois("someuser")
+        
+        let messages = await mock.getSentMessages()
+        XCTAssertTrue(messages.contains { $0.hasPrefix("WHOIS") }, "Should contain WHOIS command")
+    }
+    
+    func testAwayCommand() async throws {
+        try await mock.connect(
+            host: "irc.example.com",
+            port: 6697,
+            tls: true,
+            nickname: "testuser",
+            username: "testuser",
+            realname: "Test"
+        )
+        
+        try await mock.away("Be right back")
+        
+        let away = await mock.getAwayMessage()
+        XCTAssertEqual(away, "Be right back", "Away message should be set")
+    }
+    
+    func testAwayClear() async throws {
+        try await mock.connect(
+            host: "irc.example.com",
+            port: 6697,
+            tls: true,
+            nickname: "testuser",
+            username: "testuser",
+            realname: "Test"
+        )
+        
+        try await mock.away("BRB")
+        try await mock.away(nil)
+        
+        let away = await mock.getAwayMessage()
+        XCTAssertNil(away, "Away message should be cleared")
+    }
+    
+    func testQuitCommand() async throws {
+        try await mock.connect(
+            host: "irc.example.com",
+            port: 6697,
+            tls: true,
+            nickname: "testuser",
+            username: "testuser",
+            realname: "Test"
+        )
+        
+        try await mock.quit("Goodbye")
+        
+        let messages = await mock.getSentMessages()
+        XCTAssertTrue(messages.contains { $0.hasPrefix("QUIT") }, "Should contain QUIT command")
+        XCTAssertTrue(disconnectReceived, "Disconnect callback should fire")
+    }
+}
+
 #endif // !os(Linux)

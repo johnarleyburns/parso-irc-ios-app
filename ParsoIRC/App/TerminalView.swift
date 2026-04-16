@@ -24,21 +24,11 @@ struct TerminalView: View {
     let channel: Channel
     var isConnecting: Bool = false
     
+    @State private var ircClient: IRCClient?
+    
     @State private var lines: [TerminalLine] = []
     @State private var showCommandSheet = false
     @State private var scrollProxy: ScrollViewProxy?
-    
-    private let commands = [
-        ("NICK", "Set nickname"),
-        ("USER", "Set username"),
-        ("JOIN", "Join channel"),
-        ("PART", "Leave channel"),
-        ("PRIVMSG", "Send message"),
-        ("ME", "Action (/me)"),
-        ("WHOIS", "Query user"),
-        ("AWAY", "Set away"),
-        ("QUIT", "Disconnect")
-    ]
     
     var body: some View {
         ZStack {
@@ -114,7 +104,6 @@ struct TerminalView: View {
         .navigationBarHidden(true)
         .sheet(isPresented: $showCommandSheet) {
             CommandInputSheet(
-                commands: commands,
                 channel: channel,
                 server: server,
                 onSend: { command, arguments in
@@ -139,14 +128,17 @@ struct TerminalView: View {
     private func showConnectingState() {
         addSystemMessage("* Connecting to \(server.host):\(server.port)")
         
-        guard let client = ircManager.getClient(for: server.id) else {
-            addSystemMessage("* Error: No client")
+        let nickname = server.nickname.isEmpty ? "parso\(Int.random(in: 1000...9999))" : server.nickname
+        let username = server.realname.isEmpty ? "parso" : server.realname
+        let realname = server.realname.isEmpty ? "Parso IRC" : server.realname
+        
+        ircClient = IRCClient()
+        
+        guard let client = ircClient else {
+            addSystemMessage("* Error: Failed to create client")
             return
         }
         
-        addSystemMessage("* Connected, joining \(channel.name)")
-        
-        let channelName = channel.name
         client.onMessage = { message in
             let line = "\(message.command) \(message.parameters.joined(separator: " "))"
             Task { @MainActor in
@@ -163,6 +155,39 @@ struct TerminalView: View {
         client.onDisconnect = {
             Task { @MainActor in
                 self.addSystemMessage("* Disconnected")
+            }
+        }
+        
+        client.onError = { error in
+            Task { @MainActor in
+                self.addSystemMessage("* Error: \(error.localizedDescription)")
+            }
+        }
+        
+        Task {
+            do {
+                try await client.connect(
+                    host: server.host,
+                    port: server.port,
+                    tls: server.ssl,
+                    nickname: nickname,
+                    username: username,
+                    realname: realname,
+                    serverPassword: server.password,
+                    useSASL: server.saslEnabled,
+                    saslPassword: server.password
+                )
+                
+                await MainActor.run {
+                    self.addSystemMessage("* Connected to \(server.host)")
+                    self.ircManager.connections[self.server.id] = client
+                    self.ircManager.connectionStates[self.server.id] = .connected
+                }
+            } catch {
+                await MainActor.run {
+                    self.addSystemMessage("* Connection failed: \(error.localizedDescription)")
+                    self.ircManager.connectionStates[self.server.id] = .failed(.connectionFailed(error.localizedDescription))
+                }
             }
         }
     }

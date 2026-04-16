@@ -243,6 +243,34 @@ actor IRCClient {
         try await send(command: "QUIT", parameters: [message])
     }
     
+    func nick(_ newNickname: String) async throws {
+        try await send(command: "NICK", parameters: [newNickname])
+    }
+    
+    func list() async throws {
+        try await send(command: "LIST", parameters: [])
+    }
+    
+    func names(_ channel: String) async throws {
+        try await send(command: "NAMES", parameters: [channel])
+    }
+    
+    func whois(_ username: String) async throws {
+        try await send(command: "WHOIS", parameters: [username])
+    }
+    
+    func away(_ message: String?) async throws {
+        if let message = message {
+            try await send(command: "AWAY", parameters: [message])
+        } else {
+            try await send(command: "AWAY", parameters: [])
+        }
+    }
+    
+    func me(_ message: String, to channel: String) async throws {
+        try await send(command: "PRIVMSG", parameters: [channel, "\u0001ACTION \(message)\u0001"])
+    }
+    
     func isConnectedToServer() -> Bool {
         return isConnected
     }

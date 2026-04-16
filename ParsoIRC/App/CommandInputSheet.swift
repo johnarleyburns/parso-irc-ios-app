@@ -1,19 +1,31 @@
 import SwiftUI
 
 struct CommandInputSheet: View {
-    let commands: [(name: String, description: String)]
     let channel: Channel
     let server: Server
     let onSend: (String, String) -> Void
     let onCancel: () -> Void
     
-    @State private var selectedCommand: String = "PRIVMSG"
+    private let commands: [(name: String, description: String, needsArgs: Bool)] = [
+        ("NICK", "Set nickname", true),
+        ("USER", "Set username", true),
+        ("JOIN", "Join channel", true),
+        ("PART", "Leave channel", true),
+        ("LIST", "List channels", false),
+        ("NAMES", "List users in channel", true),
+        ("PRIVMSG", "Send private message", true),
+        ("ME", "Action (/me)", true),
+        ("WHOIS", "Query user", true),
+        ("AWAY", "Set away status", false),
+        ("QUIT", "Disconnect", false)
+    ]
+    
+    @State private var selectedIndex: Int = 0
     @State private var arguments: String = ""
     @State private var preview: String = ""
     
     var body: some View {
         VStack(spacing: 0) {
-            // Header
             HStack {
                 Text("Send IRC Command")
                     .font(.headline)
@@ -29,69 +41,72 @@ struct CommandInputSheet: View {
             .padding()
             .background(Color(white: 0.1))
             
-            // Command picker
-            ScrollView {
-                VStack(spacing: 8) {
-                    ForEach(commands, id: \.name) { cmd in
+            VStack(spacing: 16) {
+                Text("Command")
+                    .font(.caption)
+                    .foregroundColor(.gray)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                
+                Menu {
+                    ForEach(0..<commands.count, id: \.self) { index in
                         Button {
-                            selectedCommand = cmd.name
+                            selectedIndex = index
+                            arguments = ""
                             updatePreview()
                         } label: {
                             HStack {
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(cmd.name)
-                                        .font(.headline)
-                                        .foregroundColor(selectedCommand == cmd.name ? .green : .white)
-                                    Text(cmd.description)
-                                        .font(.caption)
-                                        .foregroundColor(.gray)
-                                }
-                                
-                                Spacer()
-                                
-                                if selectedCommand == cmd.name {
-                                    Image(systemName: "checkmark.circle.fill")
-                                        .foregroundColor(.green)
-                                }
+                                Text(commands[index].name)
+                                Text(commands[index].description)
+                                    .foregroundColor(.secondary)
                             }
-                            .padding()
-                            .background(selectedCommand == cmd.name ? Color.green.opacity(0.2) : Color.gray.opacity(0.2))
-                            .cornerRadius(8)
                         }
                     }
+                } label: {
+                    HStack {
+                        Text(commands[selectedIndex].name)
+                            .font(.headline)
+                            .foregroundColor(.green)
+                        Text(commands[selectedIndex].description)
+                            .font(.caption)
+                            .foregroundColor(.gray)
+                        Spacer()
+                        Image(systemName: "chevron.down")
+                            .foregroundColor(.gray)
+                    }
+                    .padding()
+                    .frame(maxWidth: .infinity)
+                    .background(Color.gray.opacity(0.2))
+                    .cornerRadius(8)
+                }
+            }
+            .padding()
+            
+            if commands[selectedIndex].needsArgs {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(getArgLabel())
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                    
+                    TextField(getPlaceholder(), text: $arguments)
+                        .textFieldStyle(.plain)
+                        .font(.system(.body, design: .monospaced))
+                        .foregroundColor(.white)
+                        .padding()
+                        .background(Color.gray.opacity(0.2))
+                        .cornerRadius(8)
+                        .onChange(of: arguments) { _, _ in
+                            updatePreview()
+                        }
                 }
                 .padding()
             }
             
-            // Arguments input
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Arguments")
-                    .font(.caption)
-                    .foregroundColor(.gray)
-                
-                TextField(getPlaceholder(), text: $arguments)
-                    .textFieldStyle(.plain)
-                    .font(.system(.body, design: .monospaced))
-                    .foregroundColor(.white)
-                    .padding()
-                    .background(Color.gray.opacity(0.2))
-                    .cornerRadius(8)
-                    .onChange(of: arguments) { _, _ in
-                        updatePreview()
-                    }
-                    .onChange(of: selectedCommand) { _, _ in
-                        updatePreview()
-                    }
-            }
-            .padding()
-            
-            // Preview
             VStack(alignment: .leading, spacing: 4) {
                 Text("Preview:")
                     .font(.caption)
                     .foregroundColor(.gray)
                 
-                Text(preview.isEmpty ? "(enter arguments above)" : preview)
+                Text(preview.isEmpty ? "(no arguments needed)" : preview)
                     .font(.system(.caption, design: .monospaced))
                     .foregroundColor(.yellow)
                     .padding()
@@ -101,10 +116,9 @@ struct CommandInputSheet: View {
             }
             .padding()
             
-            // Send button
             Button {
                 let args = formatArguments()
-                onSend(selectedCommand, args)
+                onSend(commands[selectedIndex].name, args)
             } label: {
                 Text("Send")
                     .font(.headline)
@@ -124,15 +138,32 @@ struct CommandInputSheet: View {
         }
     }
     
+    private func getArgLabel() -> String {
+        switch commands[selectedIndex].name {
+        case "NICK": return "New Nickname"
+        case "USER": return "Username Realname"
+        case "JOIN": return "Channel (#channel)"
+        case "PART": return "Channel (#channel)"
+        case "NAMES": return "Channel (#channel)"
+        case "PRIVMSG": return "Username Message"
+        case "ME": return "Action Message"
+        case "WHOIS": return "Username"
+        case "AWAY": return "Away Message (optional)"
+        case "QUIT": return "Reason (optional)"
+        default: return "Arguments"
+        }
+    }
+    
     private func getPlaceholder() -> String {
-        switch selectedCommand {
+        switch commands[selectedIndex].name {
         case "NICK": return "newnick"
         case "USER": return "username realname"
         case "JOIN": return channel.name
         case "PART": return channel.name
-        case "PRIVMSG": return "\(channel.name) message"
-        case "ME": return "\(channel.name) action"
-        case "WHOIS": return "nickname"
+        case "NAMES": return channel.name
+        case "PRIVMSG": return "username message"
+        case "ME": return "action message"
+        case "WHOIS": return "username"
         case "AWAY": return "away message"
         case "QUIT": return "reason"
         default: return "arguments"
@@ -140,37 +171,63 @@ struct CommandInputSheet: View {
     }
     
     private func formatArguments() -> String {
-        switch selectedCommand {
-        case "NICK": return arguments
-        case "USER": return arguments
-        case "JOIN": return arguments
-        case "PART": return arguments.isEmpty ? channel.name : arguments
-        case "PRIVMSG": return arguments
-        case "ME": return arguments
-        case "WHOIS": return arguments
-        case "AWAY": return arguments
-        case "QUIT": return arguments
-        default: return arguments
+        let cmd = commands[selectedIndex].name
+        if arguments.isEmpty {
+            if cmd == "QUIT" { return "" }
+            return ""
         }
+        return arguments
     }
     
     private func updatePreview() {
-        let args = formatArguments()
-        if args.isEmpty {
-            preview = ":\(selectedCommand)"
-        } else {
-            preview = ":\(selectedCommand) \(args)"
+        let cmd = commands[selectedIndex].name
+        let args = arguments
+        
+        switch cmd {
+        case "NICK":
+            preview = args.isEmpty ? "NICK" : "NICK :\(args)"
+        case "USER":
+            preview = args.isEmpty ? "USER" : "USER \(args.replacingOccurrences(of: " ", with: " "))"
+        case "JOIN":
+            preview = args.isEmpty ? "JOIN \(channel.name)" : "JOIN \(args)"
+        case "PART":
+            preview = args.isEmpty ? "PART \(channel.name)" : "PART \(args)"
+        case "LIST":
+            preview = "LIST"
+        case "NAMES":
+            preview = args.isEmpty ? "NAMES \(channel.name)" : "NAMES \(args)"
+        case "PRIVMSG":
+            let parts = args.split(separator: " ", maxSplits: 1)
+            if parts.count == 2 {
+                let target = String(parts[0])
+                let message = String(parts[1])
+                preview = "PRIVMSG \(target) :\(message)"
+            } else {
+                preview = "PRIVMSG username :message"
+            }
+        case "ME":
+            preview = args.isEmpty ? "PRIVMSG \(channel.name) :\u0001ACTION\u0001" : "PRIVMSG \(channel.name) :\u0001ACTION \(args)\u0001"
+        case "WHOIS":
+            preview = args.isEmpty ? "WHOIS" : "WHOIS \(args)"
+        case "AWAY":
+            preview = args.isEmpty ? "AWAY" : "AWAY :\(args)"
+        case "QUIT":
+            preview = args.isEmpty ? "QUIT" : "QUIT :\(args)"
+        default:
+            preview = args.isEmpty ? cmd : "\(cmd) \(args)"
         }
     }
     
     private var isValid: Bool {
-        !arguments.isEmpty || selectedCommand == "QUIT"
+        let cmd = commands[selectedIndex].name
+        if cmd == "QUIT" { return true }
+        if commands[selectedIndex].needsArgs && arguments.isEmpty { return false }
+        return true
     }
 }
 
 #Preview {
     CommandInputSheet(
-        commands: [("NICK", "Set nickname"), ("JOIN", "Join channel"), ("PRIVMSG", "Send message")],
         channel: Channel(name: "#linux"),
         server: Server.defaultNetworks[0],
         onSend: { _, _ in },
