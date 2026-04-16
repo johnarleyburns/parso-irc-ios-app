@@ -71,7 +71,7 @@ struct ServerSelectionView: View {
             .fullScreenCover(item: $connectingServer) { server in
                 if let channel = connectingChannel {
                     NavigationStack {
-                        TerminalView(server: server, channel: channel, isConnecting: true)
+                        TerminalView(server: server, channel: channel, startConnecting: true)
                             .environmentObject(ircManager)
                             .environmentObject(appState)
                     }
