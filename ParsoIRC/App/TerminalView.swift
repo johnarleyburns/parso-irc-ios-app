@@ -22,6 +22,7 @@ struct TerminalView: View {
     
     let server: Server
     let channel: Channel
+    var isConnecting: Bool = false
     
     @State private var lines: [TerminalLine] = []
     @State private var showCommandSheet = false
@@ -127,15 +128,63 @@ struct TerminalView: View {
             .presentationDetents([.medium])
         }
         .onAppear {
-            setupIRCCallbacks()
-            addSystemMessage("Connected to \(server.name) as \(server.nickname)")
-            addSystemMessage("Channel: \(channel.name)")
+            if isConnecting {
+                showConnectingState()
+            } else {
+                setupIRCCallbacks()
+            }
+        }
+    }
+    
+    private func showConnectingState() {
+        addSystemMessage("* Connecting to \(server.host):\(server.port)")
+        
+        guard let client = ircManager.getClient(for: server.id) else {
+            addSystemMessage("* Error: No client")
+            return
+        }
+        
+        addSystemMessage("* Connected, joining \(channel.name)")
+        
+        client.onMessage = { [weak self] message in
+            Task { @MainActor in
+                self?.addReceivedMessage(message.rawLine)
+            }
+        }
+        
+        client.onWelcome = { [weak self] nick in
+            Task { @MainActor in
+                self?.addSystemMessage("* You are now known as \(nick)")
+            }
+        }
+        
+        client.onDisconnect = { [weak self] in
+            Task { @MainActor in
+                self?.addSystemMessage("* Disconnected")
+            }
         }
     }
     
     private func setupIRCCallbacks() {
-        // Messages are already handled by the IRC client
-        // We can add additional callbacks if needed
+        guard let client = ircManager.getClient(for: server.id) else { return }
+        
+        client.onMessage = { [weak self] message in
+            Task { @MainActor in
+                self?.addReceivedMessage(message.rawLine)
+            }
+        }
+        
+        client.onWelcome = { [weak self] nick in
+            Task { @MainActor in
+                self?.addSystemMessage("* You are now known as \(nick)")
+            }
+        }
+        
+        client.onDisconnect = { [weak self] in
+            Task { @MainActor in
+                self?.addSystemMessage("* Disconnected")
+            }
+        }
     }
     
     private func sendCommand(command: String, arguments: String) {

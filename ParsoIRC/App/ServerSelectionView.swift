@@ -4,10 +4,10 @@ struct ServerSelectionView: View {
     @EnvironmentObject var ircManager: IRCClientManager
     @EnvironmentObject var appState: AppState
     
-    @State private var isConnecting = false
+    @State private var connectingServer: Server?
+    @State private var connectingChannel: Channel?
     @State private var showError = false
     @State private var errorMessage = ""
-    @State private var showTerminal = false
     
     private let servers: [(name: String, host: String, port: Int, channels: [String])] = [
         ("Libera.Chat", "irc.libera.chat", 6697, ["#linux", "#kde", "#libera", "#archlinux"]),
@@ -52,19 +52,13 @@ struct ServerSelectionView: View {
                                         
                                         Spacer()
                                         
-                                        if isConnecting {
-                                            ProgressView()
-                                                .tint(.green)
-                                        } else {
-                                            Image(systemName: "chevron.right")
-                                                .foregroundColor(.gray)
-                                        }
+                                        Image(systemName: "chevron.right")
+                                            .foregroundColor(.gray)
                                     }
                                     .padding()
                                     .background(Color.gray.opacity(0.2))
                                     .cornerRadius(12)
                                 }
-                                .disabled(isConnecting)
                             }
                         }
                         .padding(.horizontal)
@@ -74,12 +68,24 @@ struct ServerSelectionView: View {
                 }
             }
             .navigationBarHidden(true)
+            .fullScreenCover(item: $connectingServer) { server in
+                if let channel = connectingChannel {
+                    NavigationStack {
+                        TerminalView(server: server, channel: channel, isConnecting: true)
+                            .environmentObject(ircManager)
+                            .environmentObject(appState)
+                    }
+                }
+            }
+            .alert("Connection Error", isPresented: $showError) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(errorMessage)
+            }
         }
     }
     
     private func connect(to server: (name: String, host: String, port: Int, channels: [String])) {
-        isConnecting = true
-        
         let serverConfig = Server(
             id: UUID().uuidString,
             name: server.name,
@@ -95,17 +101,17 @@ struct ServerSelectionView: View {
             lastActiveChannel: server.channels.first ?? "#linux"
         )
         
+        connectingServer = serverConfig
+        connectingChannel = Channel(name: serverConfig.lastActiveChannel ?? "#linux")
+        
         Task {
             do {
                 try await ircManager.connectWithHistory(to: serverConfig)
-                await MainActor.run {
-                    showTerminal = true
-                }
             } catch {
                 await MainActor.run {
                     errorMessage = error.localizedDescription
                     showError = true
-                    isConnecting = false
+                    connectingServer = nil
                 }
             }
         }
