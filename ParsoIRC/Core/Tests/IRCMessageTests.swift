@@ -163,7 +163,7 @@ final class IRCClientTests: XCTestCase {
         try await mock.nick("newnick")
         
         let messages = await mock.getSentMessages()
-        XCTAssertEqual(messages.count, 2, "Should have 2 messages (CONNECT + NICK)")
+        XCTAssertEqual(messages.count, 1, "Should have 1 message (NICK)")
         XCTAssertTrue(messages.contains { $0.hasPrefix("NICK") }, "Should contain NICK command")
     }
     
