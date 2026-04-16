@@ -153,7 +153,7 @@ struct TerminalView: View {
         Task {
             do {
                 if let client = ircManager.getClient(for: server.id) {
-                    try await client.send(message: message)
+                    try await client.send_raw(message)
                 }
             } catch {
                 addSystemMessage("Error: \(error.localizedDescription)")
