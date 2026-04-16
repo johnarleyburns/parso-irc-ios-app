@@ -186,7 +186,6 @@ struct TerminalView: View {
             } catch {
                 await MainActor.run {
                     self.addSystemMessage("* Connection failed: \(error.localizedDescription)")
-                    self.ircManager.connectionStates[self.server.id] = .failed(.connectionFailed(error.localizedDescription))
                 }
             }
         }
