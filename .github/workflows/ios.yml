@@ -10,7 +10,7 @@ on:
 jobs:
   # ─── NEW: Run tests before building ───────────────────────────────────────
   test:
-    name: Unit & UI Tests
+    name: Unit Tests
     runs-on: macos-15
     steps:
       - name: Checkout
@@ -111,14 +111,6 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
             2>&1 | tee test.log
-
-      # - name: Run UI tests
-      #   run: |
-      #     xcodebuild test \
-      #       -project ParsoIRC.xcodeproj \
-      #       -scheme ParsoIRC \
-      #       -destination "platform=iOS Simulator,id=${{ steps.simulator.outputs.udid }}" \
-      #       -only-testing:ParsoIRCUITests
 
       - name: Upload test results
         if: always()

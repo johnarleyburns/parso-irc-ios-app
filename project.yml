@@ -89,22 +89,6 @@ targets:
         TEST_HOST: "$(BUILT_PRODUCTS_DIR)/ParsoIRC.app/ParsoIRC"
         BUNDLE_LOADER: "$(TEST_HOST)"
 
-  ParsoIRCUITests:
-    type: bundle.unit-test
-    platform: iOS
-    deploymentTarget: "17.0"
-    sources:
-      - path: ParsoIRC/ParsoIRCUITests
-    dependencies:
-      - target: ParsoIRC
-    settings:
-      base:
-        GENERATE_INFOPLIST_FILE: YES
-        INFOPLIST_KEY_CFBundleShortVersionString: "1.0.0"
-        INFOPLIST_KEY_CFBundleVersion: "1"
-        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/ParsoIRC.app/ParsoIRC"
-        BUNDLE_LOADER: "$(TEST_HOST)"
-
 schemes:
   ParsoIRC:
     build:
@@ -116,7 +100,6 @@ schemes:
       config: Debug
       targets:
         - ParsoIRCTests
-        - ParsoIRCUITests
     profile:
       config: Release
     analyze:
@@ -128,19 +111,6 @@ schemes:
     build:
       targets:
         ParsoIRCTests: all
-    run:
-      config: Debug
-    test:
-      config: Debug
-    profile:
-      config: Release
-    archive:
-      config: Release
-
-  ParsoIRCUITests:
-    build:
-      targets:
-        ParsoIRCUITests: all
     run:
       config: Debug
     test:

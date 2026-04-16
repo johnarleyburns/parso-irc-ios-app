@@ -8,62 +8,34 @@
 
 /* Begin PBXBuildFile section */
 		0133FE6C1B735DB2601946A1 /* SplashScreenView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C2098EAD54CAC510D3C467E /* SplashScreenView.swift */; };
-		05EAD9A1ACAC39B8D4373EED /* ChannelSettingsSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81357BD4B36593226304E3AF /* ChannelSettingsSheet.swift */; };
-		0D8B1C5B9EEAC50F3A8F1ACE /* ReconnectingSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 604094F21E764ECB019FE0AE /* ReconnectingSheet.swift */; };
-		1B57CBE65BEE6BE1B40F7361 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0AEC100EA46754BA3DC48FD3 /* SettingsView.swift */; };
 		2BC0CD2C0118139103216596 /* IRCMessageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 816366BE8D0CB46EE7F7FA86 /* IRCMessageTests.swift */; };
 		3C9948BF220EE23FC86B23C5 /* IRCModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8A9E13316FC1467F04022F5D /* IRCModels.swift */; };
-		3E6D10EADC1868FE5738C162 /* InputBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 437877A533701F4BF0DA1D9E /* InputBarView.swift */; };
 		3F7E221CD1BD1C844863AC02 /* IRCIntegrationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2DEF80BF6A61D335FADFFBAA /* IRCIntegrationTests.swift */; };
 		3F9394E9CC4763FB472B9737 /* WatchManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA310C148C6DA8646DA945E8 /* WatchManager.swift */; };
-		3FAC22CD2585F5A3DBC58FB6 /* ConversationListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9DE41DE6C169810BB0E00698 /* ConversationListView.swift */; };
-		4431191EC6D4BA3EF5AD85A5 /* QuickConnectSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = E77F75ADBC65C87A32C555C1 /* QuickConnectSheet.swift */; };
 		4481E492C84B05888A430809 /* IRCErrorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C89971396BE51FF48B715A86 /* IRCErrorTests.swift */; };
 		45D7365861655CD2765099CF /* NickColorGenerator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D152909FA8E1CD2ECEF3561 /* NickColorGenerator.swift */; };
 		45F43AFC6AC55F724F611E57 /* ParsoIRCApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4B86422E8E405D0FE1027DA /* ParsoIRCApp.swift */; };
-		476F8E27EDD759AE1337A880 /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56C28EB7D260E7C30E0D5C9D /* HomeView.swift */; };
 		4AC9FA90B6E5295CD4E9D31A /* AvatarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7812F2E85A5555DB7AE4EB2 /* AvatarView.swift */; };
-		4D6ED41152C047B8FCAFA7BE /* DebugToastView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03BCED6C44044B63C7DA83EC /* DebugToastView.swift */; };
 		4F883B657FE53E8C1954D36D /* NetworkMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19E664E8DE48281DDE12793D /* NetworkMonitor.swift */; };
-		4FA80375CA263B9EF1A3D7EF /* MessageBubbleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BBBAA6732A32F014C0ED97A /* MessageBubbleView.swift */; };
-		519CB04F1CC3AF41E3AB0134 /* TutorialView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95F332C5F1AB216A24EB4FBE /* TutorialView.swift */; };
-		58C03883AC45349DE7B6C305 /* MemberListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A17575386AA56E09FEE1287 /* MemberListView.swift */; };
-		58CE7EF9A534A43295AF27D3 /* TypingIndicatorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4AF4079211793DC5787E4C8F /* TypingIndicatorView.swift */; };
-		5D45952305E35B56C8EEBA5F /* TutorialManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42F4CB1600100FCDDCA6E2A2 /* TutorialManager.swift */; };
-		64496229C1B0D6032BB28028 /* ChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB3B7B159E6462218B722671 /* ChatView.swift */; };
 		662E7D2E9CF93D494590DBCD /* IRCClientManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30CE7E42840DAD51D6330A76 /* IRCClientManager.swift */; };
 		6B66AEE6B038A0958C16D607 /* SQLite in Frameworks */ = {isa = PBXBuildFile; productRef = B048C700B0D1A78ADC51D3D4 /* SQLite */; };
 		6E6160E878A6124C890E4B5E /* IRCMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9002F82EFDDAFCFC614256F9 /* IRCMessage.swift */; };
 		74164C9BD427A53E32373376 /* Date+Formatting.swift in Sources */ = {isa = PBXBuildFile; fileRef = 090EFD258A710D226C62715D /* Date+Formatting.swift */; };
-		7E76C09122A1C48E7C0461E6 /* SignUpWorkflowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D88FA3FECA58097C53677256 /* SignUpWorkflowTests.swift */; };
 		82B42B20306C0331C985A16F /* Color+Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07E7D04948ED236B84CB1A82 /* Color+Theme.swift */; };
-		85290CC4FD0452CBCD8D7937 /* MainTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F76C5408EAA601F53F27D94 /* MainTabView.swift */; };
-		897BD6D0A5AAE3B77ED59D79 /* ChatViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = ECAFA7366CA3C912F8B4E882 /* ChatViewModel.swift */; };
-		8EA0BBA948FC671C1BD17516 /* DateSeparatorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 69265E0EA6072F27008C69F3 /* DateSeparatorView.swift */; };
+		8838D901C117AB45132B3F31 /* TerminalView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C0C425A79B9062498FC242C /* TerminalView.swift */; };
 		9F31103137D5A38CD5D44EDC /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 616CD3F176E8DCDFCBD24F68 /* Assets.xcassets */; };
 		AE8FAACD40CF8FB77DFD72CA /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79F387B1DB41E7CD8828DC5B /* ContentView.swift */; };
+		B6A52171F3BDEFC3B1E72480 /* ServerSelectionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6EF975BCEFBD116B66F50127 /* ServerSelectionView.swift */; };
 		B71BE33F9EE9FB088D07469C /* IRCClientMock.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42A5C90B2A117F4E10F9B0C5 /* IRCClientMock.swift */; };
-		C3A0D0E5EB90690A0E2FB470 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C0A9C191CB5FF996C566124 /* OnboardingView.swift */; };
-		CAB4C2F88CBE7DCAD136EFAF /* ProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A702884E7BC889595DDE9617 /* ProfileView.swift */; };
-		CB715F4A1D0A45FA260E74D2 /* LoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 030235EB9CF674BD82D84EB6 /* LoginView.swift */; };
+		BA7B1EE55E226D52A6F197EC /* CommandInputSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2372DD03EF6AD4FB987312E /* CommandInputSheet.swift */; };
 		CC61408D85A9DD3DCC1CA735 /* NotificationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39A23300227F01ED77CBCC0F /* NotificationManager.swift */; };
 		D0C66AD97DB59F93B9AAB5CF /* DatabaseManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = C73FCAD8E5E67FB43D95A3CE /* DatabaseManager.swift */; };
-		D54B619A49E39B79F8BFBEEC /* ServerListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2872F9FFB33A997A689F144 /* ServerListView.swift */; };
-		DD2FB70605495937CC351F19 /* AddServerSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0E74ECA16340EE8BF5DE1D6 /* AddServerSheet.swift */; };
 		E636F1F7F534262C2F61E994 /* HapticManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68A8C90FA376CF1F00EE1B8A /* HapticManager.swift */; };
 		ED86B3C872073D3606376341 /* IRCClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADD9A6C8AD8D97A1C8D31013 /* IRCClient.swift */; };
 		FC491AC7AF49B40AB8AC79CA /* IRCError.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F902D39A7FB938CE624E1B3 /* IRCError.swift */; };
-		FE6510E7835D46FD77D7DE79 /* RegistrationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B003BB7C46E8952092A56CF7 /* RegistrationView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
-		4EA92B3D07ADB71F77FBC554 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = B3EF558F13059E376E1FFE55 /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = 4D75E43C5C2DF2D555182C49;
-			remoteInfo = ParsoIRC;
-		};
 		B7F5EC3EB6AE3E9A4558A1EA /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = B3EF558F13059E376E1FFE55 /* Project object */;
@@ -74,54 +46,32 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		030235EB9CF674BD82D84EB6 /* LoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginView.swift; sourceTree = "<group>"; };
-		03BCED6C44044B63C7DA83EC /* DebugToastView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DebugToastView.swift; sourceTree = "<group>"; };
 		07E7D04948ED236B84CB1A82 /* Color+Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Color+Theme.swift"; sourceTree = "<group>"; };
 		090EFD258A710D226C62715D /* Date+Formatting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Date+Formatting.swift"; sourceTree = "<group>"; };
-		0AEC100EA46754BA3DC48FD3 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		19E664E8DE48281DDE12793D /* NetworkMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NetworkMonitor.swift; sourceTree = "<group>"; };
 		2DEF80BF6A61D335FADFFBAA /* IRCIntegrationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IRCIntegrationTests.swift; sourceTree = "<group>"; };
-		2F76C5408EAA601F53F27D94 /* MainTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainTabView.swift; sourceTree = "<group>"; };
 		30CE7E42840DAD51D6330A76 /* IRCClientManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IRCClientManager.swift; sourceTree = "<group>"; };
 		3523F453C71AD0DE752512DD /* ParsoIRC.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = ParsoIRC.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		39A23300227F01ED77CBCC0F /* NotificationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationManager.swift; sourceTree = "<group>"; };
+		3C0C425A79B9062498FC242C /* TerminalView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalView.swift; sourceTree = "<group>"; };
 		42A5C90B2A117F4E10F9B0C5 /* IRCClientMock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IRCClientMock.swift; sourceTree = "<group>"; };
-		42F4CB1600100FCDDCA6E2A2 /* TutorialManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TutorialManager.swift; sourceTree = "<group>"; };
-		437877A533701F4BF0DA1D9E /* InputBarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InputBarView.swift; sourceTree = "<group>"; };
-		4AF4079211793DC5787E4C8F /* TypingIndicatorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TypingIndicatorView.swift; sourceTree = "<group>"; };
-		4BBBAA6732A32F014C0ED97A /* MessageBubbleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageBubbleView.swift; sourceTree = "<group>"; };
-		56C28EB7D260E7C30E0D5C9D /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
-		5C0A9C191CB5FF996C566124 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
 		5C2098EAD54CAC510D3C467E /* SplashScreenView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SplashScreenView.swift; sourceTree = "<group>"; };
-		604094F21E764ECB019FE0AE /* ReconnectingSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReconnectingSheet.swift; sourceTree = "<group>"; };
 		616CD3F176E8DCDFCBD24F68 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		68A8C90FA376CF1F00EE1B8A /* HapticManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HapticManager.swift; sourceTree = "<group>"; };
-		69265E0EA6072F27008C69F3 /* DateSeparatorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DateSeparatorView.swift; sourceTree = "<group>"; };
-		6A17575386AA56E09FEE1287 /* MemberListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MemberListView.swift; sourceTree = "<group>"; };
+		6EF975BCEFBD116B66F50127 /* ServerSelectionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerSelectionView.swift; sourceTree = "<group>"; };
 		79F387B1DB41E7CD8828DC5B /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		7D152909FA8E1CD2ECEF3561 /* NickColorGenerator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NickColorGenerator.swift; sourceTree = "<group>"; };
-		81357BD4B36593226304E3AF /* ChannelSettingsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChannelSettingsSheet.swift; sourceTree = "<group>"; };
 		816366BE8D0CB46EE7F7FA86 /* IRCMessageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IRCMessageTests.swift; sourceTree = "<group>"; };
 		8A9E13316FC1467F04022F5D /* IRCModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IRCModels.swift; sourceTree = "<group>"; };
-		8D7EE5A093FD53954221C764 /* ParsoIRCUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = ParsoIRCUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		9002F82EFDDAFCFC614256F9 /* IRCMessage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IRCMessage.swift; sourceTree = "<group>"; };
-		95F332C5F1AB216A24EB4FBE /* TutorialView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TutorialView.swift; sourceTree = "<group>"; };
-		9DE41DE6C169810BB0E00698 /* ConversationListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationListView.swift; sourceTree = "<group>"; };
 		9F902D39A7FB938CE624E1B3 /* IRCError.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IRCError.swift; sourceTree = "<group>"; };
-		A2872F9FFB33A997A689F144 /* ServerListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerListView.swift; sourceTree = "<group>"; };
+		A2372DD03EF6AD4FB987312E /* CommandInputSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandInputSheet.swift; sourceTree = "<group>"; };
 		A4B86422E8E405D0FE1027DA /* ParsoIRCApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ParsoIRCApp.swift; sourceTree = "<group>"; };
-		A702884E7BC889595DDE9617 /* ProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileView.swift; sourceTree = "<group>"; };
 		ADD9A6C8AD8D97A1C8D31013 /* IRCClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IRCClient.swift; sourceTree = "<group>"; };
-		B003BB7C46E8952092A56CF7 /* RegistrationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegistrationView.swift; sourceTree = "<group>"; };
 		C73FCAD8E5E67FB43D95A3CE /* DatabaseManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DatabaseManager.swift; sourceTree = "<group>"; };
 		C89971396BE51FF48B715A86 /* IRCErrorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IRCErrorTests.swift; sourceTree = "<group>"; };
 		CEE564ECFCA2DD31E229D5CB /* ParsoIRCTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = ParsoIRCTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		D88FA3FECA58097C53677256 /* SignUpWorkflowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignUpWorkflowTests.swift; sourceTree = "<group>"; };
-		DB3B7B159E6462218B722671 /* ChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatView.swift; sourceTree = "<group>"; };
-		E77F75ADBC65C87A32C555C1 /* QuickConnectSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickConnectSheet.swift; sourceTree = "<group>"; };
 		EA310C148C6DA8646DA945E8 /* WatchManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchManager.swift; sourceTree = "<group>"; };
-		ECAFA7366CA3C912F8B4E882 /* ChatViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChatViewModel.swift; sourceTree = "<group>"; };
-		F0E74ECA16340EE8BF5DE1D6 /* AddServerSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddServerSheet.swift; sourceTree = "<group>"; };
 		F7812F2E85A5555DB7AE4EB2 /* AvatarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AvatarView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -162,7 +112,6 @@
 		3572CB7B17147C5A69E3974F /* Settings */ = {
 			isa = PBXGroup;
 			children = (
-				0AEC100EA46754BA3DC48FD3 /* SettingsView.swift */,
 			);
 			path = Settings;
 			sourceTree = "<group>";
@@ -170,7 +119,6 @@
 		3A79A1857EE6E20257150808 /* Conversations */ = {
 			isa = PBXGroup;
 			children = (
-				9DE41DE6C169810BB0E00698 /* ConversationListView.swift */,
 			);
 			path = Conversations;
 			sourceTree = "<group>";
@@ -224,10 +172,6 @@
 		5D670B4EC170BF2281FAE5FC /* Servers */ = {
 			isa = PBXGroup;
 			children = (
-				F0E74ECA16340EE8BF5DE1D6 /* AddServerSheet.swift */,
-				E77F75ADBC65C87A32C555C1 /* QuickConnectSheet.swift */,
-				604094F21E764ECB019FE0AE /* ReconnectingSheet.swift */,
-				A2872F9FFB33A997A689F144 /* ServerListView.swift */,
 			);
 			path = Servers;
 			sourceTree = "<group>";
@@ -236,7 +180,6 @@
 			isa = PBXGroup;
 			children = (
 				5D3B2A55E40473FF45984FCD /* ParsoIRC */,
-				DED3B5539FA4DA6274C8EFDC /* ParsoIRCUITests */,
 				B733BCDEEC1CC905A215B595 /* Tests */,
 				985E89B7E6AAE7BB85AF4954 /* Products */,
 			);
@@ -266,16 +209,12 @@
 		78121EF8A6F2255886AB348A /* App */ = {
 			isa = PBXGroup;
 			children = (
+				A2372DD03EF6AD4FB987312E /* CommandInputSheet.swift */,
 				79F387B1DB41E7CD8828DC5B /* ContentView.swift */,
-				03BCED6C44044B63C7DA83EC /* DebugToastView.swift */,
-				56C28EB7D260E7C30E0D5C9D /* HomeView.swift */,
-				030235EB9CF674BD82D84EB6 /* LoginView.swift */,
-				2F76C5408EAA601F53F27D94 /* MainTabView.swift */,
-				5C0A9C191CB5FF996C566124 /* OnboardingView.swift */,
 				A4B86422E8E405D0FE1027DA /* ParsoIRCApp.swift */,
-				A702884E7BC889595DDE9617 /* ProfileView.swift */,
-				B003BB7C46E8952092A56CF7 /* RegistrationView.swift */,
+				6EF975BCEFBD116B66F50127 /* ServerSelectionView.swift */,
 				5C2098EAD54CAC510D3C467E /* SplashScreenView.swift */,
+				3C0C425A79B9062498FC242C /* TerminalView.swift */,
 			);
 			path = App;
 			sourceTree = "<group>";
@@ -283,7 +222,6 @@
 		81136C3DDE3BC3C174ADB0BC /* Members */ = {
 			isa = PBXGroup;
 			children = (
-				6A17575386AA56E09FEE1287 /* MemberListView.swift */,
 			);
 			path = Members;
 			sourceTree = "<group>";
@@ -293,7 +231,6 @@
 			children = (
 				3523F453C71AD0DE752512DD /* ParsoIRC.app */,
 				CEE564ECFCA2DD31E229D5CB /* ParsoIRCTests.xctest */,
-				8D7EE5A093FD53954221C764 /* ParsoIRCUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -301,13 +238,6 @@
 		A1AFC13A51A0E1B7C95AFBDE /* Chat */ = {
 			isa = PBXGroup;
 			children = (
-				81357BD4B36593226304E3AF /* ChannelSettingsSheet.swift */,
-				DB3B7B159E6462218B722671 /* ChatView.swift */,
-				ECAFA7366CA3C912F8B4E882 /* ChatViewModel.swift */,
-				69265E0EA6072F27008C69F3 /* DateSeparatorView.swift */,
-				437877A533701F4BF0DA1D9E /* InputBarView.swift */,
-				4BBBAA6732A32F014C0ED97A /* MessageBubbleView.swift */,
-				4AF4079211793DC5787E4C8F /* TypingIndicatorView.swift */,
 			);
 			path = Chat;
 			sourceTree = "<group>";
@@ -354,8 +284,6 @@
 		C9913FE35C873F5100C1A786 /* Tutorial */ = {
 			isa = PBXGroup;
 			children = (
-				42F4CB1600100FCDDCA6E2A2 /* TutorialManager.swift */,
-				95F332C5F1AB216A24EB4FBE /* TutorialView.swift */,
 			);
 			path = Tutorial;
 			sourceTree = "<group>";
@@ -367,15 +295,6 @@
 				43567211C76EDDEFEF01E2D1 /* Preview Content */,
 			);
 			path = Resources;
-			sourceTree = "<group>";
-		};
-		DED3B5539FA4DA6274C8EFDC /* ParsoIRCUITests */ = {
-			isa = PBXGroup;
-			children = (
-				D88FA3FECA58097C53677256 /* SignUpWorkflowTests.swift */,
-			);
-			name = ParsoIRCUITests;
-			path = ParsoIRC/ParsoIRCUITests;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -419,24 +338,6 @@
 			productReference = 3523F453C71AD0DE752512DD /* ParsoIRC.app */;
 			productType = "com.apple.product-type.application";
 		};
-		E91E5616C245FC5D2E98FC0B /* ParsoIRCUITests */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = C948CC96B671EBB42A944F9F /* Build configuration list for PBXNativeTarget "ParsoIRCUITests" */;
-			buildPhases = (
-				F286E0BD3DE896890F5978D6 /* Sources */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-				160979B371D9A23AE6B05C74 /* PBXTargetDependency */,
-			);
-			name = ParsoIRCUITests;
-			packageProductDependencies = (
-			);
-			productName = ParsoIRCUITests;
-			productReference = 8D7EE5A093FD53954221C764 /* ParsoIRCUITests.xctest */;
-			productType = "com.apple.product-type.bundle.unit-test";
-		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -467,7 +368,6 @@
 			targets = (
 				4D75E43C5C2DF2D555182C49 /* ParsoIRC */,
 				2AB7FC65F825762DA042B6DF /* ParsoIRCTests */,
-				E91E5616C245FC5D2E98FC0B /* ParsoIRCUITests */,
 			);
 		};
 /* End PBXProject section */
@@ -499,65 +399,32 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				DD2FB70605495937CC351F19 /* AddServerSheet.swift in Sources */,
 				4AC9FA90B6E5295CD4E9D31A /* AvatarView.swift in Sources */,
-				05EAD9A1ACAC39B8D4373EED /* ChannelSettingsSheet.swift in Sources */,
-				64496229C1B0D6032BB28028 /* ChatView.swift in Sources */,
-				897BD6D0A5AAE3B77ED59D79 /* ChatViewModel.swift in Sources */,
 				82B42B20306C0331C985A16F /* Color+Theme.swift in Sources */,
+				BA7B1EE55E226D52A6F197EC /* CommandInputSheet.swift in Sources */,
 				AE8FAACD40CF8FB77DFD72CA /* ContentView.swift in Sources */,
-				3FAC22CD2585F5A3DBC58FB6 /* ConversationListView.swift in Sources */,
 				D0C66AD97DB59F93B9AAB5CF /* DatabaseManager.swift in Sources */,
 				74164C9BD427A53E32373376 /* Date+Formatting.swift in Sources */,
-				8EA0BBA948FC671C1BD17516 /* DateSeparatorView.swift in Sources */,
-				4D6ED41152C047B8FCAFA7BE /* DebugToastView.swift in Sources */,
 				E636F1F7F534262C2F61E994 /* HapticManager.swift in Sources */,
-				476F8E27EDD759AE1337A880 /* HomeView.swift in Sources */,
 				ED86B3C872073D3606376341 /* IRCClient.swift in Sources */,
 				662E7D2E9CF93D494590DBCD /* IRCClientManager.swift in Sources */,
 				FC491AC7AF49B40AB8AC79CA /* IRCError.swift in Sources */,
 				6E6160E878A6124C890E4B5E /* IRCMessage.swift in Sources */,
 				3C9948BF220EE23FC86B23C5 /* IRCModels.swift in Sources */,
-				3E6D10EADC1868FE5738C162 /* InputBarView.swift in Sources */,
-				CB715F4A1D0A45FA260E74D2 /* LoginView.swift in Sources */,
-				85290CC4FD0452CBCD8D7937 /* MainTabView.swift in Sources */,
-				58C03883AC45349DE7B6C305 /* MemberListView.swift in Sources */,
-				4FA80375CA263B9EF1A3D7EF /* MessageBubbleView.swift in Sources */,
 				4F883B657FE53E8C1954D36D /* NetworkMonitor.swift in Sources */,
 				45D7365861655CD2765099CF /* NickColorGenerator.swift in Sources */,
 				CC61408D85A9DD3DCC1CA735 /* NotificationManager.swift in Sources */,
-				C3A0D0E5EB90690A0E2FB470 /* OnboardingView.swift in Sources */,
 				45F43AFC6AC55F724F611E57 /* ParsoIRCApp.swift in Sources */,
-				CAB4C2F88CBE7DCAD136EFAF /* ProfileView.swift in Sources */,
-				4431191EC6D4BA3EF5AD85A5 /* QuickConnectSheet.swift in Sources */,
-				0D8B1C5B9EEAC50F3A8F1ACE /* ReconnectingSheet.swift in Sources */,
-				FE6510E7835D46FD77D7DE79 /* RegistrationView.swift in Sources */,
-				D54B619A49E39B79F8BFBEEC /* ServerListView.swift in Sources */,
-				1B57CBE65BEE6BE1B40F7361 /* SettingsView.swift in Sources */,
+				B6A52171F3BDEFC3B1E72480 /* ServerSelectionView.swift in Sources */,
 				0133FE6C1B735DB2601946A1 /* SplashScreenView.swift in Sources */,
-				5D45952305E35B56C8EEBA5F /* TutorialManager.swift in Sources */,
-				519CB04F1CC3AF41E3AB0134 /* TutorialView.swift in Sources */,
-				58CE7EF9A534A43295AF27D3 /* TypingIndicatorView.swift in Sources */,
+				8838D901C117AB45132B3F31 /* TerminalView.swift in Sources */,
 				3F9394E9CC4763FB472B9737 /* WatchManager.swift in Sources */,
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		F286E0BD3DE896890F5978D6 /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-				7E76C09122A1C48E7C0461E6 /* SignUpWorkflowTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
-		160979B371D9A23AE6B05C74 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = 4D75E43C5C2DF2D555182C49 /* ParsoIRC */;
-			targetProxy = 4EA92B3D07ADB71F77FBC554 /* PBXContainerItemProxy */;
-		};
 		CF783542110C67DA30493C3D /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = 4D75E43C5C2DF2D555182C49 /* ParsoIRC */;
@@ -651,32 +518,6 @@
 			};
 			name = Release;
 		};
-		A557D708DEBF5DA85572AF5A /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				BUNDLE_LOADER = "$(TEST_HOST)";
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleShortVersionString = 1.0.0;
-				INFOPLIST_KEY_CFBundleVersion = 1;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.parso.ParsoIRCUITests;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/ParsoIRC.app/ParsoIRC";
-			};
-			name = Release;
-		};
-		AC38F1EEE63E054A7D3FD4EC /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				BUNDLE_LOADER = "$(TEST_HOST)";
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleShortVersionString = 1.0.0;
-				INFOPLIST_KEY_CFBundleVersion = 1;
-				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.parso.ParsoIRCUITests;
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/ParsoIRC.app/ParsoIRC";
-			};
-			name = Debug;
-		};
 		ADA74E1339FB52A55AF595DC /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -719,15 +560,6 @@
 			buildConfigurations = (
 				8F225E18F6C8D626A37ED1D1 /* Debug */,
 				9151DAAAACEEA6468CCE8A6E /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Debug;
-		};
-		C948CC96B671EBB42A944F9F /* Build configuration list for PBXNativeTarget "ParsoIRCUITests" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				AC38F1EEE63E054A7D3FD4EC /* Debug */,
-				A557D708DEBF5DA85572AF5A /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;

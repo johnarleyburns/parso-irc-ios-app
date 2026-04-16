@@ -50,17 +50,6 @@
                ReferencedContainer = "container:ParsoIRC.xcodeproj">
             </BuildableReference>
          </TestableReference>
-         <TestableReference
-            skipped = "NO"
-            parallelizable = "NO">
-            <BuildableReference
-               BuildableIdentifier = "primary"
-               BlueprintIdentifier = "E91E5616C245FC5D2E98FC0B"
-               BuildableName = "ParsoIRCUITests.xctest"
-               BlueprintName = "ParsoIRCUITests"
-               ReferencedContainer = "container:ParsoIRC.xcodeproj">
-            </BuildableReference>
-         </TestableReference>
       </Testables>
       <CommandLineArguments>
       </CommandLineArguments>
