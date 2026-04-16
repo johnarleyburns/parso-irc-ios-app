@@ -1,6 +1,5 @@
 import Foundation
 
-#if os(Linux)
 #if canImport(Network)
 import Network
 #endif
@@ -247,5 +246,3 @@ actor IRCClientMock {
         failError = nil
     }
 }
-
-#endif
