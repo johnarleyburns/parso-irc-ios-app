@@ -24,11 +24,13 @@
 		82B42B20306C0331C985A16F /* Color+Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07E7D04948ED236B84CB1A82 /* Color+Theme.swift */; };
 		8838D901C117AB45132B3F31 /* TerminalView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C0C425A79B9062498FC242C /* TerminalView.swift */; };
 		9F31103137D5A38CD5D44EDC /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 616CD3F176E8DCDFCBD24F68 /* Assets.xcassets */; };
+		A4C7B49B16B56B90BB440F46 /* MockIRCServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C875231EAA7FAB05AFAC0AD /* MockIRCServer.swift */; };
 		B6A52171F3BDEFC3B1E72480 /* ServerSelectionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6EF975BCEFBD116B66F50127 /* ServerSelectionView.swift */; };
 		B71BE33F9EE9FB088D07469C /* IRCClientMock.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42A5C90B2A117F4E10F9B0C5 /* IRCClientMock.swift */; };
 		BA7B1EE55E226D52A6F197EC /* CommandInputSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2372DD03EF6AD4FB987312E /* CommandInputSheet.swift */; };
 		CC61408D85A9DD3DCC1CA735 /* NotificationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39A23300227F01ED77CBCC0F /* NotificationManager.swift */; };
 		D0C66AD97DB59F93B9AAB5CF /* DatabaseManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = C73FCAD8E5E67FB43D95A3CE /* DatabaseManager.swift */; };
+		E37C8193E2F4912107CB9798 /* MockIRCLinuxTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F96C7203B9E2BFB5F318E794 /* MockIRCLinuxTests.swift */; };
 		E636F1F7F534262C2F61E994 /* HapticManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 68A8C90FA376CF1F00EE1B8A /* HapticManager.swift */; };
 		ED86B3C872073D3606376341 /* IRCClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADD9A6C8AD8D97A1C8D31013 /* IRCClient.swift */; };
 		FC491AC7AF49B40AB8AC79CA /* IRCError.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F902D39A7FB938CE624E1B3 /* IRCError.swift */; };
@@ -62,6 +64,7 @@
 		816366BE8D0CB46EE7F7FA86 /* IRCMessageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IRCMessageTests.swift; sourceTree = "<group>"; };
 		8A9E13316FC1467F04022F5D /* IRCModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IRCModels.swift; sourceTree = "<group>"; };
 		9002F82EFDDAFCFC614256F9 /* IRCMessage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IRCMessage.swift; sourceTree = "<group>"; };
+		9C875231EAA7FAB05AFAC0AD /* MockIRCServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockIRCServer.swift; sourceTree = "<group>"; };
 		9F902D39A7FB938CE624E1B3 /* IRCError.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IRCError.swift; sourceTree = "<group>"; };
 		A2372DD03EF6AD4FB987312E /* CommandInputSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommandInputSheet.swift; sourceTree = "<group>"; };
 		A4B86422E8E405D0FE1027DA /* ParsoIRCApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ParsoIRCApp.swift; sourceTree = "<group>"; };
@@ -71,6 +74,7 @@
 		CEE564ECFCA2DD31E229D5CB /* ParsoIRCTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = ParsoIRCTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		EA310C148C6DA8646DA945E8 /* WatchManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchManager.swift; sourceTree = "<group>"; };
 		F7812F2E85A5555DB7AE4EB2 /* AvatarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AvatarView.swift; sourceTree = "<group>"; };
+		F96C7203B9E2BFB5F318E794 /* MockIRCLinuxTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockIRCLinuxTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -248,6 +252,15 @@
 			path = Utilities;
 			sourceTree = "<group>";
 		};
+		A8990DD4F6C091F30C552322 /* Mocks */ = {
+			isa = PBXGroup;
+			children = (
+				F96C7203B9E2BFB5F318E794 /* MockIRCLinuxTests.swift */,
+				9C875231EAA7FAB05AFAC0AD /* MockIRCServer.swift */,
+			);
+			path = Mocks;
+			sourceTree = "<group>";
+		};
 		B733BCDEEC1CC905A215B595 /* Tests */ = {
 			isa = PBXGroup;
 			children = (
@@ -255,6 +268,7 @@
 				C89971396BE51FF48B715A86 /* IRCErrorTests.swift */,
 				2DEF80BF6A61D335FADFFBAA /* IRCIntegrationTests.swift */,
 				816366BE8D0CB46EE7F7FA86 /* IRCMessageTests.swift */,
+				A8990DD4F6C091F30C552322 /* Mocks */,
 			);
 			name = Tests;
 			path = ParsoIRC/Core/Tests;
@@ -389,6 +403,8 @@
 				4481E492C84B05888A430809 /* IRCErrorTests.swift in Sources */,
 				3F7E221CD1BD1C844863AC02 /* IRCIntegrationTests.swift in Sources */,
 				2BC0CD2C0118139103216596 /* IRCMessageTests.swift in Sources */,
+				E37C8193E2F4912107CB9798 /* MockIRCLinuxTests.swift in Sources */,
+				A4C7B49B16B56B90BB440F46 /* MockIRCServer.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

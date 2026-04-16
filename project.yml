@@ -77,8 +77,6 @@ targets:
     deploymentTarget: "17.0"
     sources:
       - path: ParsoIRC/Core/Tests
-        excludes:
-          - "**/Mocks/**"
     dependencies:
       - target: ParsoIRC
     settings:
