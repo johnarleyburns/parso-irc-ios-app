@@ -52,12 +52,14 @@ actor IRCClient {
     ) async throws {
         guard !isConnected else { return }
 
+        print("[IRCClient] connect() called for \(host):\(port), tls: \(tls)")
         serverInfo = (host, UInt16(port))
         useTLS = tls
 
         let hostNW = NWEndpoint.Host(host)
         let portNW = NWEndpoint.Port(integerLiteral: UInt16(port))
 
+        print("[IRCClient] Creating NWConnection to \(host):\(port)...")
         let parameters: NWParameters
         if tls {
             parameters = NWParameters(tls: .init())
@@ -67,26 +69,33 @@ actor IRCClient {
 
         let connection = NWConnection(host: hostNW, port: portNW, using: parameters)
         self.connection = connection
+        print("[IRCClient] Setting stateUpdateHandler...")
 
         connection.stateUpdateHandler = { [weak self] state in
+            print("[IRCClient] state changed: \(String(describing: state))")
             Task {
                 await self?.handleStateChange(state)
             }
         }
 
+        print("[IRCClient] Starting connection...")
         connection.start(queue: queue)
+        print("[IRCClient] connection.start() called")
 
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             Task {
                 do {
+                    print("[IRCClient] Waiting for connection (timeout 30s)...")
                     try await self.waitForConnection(timeout: 30)
+                    print("[IRCClient] Connection ready!")
                     self.isConnected = true
                     self.currentNick = nickname
-                    
+
                     try await self.send_raw("CAP LS 302")
-                    
+
                     continuation.resume()
                 } catch {
+                    print("[IRCClient] Connection failed: \(error.localizedDescription)")
                     continuation.resume(throwing: error)
                 }
             }
@@ -157,18 +166,26 @@ actor IRCClient {
     private func waitForConnection(timeout: Int) async throws {
         let startTime = Date()
         while !isConnected {
+            let elapsed = Date().timeIntervalSince(startTime)
+            if Int(elapsed) % 5 == 0 && elapsed > 0.1 {
+                print("[IRCClient] Still waiting... \(Int(elapsed))s elapsed")
+            }
             try await Task.sleep(nanoseconds: 100_000_000)
             if Date().timeIntervalSince(startTime) > Double(timeout) {
+                print("[IRCClient] Connection timeout after \(timeout)s")
                 throw IRCError.timeout
             }
         }
     }
 
     private func handleStateChange(_ state: NWConnection.State) {
+        print("[IRCClient] handleStateChange: \(String(describing: state))")
         switch state {
         case .ready:
+            print("[IRCClient] Connection ready!")
             isConnected = true
         case .failed(let error):
+            print("[IRCClient] Connection failed: \(error.localizedDescription)")
             Task { @MainActor in
                 self.onError?(error)
             }

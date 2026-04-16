@@ -29,10 +29,24 @@ struct TerminalView: View {
     @State private var lines: [TerminalLine] = []
     @State private var showCommandSheet = false
     @State private var scrollProxy: ScrollViewProxy?
+    @State private var isConnecting = true
+    @State private var connectionStartTime = Date()
     
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
+            
+            if isConnecting && lines.isEmpty {
+                VStack {
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle(tint: .green))
+                        .scaleEffect(1.5)
+                    Text("Connecting to \(server.host)...")
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                        .padding(.top, 16)
+                }
+            }
             
             VStack(spacing: 0) {
                 // Terminal header
@@ -48,13 +62,31 @@ struct TerminalView: View {
                     
                     Spacer()
                     
-                    if ircManager.connectionState(for: server.id) == .connected {
-                        Text("CONNECTED")
+                    if !isConnecting {
+                        if ircManager.connectionState(for: server.id) == .connected {
+                            Text("CONNECTED")
+                                .font(.caption2)
+                                .foregroundColor(.green)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(Color.green.opacity(0.2))
+                                .cornerRadius(4)
+                        } else {
+                            Text("DISCONNECTED")
+                                .font(.caption2)
+                                .foregroundColor(.red)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(Color.red.opacity(0.2))
+                                .cornerRadius(4)
+                        }
+                    } else {
+                        Text("CONNECTING...")
                             .font(.caption2)
-                            .foregroundColor(.green)
+                            .foregroundColor(.yellow)
                             .padding(.horizontal, 8)
                             .padding(.vertical, 4)
-                            .background(Color.green.opacity(0.2))
+                            .background(Color.yellow.opacity(0.2))
                             .cornerRadius(4)
                     }
                 }
@@ -126,46 +158,62 @@ struct TerminalView: View {
     }
     
     private func showConnectingState() {
-        addSystemMessage("* Connecting to \(server.host):\(server.port)")
+        connectionStartTime = Date()
+        addSystemMessage("[DEBUG] Starting connection to \(server.host):\(server.port)")
+        print("[DEBUG] showConnectingState called for \(server.host):\(server.port)")
         
         let nickname = server.nickname.isEmpty ? "parso\(Int.random(in: 1000...9999))" : server.nickname
         let username = server.realname.isEmpty ? "parso" : server.realname
         let realname = server.realname.isEmpty ? "Parso IRC" : server.realname
         
+        addSystemMessage("* Using nick: \(nickname)")
+        print("[DEBUG] Creating IRCClient...")
         ircClient = IRCClient()
         
         guard let client = ircClient else {
             addSystemMessage("* Error: Failed to create client")
+            print("[DEBUG] ERROR: Failed to create IRCClient")
             return
         }
+        print("[DEBUG] IRCClient created, setting up callbacks...")
         
         client.onMessage = { message in
             let line = "\(message.command) \(message.parameters.joined(separator: " "))"
+            print("[DEBUG] onMessage: \(line)")
             Task { @MainActor in
                 self.addReceivedMessage(line)
+                self.isConnecting = false
             }
         }
         
         client.onWelcome = { nick in
+            print("[DEBUG] onWelcome: \(nick)")
             Task { @MainActor in
                 self.addSystemMessage("* You are now known as \(nick)")
+                self.isConnecting = false
             }
         }
         
         client.onDisconnect = {
+            print("[DEBUG] onDisconnect")
             Task { @MainActor in
                 self.addSystemMessage("* Disconnected")
+                self.isConnecting = false
             }
         }
         
         client.onError = { error in
+            print("[DEBUG] onError: \(error.localizedDescription)")
             Task { @MainActor in
                 self.addSystemMessage("* Error: \(error.localizedDescription)")
+                self.isConnecting = false
             }
         }
         
+        print("[DEBUG] Starting connection task...")
         Task {
             do {
+                print("[DEBUG] Calling client.connect()...")
                 try await client.connect(
                     host: server.host,
                     port: server.port,
@@ -177,15 +225,43 @@ struct TerminalView: View {
                     useSASL: server.saslEnabled,
                     saslPassword: server.password
                 )
+                print("[DEBUG] client.connect() succeeded")
                 
                 await MainActor.run {
                     self.addSystemMessage("* Connected to \(server.host)")
+                    self.addSystemMessage("[DEBUG] Connection complete!")
                     self.ircManager.connections[self.server.id] = client
                     self.ircManager.connectionStates[self.server.id] = .connected
+                    self.isConnecting = false
                 }
             } catch {
+                print("[DEBUG] client.connect() failed: \(error.localizedDescription)")
                 await MainActor.run {
                     self.addSystemMessage("* Connection failed: \(error.localizedDescription)")
+                    self.isConnecting = false
+                }
+            }
+        }
+        
+        Task {
+            try? await Task.sleep(nanoseconds: 10_000_000_000)
+            await MainActor.run {
+                if self.isConnecting && self.lines.count <= 1 {
+                    let elapsed = Date().timeIntervalSince(self.connectionStartTime)
+                    print("[DEBUG] Connection timeout check: \(elapsed)s elapsed, lines: \(self.lines.count)")
+                    self.addSystemMessage("[DEBUG] Still connecting after \(Int(elapsed))s...")
+                }
+            }
+        }
+        
+        Task {
+            try? await Task.sleep(nanoseconds: 30_000_000_000)
+            await MainActor.run {
+                if self.isConnecting && self.lines.count <= 1 {
+                    let elapsed = Date().timeIntervalSince(self.connectionStartTime)
+                    self.addSystemMessage("* Connection timeout after \(Int(elapsed))s")
+                    self.addSystemMessage("* Please check your network connection")
+                    self.isConnecting = false
                 }
             }
         }
