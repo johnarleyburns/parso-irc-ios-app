@@ -97,10 +97,9 @@ struct ServerSelectionView: View {
         
         Task {
             do {
-                try await ircManager.connectWithHistory(to: serverConfig) { serverId, channelName in
-                    await MainActor.run {
-                        showTerminal = true
-                    }
+                try await ircManager.connectWithHistory(to: serverConfig)
+                await MainActor.run {
+                    showTerminal = true
                 }
             } catch {
                 await MainActor.run {

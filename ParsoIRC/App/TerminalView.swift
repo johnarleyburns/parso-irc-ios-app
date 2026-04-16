@@ -57,7 +57,7 @@ struct TerminalView: View {
                     
                     Spacer()
                     
-                    if ircManager.connectionStates[server.id] == .connected {
+                    if ircManager.connectionState(for: server.id) == .connected {
                         Text("CONNECTED")
                             .font(.caption2)
                             .foregroundColor(.green)
@@ -152,7 +152,7 @@ struct TerminalView: View {
         // Send via IRC client
         Task {
             do {
-                if let client = ircManager.connections[server.id] {
+                if let client = ircManager.getClient(for: server.id) {
                     try await client.send(message: message)
                 }
             } catch {

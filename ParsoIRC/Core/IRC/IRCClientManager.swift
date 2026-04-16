@@ -32,8 +32,8 @@ enum ConnectionState: Equatable {
 final class IRCClientManager: ObservableObject {
     static let shared = IRCClientManager()
     
-    private var connections: [String: IRCClient] = [:]
-    private var connectionStates: [String: ConnectionState] = [:]
+    var connections: [String: IRCClient] = [:]
+    var connectionStates: [String: ConnectionState] = [:]
     @Published var currentNicknames: [String: String] = [:]
     
     var connectionStatesPublisher: [String: ConnectionState] {

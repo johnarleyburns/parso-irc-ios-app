@@ -34,14 +34,6 @@ struct ParsoIRCApp: App {
                     ServerSelectionView()
                         .environmentObject(ircManager)
                         .environmentObject(appState)
-                        .onChange(of: ircManager.activeConnectionServerId) { _, newServerId in
-                            if let serverId = newServerId,
-                               let server = appState.servers.first(where: { $0.id == serverId }) {
-                                connectedServer = server
-                                let channelName = server.lastActiveChannel ?? server.channels.first?.name ?? "#linux"
-                                connectedChannel = server.channels.first(where: { $0.name == channelName }) ?? Channel(name: channelName)
-                            }
-                        }
                         .fullScreenCover(item: $connectedServer) { server in
                             if let channel = connectedChannel {
                                 NavigationStack {
