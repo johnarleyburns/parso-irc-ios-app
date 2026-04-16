@@ -37,8 +37,6 @@ actor IRCClient {
     private var acknowledgedCapabilities: Set<String> = []
     private var isCapNegotiationComplete = false
     private var saslRequested = false
-    private var debugEnabled = true
-    
     // MARK: - Connection
 
     func connect(
@@ -194,10 +192,6 @@ actor IRCClient {
             throw IRCError.notConnected
         }
         
-        if debugEnabled {
-            DebugMessages.shared.addMessage("SEND: \(message)")
-        }
-
         var data = message.data(using: .utf8) ?? Data()
         data.append(contentsOf: [0x0D, 0x0A])
 
@@ -297,9 +291,6 @@ actor IRCClient {
 
         let lines = string.components(separatedBy: "\r\n")
         for line in lines where !line.isEmpty {
-            if debugEnabled {
-                DebugMessages.shared.addMessage("RECV: \(line)")
-            }
             let message = IRCMessage(rawLine: line)
             await handleMessage(message)
         }

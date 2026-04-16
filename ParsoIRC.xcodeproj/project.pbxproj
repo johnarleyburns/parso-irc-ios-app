@@ -24,7 +24,6 @@
 		82B42B20306C0331C985A16F /* Color+Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07E7D04948ED236B84CB1A82 /* Color+Theme.swift */; };
 		8838D901C117AB45132B3F31 /* TerminalView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3C0C425A79B9062498FC242C /* TerminalView.swift */; };
 		9F31103137D5A38CD5D44EDC /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 616CD3F176E8DCDFCBD24F68 /* Assets.xcassets */; };
-		AE8FAACD40CF8FB77DFD72CA /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79F387B1DB41E7CD8828DC5B /* ContentView.swift */; };
 		B6A52171F3BDEFC3B1E72480 /* ServerSelectionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6EF975BCEFBD116B66F50127 /* ServerSelectionView.swift */; };
 		B71BE33F9EE9FB088D07469C /* IRCClientMock.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42A5C90B2A117F4E10F9B0C5 /* IRCClientMock.swift */; };
 		BA7B1EE55E226D52A6F197EC /* CommandInputSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2372DD03EF6AD4FB987312E /* CommandInputSheet.swift */; };
@@ -59,7 +58,6 @@
 		616CD3F176E8DCDFCBD24F68 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		68A8C90FA376CF1F00EE1B8A /* HapticManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HapticManager.swift; sourceTree = "<group>"; };
 		6EF975BCEFBD116B66F50127 /* ServerSelectionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerSelectionView.swift; sourceTree = "<group>"; };
-		79F387B1DB41E7CD8828DC5B /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		7D152909FA8E1CD2ECEF3561 /* NickColorGenerator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NickColorGenerator.swift; sourceTree = "<group>"; };
 		816366BE8D0CB46EE7F7FA86 /* IRCMessageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IRCMessageTests.swift; sourceTree = "<group>"; };
 		8A9E13316FC1467F04022F5D /* IRCModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IRCModels.swift; sourceTree = "<group>"; };
@@ -210,7 +208,6 @@
 			isa = PBXGroup;
 			children = (
 				A2372DD03EF6AD4FB987312E /* CommandInputSheet.swift */,
-				79F387B1DB41E7CD8828DC5B /* ContentView.swift */,
 				A4B86422E8E405D0FE1027DA /* ParsoIRCApp.swift */,
 				6EF975BCEFBD116B66F50127 /* ServerSelectionView.swift */,
 				5C2098EAD54CAC510D3C467E /* SplashScreenView.swift */,
@@ -402,7 +399,6 @@
 				4AC9FA90B6E5295CD4E9D31A /* AvatarView.swift in Sources */,
 				82B42B20306C0331C985A16F /* Color+Theme.swift in Sources */,
 				BA7B1EE55E226D52A6F197EC /* CommandInputSheet.swift in Sources */,
-				AE8FAACD40CF8FB77DFD72CA /* ContentView.swift in Sources */,
 				D0C66AD97DB59F93B9AAB5CF /* DatabaseManager.swift in Sources */,
 				74164C9BD427A53E32373376 /* Date+Formatting.swift in Sources */,
 				E636F1F7F534262C2F61E994 /* HapticManager.swift in Sources */,
