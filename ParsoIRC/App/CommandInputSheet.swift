@@ -131,7 +131,7 @@ struct CommandInputSheet: View {
         case "JOIN": return channel.name
         case "PART": return channel.name
         case "PRIVMSG": return "\(channel.name) message"
-        case "ME": return channel.name action"
+        case "ME": return "\(channel.name) action"
         case "WHOIS": return "nickname"
         case "AWAY": return "away message"
         case "QUIT": return "reason"
