@@ -1,4 +1,5 @@
 import Foundation
+@testable import ParsoIRC
 
 #if canImport(Network)
 import Network

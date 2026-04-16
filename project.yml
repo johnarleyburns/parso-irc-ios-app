@@ -77,6 +77,8 @@ targets:
     deploymentTarget: "17.0"
     sources:
       - path: ParsoIRC/Core/Tests
+        excludes:
+          - "**/LinuxStubs/**"
     dependencies:
       - target: ParsoIRC
     settings:
