@@ -218,6 +218,14 @@ actor IRCClientMock {
         try await send_raw("PRIVMSG \(channel) :\(actionMessage)")
     }
     
+    func quit(_ message: String? = nil) async throws {
+        if let message = message {
+            try await send_raw("QUIT :\(message)")
+        } else {
+            try await send_raw("QUIT")
+        }
+    }
+    
     func getJoinedChannels() -> [String] {
         return channels
     }
