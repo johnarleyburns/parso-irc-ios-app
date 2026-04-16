@@ -22,7 +22,7 @@ struct TerminalView: View {
     
     let server: Server
     let channel: Channel
-    var isConnecting: Bool = false
+    var startConnecting: Bool = false
     
     @State private var ircClient: IRCClient?
     
@@ -36,7 +36,7 @@ struct TerminalView: View {
         ZStack {
             Color.black.ignoresSafeArea()
             
-            if isConnecting && lines.isEmpty {
+            if startConnecting && isConnecting {
                 VStack {
                     ProgressView()
                         .progressViewStyle(CircularProgressViewStyle(tint: .green))
@@ -149,7 +149,7 @@ struct TerminalView: View {
             .presentationDetents([.medium])
         }
         .onAppear {
-            if isConnecting {
+            if startConnecting {
                 showConnectingState()
             } else {
                 setupIRCCallbacks()
