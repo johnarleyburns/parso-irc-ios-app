@@ -55,9 +55,9 @@ struct TerminalView: View {
                         Text(server.name)
                             .font(.headline)
                             .foregroundColor(.green)
-                        Text(channel.name)
+                        Text(startConnecting ? "Connecting to \(server.host)..." : channel.name)
                             .font(.caption)
-                            .foregroundColor(.gray)
+                            .foregroundColor(startConnecting ? .yellow : .gray)
                     }
                     
                     Spacer()
@@ -148,16 +148,16 @@ struct TerminalView: View {
             )
             .presentationDetents([.medium])
         }
-        .onAppear {
+        .task {
             if startConnecting {
-                showConnectingState()
+                await showConnectingState()
             } else {
                 setupIRCCallbacks()
             }
         }
     }
     
-    private func showConnectingState() {
+    private func showConnectingState() async {
         connectionStartTime = Date()
         addSystemMessage("[DEBUG] Starting connection to \(server.host):\(server.port)")
         print("[DEBUG] showConnectingState called for \(server.host):\(server.port)")
