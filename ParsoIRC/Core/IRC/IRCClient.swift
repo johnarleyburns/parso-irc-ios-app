@@ -211,14 +211,19 @@ actor IRCClient {
         
         var data = message.data(using: .utf8) ?? Data()
         data.append(contentsOf: [0x0D, 0x0A])
-
-        connection.send(content: data, completion: .contentProcessed { error in
-            if let error = error {
-                Task { @MainActor in
-                    self.onError?(error)
+        
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            connection.send(content: data, completion: .contentProcessed { error in
+                if let error = error {
+                    Task { @MainActor in
+                        self.onError?(error)
+                    }
+                    continuation.resume(throwing: error)
+                } else {
+                    continuation.resume()
                 }
-            }
-        })
+            })
+        }
     }
 
     func send(command: String, parameters: [String]) async throws {
