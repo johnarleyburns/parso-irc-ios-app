@@ -7,12 +7,7 @@ struct ParsoIRCApp: App {
     @ObservedObject private var debugLog = DebugLogManager.shared
     
     var body: some View {
-        WindowGroup {
-            SimpleConnectView()
-                .environmentObject(ircManager)
-                .environmentObject(appState)
-                .environmentObject(debugLog)
-        }
+        Text("Test")
     }
 }
 
