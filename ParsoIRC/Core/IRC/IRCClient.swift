@@ -223,7 +223,7 @@ actor IRCClient {
                     if let error = error {
                         self?.debugLog.log("send_raw error: \(error.localizedDescription)", type: .error)
                         Task { @MainActor in
-                            self.onError?(error)
+                            self?.onError?(error)
                         }
                         continuation.resume(throwing: error)
                     } else {
