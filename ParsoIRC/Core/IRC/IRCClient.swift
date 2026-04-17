@@ -74,7 +74,7 @@ actor IRCClient {
         debugLog.log("Setting stateUpdateHandler...", type: .info)
 
         connection.stateUpdateHandler = { [weak self] state in
-            debugLog.log("State changed: \(String(describing: state))", type: .info)
+            self?.debugLog.log("State changed: \(String(describing: state))", type: .info)
             Task {
                 await self?.handleStateChange(state)
             }
@@ -219,9 +219,9 @@ actor IRCClient {
         
         do {
             try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-                connection.send(content: data, completion: .contentProcessed { error in
+                connection.send(content: data, completion: .contentProcessed { [weak self] error in
                     if let error = error {
-                        debugLog.log("send_raw error: \(error.localizedDescription)", type: .error)
+                        self?.debugLog.log("send_raw error: \(error.localizedDescription)", type: .error)
                         Task { @MainActor in
                             self.onError?(error)
                         }
@@ -341,7 +341,7 @@ actor IRCClient {
         connection.receive(minimumIncompleteLength: 1, maximumLength: 65536) { [weak self] data, _, isComplete, error in
             Task {
                 if let error = error {
-                    debugLog.log("receive error: \(error.localizedDescription)", type: .error)
+                    self?.debugLog.log("receive error: \(error.localizedDescription)", type: .error)
                 }
                 
                 if let data = data, !data.isEmpty {
@@ -349,10 +349,10 @@ actor IRCClient {
                 }
 
                 if isComplete {
-                    debugLog.log("Connection completed (isComplete=true)", type: .error)
+                    self?.debugLog.log("Connection completed (isComplete=true)", type: .error)
                     await self?.disconnect()
                 } else if error != nil {
-                    debugLog.log("receive loop ending due to error", type: .error)
+                    self?.debugLog.log("receive loop ending due to error", type: .error)
                     await self?.disconnect()
                 } else {
                     await self?.startReceiving()
