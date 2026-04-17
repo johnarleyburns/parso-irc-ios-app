@@ -10,6 +10,8 @@ actor IRCClient {
     private var currentNick: String = ""
     private var serverInfo: (host: String, port: UInt16)?
     
+    private let debugLog = DebugLogManager.shared
+    
     var chathistoryEnabled: Bool = false
     var chathistoryMaxLimit: Int = 100
     var serverTimeEnabled: Bool = false
@@ -52,14 +54,14 @@ actor IRCClient {
     ) async throws {
         guard !isConnected else { return }
 
-        print("[IRCClient] connect() called for \(host):\(port), tls: \(tls)")
+        debugLog.log("connect() called for \(host):\(port), tls: \(tls)", type: .info)
         serverInfo = (host, UInt16(port))
         useTLS = tls
 
         let hostNW = NWEndpoint.Host(host)
         let portNW = NWEndpoint.Port(integerLiteral: UInt16(port))
 
-        print("[IRCClient] Creating NWConnection to \(host):\(port)...")
+        debugLog.log("Creating NWConnection to \(host):\(port)...", type: .info)
         let parameters: NWParameters
         if tls {
             parameters = NWParameters(tls: .init())
@@ -69,25 +71,25 @@ actor IRCClient {
 
         let connection = NWConnection(host: hostNW, port: portNW, using: parameters)
         self.connection = connection
-        print("[IRCClient] Setting stateUpdateHandler...")
+        debugLog.log("Setting stateUpdateHandler...", type: .info)
 
         connection.stateUpdateHandler = { [weak self] state in
-            print("[IRCClient] state changed: \(String(describing: state))")
+            debugLog.log("State changed: \(String(describing: state))", type: .info)
             Task {
                 await self?.handleStateChange(state)
             }
         }
 
-        print("[IRCClient] Starting connection...")
+        debugLog.log("Starting connection...", type: .info)
         connection.start(queue: queue)
-        print("[IRCClient] connection.start() called")
+        debugLog.log("connection.start() called", type: .info)
 
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             Task {
                 do {
-                    print("[IRCClient] Waiting for connection (timeout 30s)...")
+                    debugLog.log("Waiting for connection (timeout 30s)...", type: .info)
                     try await self.waitForConnection(timeout: 30)
-                    print("[IRCClient] Connection ready!")
+                    debugLog.log("Connection ready!", type: .info)
                     self.isConnected = true
                     self.currentNick = nickname
 
@@ -95,7 +97,7 @@ actor IRCClient {
 
                     continuation.resume()
                 } catch {
-                    print("[IRCClient] Connection failed: \(error.localizedDescription)")
+                    debugLog.log("Connection failed: \(error.localizedDescription)", type: .error)
                     continuation.resume(throwing: error)
                 }
             }
@@ -168,24 +170,24 @@ actor IRCClient {
         while !isConnected {
             let elapsed = Date().timeIntervalSince(startTime)
             if Int(elapsed) % 5 == 0 && elapsed > 0.1 {
-                print("[IRCClient] Still waiting... \(Int(elapsed))s elapsed")
+                debugLog.log("Still waiting... \(Int(elapsed))s elapsed", type: .info)
             }
             try await Task.sleep(nanoseconds: 100_000_000)
             if Date().timeIntervalSince(startTime) > Double(timeout) {
-                print("[IRCClient] Connection timeout after \(timeout)s")
+                debugLog.log("Connection timeout after \(timeout)s", type: .error)
                 throw IRCError.timeout
             }
         }
     }
 
     private func handleStateChange(_ state: NWConnection.State) {
-        print("[IRCClient] handleStateChange: \(String(describing: state))")
+        debugLog.log("handleStateChange: \(String(describing: state))", type: .info)
         switch state {
         case .ready:
-            print("[IRCClient] Connection ready!")
+            debugLog.log("Connection ready!", type: .info)
             isConnected = true
         case .failed(let error):
-            print("[IRCClient] Connection failed: \(error.localizedDescription)")
+            debugLog.log("Connection failed: \(error.localizedDescription)", type: .error)
             Task { @MainActor in
                 self.onError?(error)
             }
@@ -206,23 +208,33 @@ actor IRCClient {
 
     func send_raw(_ message: String) async throws {
         guard let connection = connection, isConnected else {
+            debugLog.log("send_raw failed: not connected", type: .error)
             throw IRCError.notConnected
         }
         
         var data = message.data(using: .utf8) ?? Data()
         data.append(contentsOf: [0x0D, 0x0A])
         
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            connection.send(content: data, completion: .contentProcessed { error in
-                if let error = error {
-                    Task { @MainActor in
-                        self.onError?(error)
+        debugLog.log("SEND: \(message)", type: .sent)
+        
+        do {
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+                connection.send(content: data, completion: .contentProcessed { error in
+                    if let error = error {
+                        debugLog.log("send_raw error: \(error.localizedDescription)", type: .error)
+                        Task { @MainActor in
+                            self.onError?(error)
+                        }
+                        continuation.resume(throwing: error)
+                    } else {
+                        continuation.resume()
                     }
-                    continuation.resume(throwing: error)
-                } else {
-                    continuation.resume()
-                }
-            })
+                })
+            }
+            debugLog.log("send_raw success", type: .info)
+        } catch {
+            debugLog.log("send_raw threw: \(error.localizedDescription)", type: .error)
+            throw error
         }
     }
 
@@ -320,15 +332,27 @@ actor IRCClient {
     // MARK: - Receiving
 
     private func startReceiving() {
-        guard let connection = connection else { return }
+        debugLog.log("startReceiving() called", type: .info)
+        guard let connection = connection else {
+            debugLog.log("startReceiving: connection is nil", type: .error)
+            return
+        }
 
         connection.receive(minimumIncompleteLength: 1, maximumLength: 65536) { [weak self] data, _, isComplete, error in
             Task {
+                if let error = error {
+                    debugLog.log("receive error: \(error.localizedDescription)", type: .error)
+                }
+                
                 if let data = data, !data.isEmpty {
                     await self?.handleReceivedData(data)
                 }
 
-                if isComplete || error != nil {
+                if isComplete {
+                    debugLog.log("Connection completed (isComplete=true)", type: .error)
+                    await self?.disconnect()
+                } else if error != nil {
+                    debugLog.log("receive loop ending due to error", type: .error)
                     await self?.disconnect()
                 } else {
                     await self?.startReceiving()
@@ -340,6 +364,8 @@ actor IRCClient {
     private func handleReceivedData(_ data: Data) async {
         guard let string = String(data: data, encoding: .utf8) else { return }
 
+        debugLog.log("RECV raw: \(string.prefix(200))", type: .received)
+
         let lines = string.components(separatedBy: "\r\n")
         for line in lines where !line.isEmpty {
             let message = IRCMessage(rawLine: line)
@@ -349,6 +375,8 @@ actor IRCClient {
 
     private func handleMessage(_ message: IRCMessage) async {
         let command = message.command
+        
+        debugLog.log("RECV cmd: \(command) \(message.parameters.joined(separator: " "))", type: .received)
 
         switch command {
         case "PING":

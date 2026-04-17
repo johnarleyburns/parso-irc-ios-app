@@ -6,6 +6,7 @@ struct SimpleConnectView: View {
     @State private var inputText: String = ""
     @State private var ircClient: IRCClient?
     @State private var scrollProxy: ScrollViewProxy?
+    @EnvironmentObject private var debugLog: DebugLogManager
     
     enum ConnectionStatus: Equatable {
         case disconnected
@@ -67,6 +68,64 @@ struct SimpleConnectView: View {
             }
             .padding()
             .background(Color(white: 0.1))
+            
+            // Debug Panel
+            VStack(spacing: 0) {
+                // Debug Header
+                HStack {
+                    Text("Debug Log")
+                        .font(.caption)
+                        .foregroundColor(.gray)
+                    Spacer()
+                    Button("Clear") {
+                        debugLog.clear()
+                    }
+                    .font(.caption)
+                    .foregroundColor(.cyan)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(Color(white: 0.15))
+                
+                // Debug Messages
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        LazyVStack(alignment: .leading, spacing: 2) {
+                            ForEach(Array(debugLog.logs.enumerated()), id: \.element.id) { index, entry in
+                                HStack(spacing: 4) {
+                                    Text(entry.timestamp.formatted(.dateTime.hour().minute().second()))
+                                        .font(.system(.caption, design: .monospaced))
+                                        .foregroundColor(Color(red: 0, green: 1, blue: 1))
+                                    
+                                    Text("[\(entry.type.rawValue)]")
+                                        .font(.system(.caption, design: .monospaced))
+                                        .foregroundColor(entry.type == .error ? Color(red: 1, green: 0.27, blue: 0.27) : Color(red: 1, green: 1, blue: 0))
+                                    
+                                    Text(entry.message)
+                                        .font(.system(.caption, design: .monospaced))
+                                        .foregroundColor(.white)
+                                }
+                                .id(entry.id)
+                            }
+                        }
+                        .padding(.horizontal, 8)
+                    }
+                    .onAppear {
+                        if let lastId = debugLog.logs.last?.id {
+                            proxy.scrollTo(lastId, anchor: .bottom)
+                        }
+                    }
+                    .onChange(of: debugLog.logs.count) { _, _ in
+                        if let lastId = debugLog.logs.last?.id {
+                            withAnimation {
+                                proxy.scrollTo(lastId, anchor: .bottom)
+                            }
+                        }
+                    }
+                }
+            }
+            .frame(height: 200)
+            .background(Color(red: 0.1, green: 0.1, blue: 0.1))
         }
         .background(Color.black.ignoresSafeArea())
         .preferredColorScheme(.dark)
