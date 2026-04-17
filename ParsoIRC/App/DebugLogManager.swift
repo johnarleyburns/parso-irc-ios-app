@@ -14,37 +14,30 @@ struct DebugLogEntry: Identifiable, Sendable {
     }
 }
 
-final class DebugLogManager: ObservableObject, @unchecked Sendable {
+@MainActor
+final class DebugLogManager: ObservableObject {
     static let shared = DebugLogManager()
     
     @Published var logs: [DebugLogEntry] = []
     
     private let maxLogs = 500
-    private let queue = DispatchQueue(label: "debuglog", qos: .userInteractive)
     
     private init() {}
     
-    func log(_ message: String, type: DebugLogEntry.LogType = .info) {
+    nonisolated func log(_ message: String, type: DebugLogEntry.LogType = .info) {
         let entry = DebugLogEntry(id: UUID(), timestamp: Date(), message: message, type: type)
         
-        queue.async { [weak self] in
-            guard let self = self else { return }
-            var updatedLogs = self.logs
-            updatedLogs.append(entry)
-            if updatedLogs.count > self.maxLogs {
-                updatedLogs.removeFirst(updatedLogs.count - self.maxLogs)
-            }
-            DispatchQueue.main.async {
-                self.logs = updatedLogs
+        Task { @MainActor in
+            self.logs.append(entry)
+            if self.logs.count > self.maxLogs {
+                self.logs.removeFirst(self.logs.count - self.maxLogs)
             }
         }
     }
     
-    func clear() {
-        queue.async { [weak self] in
-            DispatchQueue.main.async {
-                self?.logs.removeAll()
-            }
+    nonisolated func clear() {
+        Task { @MainActor in
+            self.logs.removeAll()
         }
     }
 }

@@ -26,10 +26,3 @@ class AppState: ObservableObject {
     
     init() {}
 }
-
-class AppState: ObservableObject {
-    static let shared = AppState()
-    
-    @Published var currentUser: User?
-    @Published var isAuthenticated = false
-}
