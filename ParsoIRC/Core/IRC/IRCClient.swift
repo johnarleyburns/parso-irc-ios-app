@@ -10,7 +10,7 @@ actor IRCClient {
     private var currentNick: String = ""
     private var serverInfo: (host: String, port: UInt16)?
     
-    nonisolated(unsafe) private let debugLog = DebugLogManager.shared
+    private let debugLog = DebugLogManager.shared
     
     var chathistoryEnabled: Bool = false
     var chathistoryMaxLimit: Int = 100
