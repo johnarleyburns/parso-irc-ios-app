@@ -7,7 +7,7 @@ struct SimpleConnectView: View {
     @State private var ircClient: IRCClient?
     @State private var scrollProxy: ScrollViewProxy?
     
-    enum ConnectionStatus {
+    enum ConnectionStatus: Equatable {
         case disconnected
         case connecting
         case connected
@@ -57,7 +57,7 @@ struct SimpleConnectView: View {
                     .onSubmit {
                         sendCommand()
                     }
-                    .disabled(status != .connected)
+.disabled(status != ConnectionStatus.connected)
                 
                 Button("Send") {
                     sendCommand()
