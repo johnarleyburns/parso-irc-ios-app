@@ -47,9 +47,9 @@ struct SimpleConnectView: View {
                 }
             }
             
-            // Input
+// Input
             HStack {
-                TextField("Enter command...", text: $inputText)
+                TextField("Enter command or message...", text: $inputText)
                     .textFieldStyle(.plain)
                     .foregroundColor(.white)
                     .padding(8)
@@ -58,7 +58,7 @@ struct SimpleConnectView: View {
                     .onSubmit {
                         sendCommand()
                     }
-.disabled(status != ConnectionStatus.connected)
+                    .disabled(status != .connected)
                 
                 Button("Send") {
                     sendCommand()
@@ -178,7 +178,66 @@ struct SimpleConnectView: View {
         let nickname = "parso\(Int.random(in: 1000...9999))"
         
         client.onMessage = { [self] msg in
-            let line = ":\(msg.source?.nick ?? "server") \(msg.command) \(msg.parameters.joined(separator: " "))"
+            var line: String
+            
+            switch msg.command {
+            case "PRIVMSG":
+                let from = msg.source?.nick ?? "unknown"
+                let target = msg.parameters.first ?? ""
+                let content = msg.parameters.count > 1 ? msg.parameters.dropFirst().joined(separator: " ") : ""
+                line = "<\(from)> \(content)"
+                
+            case "NOTICE":
+                let from = msg.source?.nick ?? "server"
+                let target = msg.parameters.first ?? ""
+                let content = msg.parameters.count > 1 ? msg.parameters.dropFirst().joined(separator: " ") : ""
+                line = "[\(from)] \(content)"
+                
+            case "JOIN":
+                let nick = msg.source?.nick ?? "unknown"
+                let channel = msg.parameters.first ?? ""
+                line = "* \(nick) has joined \(channel)"
+                
+            case "PART":
+                let nick = msg.source?.nick ?? "unknown"
+                let channel = msg.parameters.first ?? ""
+                line = "* \(nick) has left \(channel)"
+                
+            case "QUIT":
+                let nick = msg.source?.nick ?? "unknown"
+                line = "* \(nick) has quit"
+                
+            case "NICK":
+                let oldNick = msg.source?.nick ?? "unknown"
+                let newNick = msg.parameters.first ?? oldNick
+                line = "* \(oldNick) is now known as \(newNick)"
+                
+            case "353": // RPL_NAMREPLY
+                let channel = msg.parameters.dropFirst().first ?? ""
+                let nicks = msg.parameters.last ?? ""
+                line = "[NAMES] \(channel): \(nicks)"
+                
+            case "366": // RPL_ENDOFNAMES
+                let channel = msg.parameters.first ?? ""
+                line = "[NAMES] End of list for \(channel)"
+                
+            case "332": // RPL_TOPIC
+                let channel = msg.parameters.first ?? ""
+                let topic = msg.parameters.dropFirst().last ?? ""
+                line = "[TOPIC] \(channel): \(topic)"
+                
+            case "322": // RPL_LIST
+                let channel = msg.parameters.count > 1 ? msg.parameters[1] : ""
+                let count = msg.parameters.count > 2 ? msg.parameters[2] : ""
+                line = "[LIST] \(channel) (\(count) users)"
+                
+            case "323": // RPL_LISTEND
+                line = "[LIST] End of channel list"
+                
+            default:
+                line = ":\(msg.source?.nick ?? "server") \(msg.command) \(msg.parameters.joined(separator: " "))"
+            }
+            
             Task { @MainActor in
                 messages.append(line)
                 scrollToBottom()
