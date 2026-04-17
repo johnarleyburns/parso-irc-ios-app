@@ -229,10 +229,95 @@ struct SimpleConnectView: View {
             case "322": // RPL_LIST
                 let channel = msg.parameters.count > 1 ? msg.parameters[1] : ""
                 let count = msg.parameters.count > 2 ? msg.parameters[2] : ""
-                line = "[LIST] \(channel) (\(count) users)"
+                let topic = msg.parameters.count > 3 ? msg.parameters.dropFirst(3).joined(separator: " ").replacingOccurrences(of: "^:", with: "") : ""
+                line = "[LIST] \(channel): \(count) users"
+                if !topic.isEmpty {
+                    line += " - \(topic)"
+                }
                 
             case "323": // RPL_LISTEND
                 line = "[LIST] End of channel list"
+                
+            case "321": // RPL_LISTSTART
+                line = "[LIST] Channels:"
+                
+            case "331": // RPL_NOTOPIC
+                let channel = msg.parameters.first ?? ""
+                line = "[TOPIC] \(channel): No topic set"
+                
+            case "353": // RPL_NAMREPLY
+                let channel = msg.parameters.dropFirst(2).first ?? ""
+                let nicks = msg.parameters.last ?? ""
+                line = "[NAMES] \(channel): \(nicks)"
+                
+            case "366": // RPL_ENDOFNAMES
+                let channel = msg.parameters.first ?? ""
+                line = "[NAMES] End of list for \(channel)"
+                
+            case "332": // RPL_TOPIC
+                let channel = msg.parameters.dropFirst().first ?? ""
+                let topic = msg.parameters.last ?? ""
+                line = "[TOPIC] \(channel): \(topic)"
+                
+            case "324": // RPL_CHANNELMODEIS
+                let channel = msg.parameters.first ?? ""
+                let mode = msg.parameters.dropFirst().dropFirst().first ?? ""
+                line = "[MODE] \(channel) +\(mode)"
+                
+            case "329": // RPL_CREATIONTIME
+                let channel = msg.parameters.first ?? ""
+                let timestamp = msg.parameters.last ?? ""
+                line = "[INFO] \(channel) created: \(timestamp)"
+                
+            case "319": // RPL_WHOISCHANNELS
+                let nick = msg.parameters.first ?? ""
+                let channels = msg.parameters.dropFirst().joined(separator: " ")
+                line = "[WHOIS] \(nick) is on: \(channels)"
+                
+            case "301": // RPL_AWAY
+                let nick = msg.parameters.first ?? ""
+                let awayMsg = msg.parameters.last ?? ""
+                line = "[AWAY] \(nick): \(awayMsg)"
+                
+            case "371": // RPL_INFO
+                let info = msg.parameters.last ?? ""
+                line = "[INFO] \(info)"
+                
+            case "374": // RPL_ENDOFINFO
+                line = "[INFO] End of INFO"
+                
+            case "005": // RPL_ISUPPORT
+                line = "[SERVER] \(msg.parameters.dropFirst().joined(separator: " "))"
+                
+            case "372": // RPL_MOTD
+                let motdLine = msg.parameters.last ?? ""
+                line = "[MOTD] \(motdLine)"
+                
+            case "376": // RPL_ENDOFMOTD
+                line = "[MOTD] End of MOTD"
+                
+            case "251": // RPL_LUSERCLIENT
+                line = "[INFO] \(msg.parameters.dropFirst().joined(separator: " "))"
+                
+            case "254": // RPL_LUSERCHANNELS
+                let count = msg.parameters.first ?? "0"
+                line = "[INFO] \(count) channels"
+                
+            case "255": // RPL_LUSERME
+                line = "[INFO] \(msg.parameters.dropFirst().joined(separator: " "))"
+                
+            case "001": // RPL_WELCOME
+                let server = msg.parameters.first ?? ""
+                line = "[SERVER] Connected to \(server)"
+                
+            case "002": // RPL_YOURHOST
+                line = "[SERVER] \(msg.parameters.dropFirst().joined(separator: " "))"
+                
+            case "003": // RPL_CREATED
+                line = "[SERVER] \(msg.parameters.dropFirst().joined(separator: " "))"
+                
+            case "004": // RPL_MYINFO
+                line = "[SERVER] \(msg.parameters.dropFirst().joined(separator: " "))"
                 
             default:
                 line = ":\(msg.source?.nick ?? "server") \(msg.command) \(msg.parameters.joined(separator: " "))"
