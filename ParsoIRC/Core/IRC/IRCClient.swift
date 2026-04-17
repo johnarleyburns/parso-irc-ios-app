@@ -30,6 +30,11 @@ actor IRCClient {
     nonisolated(unsafe) var onTopicChange: ((String, String, String) -> Void)?
     nonisolated(unsafe) var onNamesList: ((String, [String]) -> Void)?
     nonisolated(unsafe) var onHistoryMessage: ((IRCMessage) -> Void)?
+    nonisolated(unsafe) var onKick: ((String, String, String, String?) -> Void)?   // channel, kicked, by, reason
+    nonisolated(unsafe) var onInvite: ((String, String) -> Void)?                  // nick, channel
+    nonisolated(unsafe) var onMode: ((String, String, [String]) -> Void)?          // target, modestring, params
+    // Catch-all for server messages not handled by a specific callback above
+    nonisolated(unsafe) var onUnhandledMessage: ((IRCMessage) -> Void)?
     
     private var readStream: InputStream?
     private var writeStream: OutputStream?
@@ -93,6 +98,7 @@ actor IRCClient {
                     self.isConnected = true
                     self.currentNick = nickname
 
+                    // RFC 2812 §3.1: send CAP LS to begin capability negotiation
                     try await self.send_raw("CAP LS 302")
 
                     continuation.resume()
@@ -121,17 +127,18 @@ actor IRCClient {
                     self.isCapNegotiationComplete = true
                     
                     if useSASL && self.acknowledgedCapabilities.contains("sasl") {
-                        try await self.send_raw("CAP REQ :sasl")
-                        try await self.send_raw("AUTHENTICATE +")
+                        try await self.send_raw("AUTHENTICATE PLAIN")
                         self.saslRequested = true
                     }
                     
-                    try await self.send_raw("NICK :\(nickname)")
-                    try await self.send_raw("USER \(username) 8 * :\(realname)")
-                    
+                    // RFC 2812 §3.1: registration order is PASS (if any), then NICK, then USER.
                     if let password = serverPassword, !password.isEmpty {
                         try await self.send_raw("PASS \(password)")
                     }
+                    // NICK takes a single middle parameter — do NOT use send() which appends ":"
+                    try await self.send_raw("NICK \(nickname)")
+                    // USER: second param must be "0" per modern IRC spec; "8" sets invisible+wallops
+                    try await self.send_raw("USER \(username) 0 * :\(realname)")
                     
                     try await self.send_raw("CAP END")
                     
@@ -258,52 +265,81 @@ actor IRCClient {
     }
 
     func join(channel: String) async throws {
-        try await send(command: "JOIN", parameters: [channel])
+        // RFC 2812 §3.2.1: JOIN <channel> — channel is a middle param, no trailing colon needed
+        try await send_raw("JOIN \(channel)")
     }
 
     func join(channel: String, key: String) async throws {
-        try await send(command: "JOIN", parameters: [channel, key])
+        try await send_raw("JOIN \(channel) \(key)")
     }
 
     func leave(channel: String, message: String? = nil) async throws {
+        // RFC 2812 §3.2.2: PART <channel> [:<part message>]
         if let message = message {
-            try await send(command: "PART", parameters: [channel, message])
+            try await send_raw("PART \(channel) :\(message)")
         } else {
-            try await send(command: "PART", parameters: [channel])
+            try await send_raw("PART \(channel)")
         }
     }
 
     func quit(message: String = "Parso IRC") async throws {
-        try await send(command: "QUIT", parameters: [message])
+        // RFC 2812 §3.1.7: QUIT [:<quit message>]
+        try await send_raw("QUIT :\(message)")
     }
     
     func nick(_ newNickname: String) async throws {
-        try await send(command: "NICK", parameters: [newNickname])
+        // RFC 2812 §3.1.2: NICK <nickname> — middle param, no trailing colon
+        try await send_raw("NICK \(newNickname)")
     }
     
     func list() async throws {
-        try await send(command: "LIST", parameters: [])
+        try await send_raw("LIST")
     }
     
     func names(_ channel: String) async throws {
-        try await send(command: "NAMES", parameters: [channel])
+        // RFC 2812 §3.2.5: NAMES [<channel>]
+        try await send_raw("NAMES \(channel)")
     }
     
     func whois(_ username: String) async throws {
-        try await send(command: "WHOIS", parameters: [username])
+        // RFC 2812 §3.6.2: WHOIS [<server>] <nickmask>
+        try await send_raw("WHOIS \(username)")
     }
     
     func away(_ message: String?) async throws {
         if let message = message {
-            try await send(command: "AWAY", parameters: [message])
+            try await send_raw("AWAY :\(message)")
         } else {
-            try await send(command: "AWAY", parameters: [])
+            // AWAY with no params clears away status
+            try await send_raw("AWAY")
         }
     }
     
     func me(_ message: String, to channel: String) async throws {
+        // CTCP ACTION: \x01ACTION text\x01
         let action = "\u{0001}ACTION \(message)\u{0001}"
         try await send(command: "PRIVMSG", parameters: [channel, action])
+    }
+    
+    func topic(channel: String, newTopic: String? = nil) async throws {
+        if let topic = newTopic {
+            try await send_raw("TOPIC \(channel) :\(topic)")
+        } else {
+            try await send_raw("TOPIC \(channel)")
+        }
+    }
+    
+    func kick(channel: String, nick: String, reason: String? = nil) async throws {
+        if let reason = reason {
+            try await send_raw("KICK \(channel) \(nick) :\(reason)")
+        } else {
+            try await send_raw("KICK \(channel) \(nick)")
+        }
+    }
+    
+    func invite(nick: String, channel: String) async throws {
+        // RFC 2812 §3.2.7: INVITE <nickname> <channel>
+        try await send_raw("INVITE \(nick) \(channel)")
     }
     
     func isConnectedToServer() -> Bool {
@@ -318,15 +354,12 @@ actor IRCClient {
         return chathistoryEnabled
     }
 
+    // SASL PLAIN authentication (separate from the connect flow)
     func authenticateSASL(username: String, password: String) async throws {
-        try await send_raw("CAP LS 302")
-        try await send_raw("CAP REQ :sasl")
-        try await send_raw("AUTHENTICATE +")
-
+        // Build PLAIN credential: \0username\0password, base64-encoded
         let saslData = "\0\(username)\0\(password)"
         let encoded = saslData.data(using: .utf8)?.base64EncodedString() ?? ""
         try await send_raw("AUTHENTICATE \(encoded)")
-        try await send_raw("CAP END")
     }
 
     // MARK: - Receiving
@@ -380,41 +413,62 @@ actor IRCClient {
 
         switch command {
         case "PING":
+            // RFC 2812 §3.7.2: PONG must echo back the server's token
             let param = message.parameters.first.map { ":\($0)" } ?? ":"
             try? await send_raw("PONG \(param)")
 
         case "CAP":
             await handleCapMessage(message)
             
-        case "005", "RPL_ISUPPORT":
+        case "005":
+            // RPL_ISUPPORT — parse tokens, then pass to UI
             handleISupportMessage(message)
+            await MainActor.run {
+                self.onUnhandledMessage?(message)
+            }
             
-        case "903", "RPL_SASLSUCCESS":
+        case "903":
+            // RPL_SASLSUCCESS
             if saslRequested {
                 try? await send_raw("CAP END")
                 saslRequested = false
             }
+            await MainActor.run {
+                self.onUnhandledMessage?(message)
+            }
             
-        case "904", "RPL_SASLFAILURE":
+        case "904":
+            // ERR_SASLFAIL
             if saslRequested {
                 try? await send_raw("CAP END")
                 saslRequested = false
+            }
+            await MainActor.run {
+                self.onUnhandledMessage?(message)
             }
 
-        case "001", "RPL_WELCOME":
-            let nick = message.parameters.first ?? ""
+        case "001":
+            // RPL_WELCOME — first param is the nick the server assigned us
+            let nick = message.parameters.first ?? currentNick
+            currentNick = nick
             await MainActor.run {
                 self.onWelcome?(nick)
             }
 
         case "JOIN":
+            // RFC 2812 §3.2.1: :nick!user@host JOIN <channel>
             let channel = message.parameters.first ?? ""
             let nick = message.source?.nick ?? ""
+            // Update our tracked nick if we are the one joining
+            if nick == currentNick {
+                debugLog.log("We joined \(channel)", type: .info)
+            }
             await MainActor.run {
                 self.onJoin?(channel, nick)
             }
 
         case "PART":
+            // RFC 2812 §3.2.2: :nick!user@host PART <channel> [:<reason>]
             let channel = message.parameters.first ?? ""
             let nick = message.source?.nick ?? ""
             let partMessage: String? = message.parameters.count > 1 ? message.parameters[1] : nil
@@ -423,6 +477,7 @@ actor IRCClient {
             }
 
         case "QUIT":
+            // RFC 2812 §3.1.7: :nick!user@host QUIT [:<reason>]
             let nick = message.source?.nick ?? ""
             let quitMessage = message.parameters.first
             await MainActor.run {
@@ -430,17 +485,19 @@ actor IRCClient {
             }
 
         case "NICK":
+            // RFC 2812 §3.1.2: :oldnick!user@host NICK <newnick>
             let oldNick = message.source?.nick ?? ""
             let newNick = message.parameters.first ?? oldNick
-            if !message.parameters.isEmpty && message.parameters[0].hasPrefix(":") == false {
-                await MainActor.run {
-                    self.onNickChange?(oldNick, newNick)
-                }
-            } else if currentNick == oldNick {
+            // Track our own nick change
+            if oldNick == currentNick {
                 currentNick = newNick
+            }
+            await MainActor.run {
+                self.onNickChange?(oldNick, newNick)
             }
 
         case "TOPIC":
+            // RFC 2812 §3.2.4: :nick!user@host TOPIC <channel> :<topic>
             let channel = message.parameters.first ?? ""
             let topic = message.parameters.count > 1 ? message.parameters[1] : ""
             let nick = message.source?.nick ?? ""
@@ -448,10 +505,49 @@ actor IRCClient {
                 self.onTopicChange?(channel, topic, nick)
             }
 
-        case "353":  // RPL_NAMREPLY
-            if let channel = message.parameters.dropFirst().last,
-               let nicksParam = message.parameters.dropFirst(2).first {
-                let nicks = nicksParam.split(separator: " ").map(String.init)
+        case "KICK":
+            // RFC 2812 §3.2.8: :nick!user@host KICK <channel> <kicked_nick> [:<reason>]
+            let channel = message.parameters.first ?? ""
+            let kicked = message.parameters.count > 1 ? message.parameters[1] : ""
+            let by = message.source?.nick ?? ""
+            let reason: String? = message.parameters.count > 2 ? message.parameters[2] : nil
+            await MainActor.run {
+                self.onKick?(channel, kicked, by, reason)
+            }
+
+        case "INVITE":
+            // RFC 2812 §3.2.7: :nick!user@host INVITE <yournick> <channel>
+            let nick = message.source?.nick ?? ""
+            let channel = message.parameters.count > 1 ? message.parameters[1] : (message.parameters.first ?? "")
+            await MainActor.run {
+                self.onInvite?(nick, channel)
+            }
+
+        case "MODE":
+            // RFC 2812 §3.1.5 / §3.2.3: :source MODE <target> <modestring> [<params>...]
+            let target = message.parameters.first ?? ""
+            let modeString = message.parameters.count > 1 ? message.parameters[1] : ""
+            let modeParams = message.parameters.count > 2 ? Array(message.parameters.dropFirst(2)) : []
+            // Track our own mode changes silently; surface to UI via onMode
+            await MainActor.run {
+                self.onMode?(target, modeString, modeParams)
+            }
+
+        case "353":
+            // RPL_NAMREPLY: :server 353 <yournick> <chantype> <channel> :<nicks...>
+            // parameters[0] = yournick, [1] = chantype (=/*/@), [2] = channel, [3] = nicks
+            if message.parameters.count >= 4 {
+                let channel = message.parameters[2]
+                let nicksRaw = message.parameters[3]
+                let nicks = nicksRaw.split(separator: " ").map(String.init)
+                await MainActor.run {
+                    self.onNamesList?(channel, nicks)
+                }
+            } else if message.parameters.count >= 3 {
+                // Fallback for servers that omit chantype
+                let channel = message.parameters[1]
+                let nicksRaw = message.parameters[2]
+                let nicks = nicksRaw.split(separator: " ").map(String.init)
                 await MainActor.run {
                     self.onNamesList?(channel, nicks)
                 }
@@ -467,62 +563,89 @@ actor IRCClient {
             }
 
         case "ERROR":
+            // RFC 2812 §3.7.4: ERROR terminates the connection
             let errorMsg = message.parameters.joined(separator: " ")
             let ircError = IRCError.connectionFailed(errorMsg)
             await MainActor.run {
                 self.onError?(ircError)
             }
+            // Cleanly close after receiving ERROR
+            connection?.cancel()
+            connection = nil
+            isConnected = false
 
         default:
-            break
+            // All other server messages (numerics, etc.) are passed to the UI
+            // via onUnhandledMessage so they can be displayed in the terminal.
+            await MainActor.run {
+                self.onUnhandledMessage?(message)
+            }
         }
     }
     
     private func handleCapMessage(_ message: IRCMessage) async {
-        guard message.parameters.count >= 3 else { return }
+        guard message.parameters.count >= 2 else { return }
         
+        // CAP params: [target, subcommand, ...]  where target is our nick or *
         let subcommand = message.parameters[1]
         
         switch subcommand {
         case "LS":
+            // May be multi-line: CAP * LS * :caps...  (asterisk = more coming)
+            // Last param holds the capability list
             if let caps = message.parameters.last {
                 let capabilities = caps.split(separator: " ").map(String.init)
                 for cap in capabilities {
-                    if cap.hasPrefix("batch") {
+                    let capName = cap.split(separator: "=").first.map(String.init) ?? cap
+                    if capName == "batch" {
                         pendingCapabilities.insert("batch")
-                    } else if cap.hasPrefix("server-time") {
+                    } else if capName == "server-time" {
                         pendingCapabilities.insert("server-time")
-                    } else if cap.hasPrefix("message-tags") {
+                    } else if capName == "message-tags" {
                         pendingCapabilities.insert("message-tags")
-                    } else if cap.hasPrefix("draft/chathistory") || cap.hasPrefix("chathistory") {
+                    } else if capName == "draft/chathistory" || capName == "chathistory" {
                         pendingCapabilities.insert("chathistory")
-                    } else if cap.hasPrefix("sasl") {
+                    } else if capName == "sasl" {
                         pendingCapabilities.insert("sasl")
                     }
                 }
+            }
+            // If this is not a multi-line LS (no asterisk before last param), negotiation is done
+            if message.parameters.count < 4 || message.parameters[2] != "*" {
+                isCapNegotiationComplete = true
             }
             
         case "ACK":
             if let caps = message.parameters.last {
                 let acknowledged = caps.split(separator: " ").map(String.init)
                 for cap in acknowledged {
-                    acknowledgedCapabilities.insert(cap)
+                    let capName = cap.trimmingCharacters(in: .init(charactersIn: "-~="))
+                    acknowledgedCapabilities.insert(capName)
                     
-                    if cap == "batch" || cap.hasPrefix("batch") {
+                    if capName == "batch" || capName.hasPrefix("batch") {
                         chathistoryEnabled = true
-                    } else if cap == "server-time" || cap.hasPrefix("server-time") {
+                    } else if capName == "server-time" {
                         serverTimeEnabled = true
-                    } else if cap.hasPrefix("chathistory") {
+                    } else if capName == "chathistory" || capName == "draft/chathistory" {
                         chathistoryEnabled = true
                     }
                 }
             }
             
         case "NAK":
+            // Server rejected our CAP REQ; nothing to do
             break
             
         case "END":
             isCapNegotiationComplete = true
+            
+        case "NEW":
+            // IRCv3 cap-notify: server advertising a new capability
+            break
+            
+        case "DEL":
+            // IRCv3 cap-notify: server removing a capability
+            break
             
         default:
             break
@@ -530,7 +653,8 @@ actor IRCClient {
     }
     
     private func handleISupportMessage(_ message: IRCMessage) {
-        for param in message.parameters {
+        // RPL_ISUPPORT params: [yournick, token1, token2, ..., "are supported by this server"]
+        for param in message.parameters.dropFirst() {
             if param.hasPrefix("CHATHISTORY=") {
                 let limitStr = param.replacingOccurrences(of: "CHATHISTORY=", with: "")
                 if let limit = Int(limitStr) {
