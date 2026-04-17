@@ -55,10 +55,10 @@ struct TerminalView: View {
         
         guard let client = ircClient else { return }
         
-        client.onDisconnect = { [weak self] in
+        client.onDisconnect = {
             Task { @MainActor in
-                self?.isConnected = false
-                self?.showConnecting = true
+                self.isConnected = false
+                self.showConnecting = true
             }
         }
         
