@@ -70,11 +70,9 @@ struct ServerSelectionView: View {
             .navigationBarHidden(true)
             .fullScreenCover(item: $connectingServer) { server in
                 if let channel = connectingChannel {
-                    NavigationStack {
-                        TerminalView(server: server, channel: channel, startConnecting: true)
-                            .environmentObject(ircManager)
-                            .environmentObject(appState)
-                    }
+                    TerminalView(server: server, channel: channel, startConnecting: true)
+                        .environmentObject(ircManager)
+                        .environmentObject(appState)
                 }
             }
             .alert("Connection Error", isPresented: $showError) {
@@ -103,6 +101,7 @@ struct ServerSelectionView: View {
         
         connectingServer = serverConfig
         connectingChannel = Channel(name: serverConfig.lastActiveChannel ?? "#linux")
+        print("[ServerSelection] set connectingServer = \(serverConfig.name)")
     }
 }
 

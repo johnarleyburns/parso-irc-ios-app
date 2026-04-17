@@ -13,6 +13,8 @@ struct TerminalView: View {
     @State private var showConnecting = true
     
     var body: some View {
+        print("[TerminalView] body evaluated: startConnecting=\(startConnecting)")
+        
         VStack {
             Text("HELLO WORLD")
                 .font(.largeTitle)
