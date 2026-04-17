@@ -31,12 +31,13 @@ struct TerminalView: View {
     @State private var scrollProxy: ScrollViewProxy?
     @State private var isConnecting = true
     @State private var connectionStartTime = Date()
+    @State private var showConnecting = true
     
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
             
-            if startConnecting && isConnecting {
+            if showConnecting {
                 VStack {
                     ProgressView()
                         .progressViewStyle(CircularProgressViewStyle(tint: .green))
@@ -55,9 +56,9 @@ struct TerminalView: View {
                         Text(server.name)
                             .font(.headline)
                             .foregroundColor(.green)
-                        Text(startConnecting ? "Connecting to \(server.host)..." : channel.name)
+                        Text(showConnecting ? "Connecting to \(server.host)..." : channel.name)
                             .font(.caption)
-                            .foregroundColor(startConnecting ? .yellow : .gray)
+                            .foregroundColor(showConnecting ? .yellow : .gray)
                     }
                     
                     Spacer()
@@ -191,6 +192,7 @@ struct TerminalView: View {
             Task { @MainActor in
                 self.addSystemMessage("* You are now known as \(nick)")
                 self.isConnecting = false
+                self.showConnecting = false
             }
         }
         
@@ -199,6 +201,7 @@ struct TerminalView: View {
             Task { @MainActor in
                 self.addSystemMessage("* Disconnected")
                 self.isConnecting = false
+                self.showConnecting = false
             }
         }
         
@@ -207,6 +210,7 @@ struct TerminalView: View {
             Task { @MainActor in
                 self.addSystemMessage("* Error: \(error.localizedDescription)")
                 self.isConnecting = false
+                self.showConnecting = false
             }
         }
         
@@ -233,12 +237,14 @@ struct TerminalView: View {
                     self.ircManager.connections[self.server.id] = client
                     self.ircManager.connectionStates[self.server.id] = .connected
                     self.isConnecting = false
+                    self.showConnecting = false
                 }
             } catch {
                 print("[DEBUG] client.connect() failed: \(error.localizedDescription)")
                 await MainActor.run {
                     self.addSystemMessage("* Connection failed: \(error.localizedDescription)")
                     self.isConnecting = false
+                    self.showConnecting = false
                 }
             }
         }
@@ -262,6 +268,7 @@ struct TerminalView: View {
                     self.addSystemMessage("* Connection timeout after \(Int(elapsed))s")
                     self.addSystemMessage("* Please check your network connection")
                     self.isConnecting = false
+                    self.showConnecting = false
                 }
             }
         }
