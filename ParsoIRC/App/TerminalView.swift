@@ -16,6 +16,17 @@ struct TerminalView: View {
         ZStack {
             Color.black.ignoresSafeArea()
             
+            // ALWAYS visible - just show state
+            VStack {
+                Text("startConnecting: \(startConnecting ? "YES" : "NO")")
+                    .foregroundColor(.yellow)
+                Text("showConnecting: \(showConnecting ? "YES" : "NO")")
+                    .foregroundColor(.orange)
+                Text("isConnected: \(isConnected ? "YES" : "NO")")
+                    .foregroundColor(.red)
+            }
+            
+            // Always layered on top
             if showConnecting {
                 VStack {
                     ProgressView()
@@ -40,23 +51,31 @@ struct TerminalView: View {
         }
         .navigationBarHidden(true)
         .task {
-            if startConnecting {
-                await showConnectingState()
-            }
+            guard startConnecting else { return }
+            await showConnectingState()
         }
     }
     
     private func showConnectingState() async {
+        print("[TerminalView] showConnectingState BEGINS")
+        print("[TerminalView] server: \(server.host):\(server.port), ssl: \(server.ssl)")
+        
         let nickname = server.nickname.isEmpty ? "parso\(Int.random(in: 1000...9999))" : server.nickname
         let username = server.realname.isEmpty ? "parso" : server.realname
         let realname = server.realname.isEmpty ? "Parso IRC" : server.realname
         
+        print("[TerminalView] Creating IRCClient for \(nickname)...")
         ircClient = IRCClient()
         
-        guard let client = ircClient else { return }
+        guard let client = ircClient else {
+            print("[TerminalView] ERROR: Failed to create IRCClient")
+            return
+        }
+        print("[TerminalView] IRCClient created, calling connect()...")
         
         client.onDisconnect = {
             Task { @MainActor in
+                print("[TerminalView] onDisconnect fired")
                 self.isConnected = false
                 self.showConnecting = true
             }
@@ -74,16 +93,22 @@ struct TerminalView: View {
                 useSASL: server.saslEnabled,
                 saslPassword: server.password
             )
+            print("[TerminalView] connect() succeeded!")
             
             await MainActor.run {
+                print("[TerminalView] Setting isConnected = true, showConnecting = false")
                 self.isConnected = true
                 self.showConnecting = false
+                print("[TerminalView] State updated")
             }
         } catch {
+            print("[TerminalView] connect() FAILED: \(error)")
             await MainActor.run {
                 self.isConnected = false
             }
         }
+        
+        print("[TerminalView] showConnectingState ENDS")
     }
 }
 
