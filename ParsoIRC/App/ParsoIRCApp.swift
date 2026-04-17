@@ -21,5 +21,5 @@ class AppState: ObservableObject {
     @Published var currentUser: User?
     @Published var isAuthenticated = false
     
-    private init() {}
+    init() {}
 }
