@@ -13,47 +13,23 @@ struct TerminalView: View {
     @State private var showConnecting = true
     
     var body: some View {
-        ZStack {
-            Color.black.ignoresSafeArea()
+        VStack {
+            Text("HELLO WORLD")
+                .font(.largeTitle)
+                .foregroundColor(.red)
             
-            // ALWAYS visible - just show state
-            VStack {
-                Text("startConnecting: \(startConnecting ? "YES" : "NO")")
-                    .foregroundColor(.yellow)
-                Text("showConnecting: \(showConnecting ? "YES" : "NO")")
-                    .foregroundColor(.orange)
-                Text("isConnected: \(isConnected ? "YES" : "NO")")
-                    .foregroundColor(.red)
+            Button("TEST BUTTON") {
+                print("Button tapped")
             }
             
-            // Always layered on top
-            if showConnecting {
-                VStack {
-                    ProgressView()
-                        .progressViewStyle(CircularProgressViewStyle(tint: .green))
-                        .scaleEffect(1.5)
-                    Text("Connecting to \(server.host)...")
-                        .font(.caption)
-                        .foregroundColor(.gray)
-                        .padding(.top, 16)
-                }
-            } else if isConnected {
-                VStack {
-                    Text("CONNECTED")
-                        .font(.title2)
-                        .fontWeight(.bold)
-                        .foregroundColor(.green)
-                    Text(server.host)
-                        .font(.caption)
-                        .foregroundColor(.gray)
-                }
+            if startConnecting {
+                Text("Connecting: YES")
+            } else {
+                Text("Connecting: NO")
             }
         }
-        .navigationBarHidden(true)
-        .task {
-            guard startConnecting else { return }
-            await showConnectingState()
-        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color.blue)
     }
     
     private func showConnectingState() async {
