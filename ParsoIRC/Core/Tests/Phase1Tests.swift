@@ -344,6 +344,9 @@ final class PresetNetworkTests: XCTestCase {
 
 // MARK: - IRCClientManager State Tests (mock-based, no network)
 
+// IRCClientManager is @MainActor-isolated, so all tests calling its methods
+// must run on the main actor.
+@MainActor
 final class IRCClientManagerStateTests: XCTestCase {
 
     // Test that connectionState(for:) returns .disconnected for an unknown server ID
