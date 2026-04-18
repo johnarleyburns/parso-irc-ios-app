@@ -33,13 +33,9 @@ final class IRCClientManager: ObservableObject {
     static let shared = IRCClientManager()
     
     var connections: [String: IRCClient] = [:]
-    var connectionStates: [String: ConnectionState] = [:]
+    @Published var connectionStates: [String: ConnectionState] = [:]
     @Published var currentNicknames: [String: String] = [:]
-    
-    var connectionStatesPublisher: [String: ConnectionState] {
-        connectionStates
-    }
-    
+
     func getClient(for serverId: String) -> IRCClient? {
         return connections[serverId]
     }
@@ -52,18 +48,7 @@ final class IRCClientManager: ObservableObject {
     // MARK: - Connection State
     
     func connectionState(for serverId: String) -> ConnectionState {
-        switch connectionStates[serverId] ?? .disconnected {
-        case .disconnected:
-            return .disconnected
-        case .connecting:
-            return .connecting
-        case .connected:
-            return .connected
-        case .reconnecting:
-            return .reconnecting
-        case .failed:
-            return .failed(IRCError.maxReconnectAttemptsReached)
-        }
+        connectionStates[serverId] ?? .disconnected
     }
     
     func isConnected(serverId: String) -> Bool {
