@@ -6,11 +6,10 @@ import SwiftUI
 /// - Shows SplashScreenView on every cold launch (2.5 s)
 /// - Shows OnboardingView when no servers have been saved yet (first-ever launch)
 /// - Otherwise shows the main NavigationSplitView with ServerSidebarView on the left
-///   and a placeholder "select a channel" detail on the right until Phase 2 lands
+///   and ChatView on the right (Phase 2) when a server + channel are both selected.
 ///
 /// The `selectedServerId` / `selectedChannelId` pair are the source of truth for
-/// what the detail column displays.  Phase 2's ChatView will read them from the
-/// environment via AppState.
+/// what the detail column displays.
 struct RootView: View {
     @EnvironmentObject private var ircManager: IRCClientManager
     @EnvironmentObject private var appState: AppState
@@ -52,9 +51,18 @@ struct RootView: View {
                 selectedChannelId: $selectedChannelId
             )
         } detail: {
-            detailPlaceholder
+            if let sid = selectedServerId,
+               let cid = selectedChannelId,
+               let channelName = resolveChannelName(serverId: sid, channelId: cid) {
+                ChatView(serverId: sid, channelName: channelName, ircManager: ircManager)
+                    // Key forces a full rebuild when the channel changes so
+                    // ChannelViewModel re-registers callbacks for the new channel.
+                    .id("\(sid):\(cid)")
+            } else {
+                detailPlaceholder
+            }
         }
-        // Pass current selection into AppState so Phase-2 ChatView can read it
+        // Pass current selection into AppState so other views can observe it
         .onChange(of: selectedServerId) { _, newVal in
             appState.selectedServerId = newVal
         }
@@ -67,7 +75,15 @@ struct RootView: View {
         }
     }
 
-    // MARK: - Detail placeholder (replaced by ChatView in Phase 2)
+    /// Looks up the channel name from the DB given a server + channel ID.
+    /// Falls back to `selectedChannelId` itself if the DB lookup fails (e.g.
+    /// the channel was added in-memory but not yet persisted).
+    private func resolveChannelName(serverId: String, channelId: String) -> String? {
+        let channels = (try? DatabaseManager.shared.fetchChannels(forServer: serverId)) ?? []
+        return channels.first(where: { $0.id == channelId })?.name ?? channelId
+    }
+
+    // MARK: - Detail placeholder (shown when no channel is selected)
 
     private var detailPlaceholder: some View {
         VStack(spacing: 24) {

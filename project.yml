@@ -45,6 +45,7 @@ targets:
           - "**/*Mock*.swift"
           - "**/LinuxStubs/**"
           - "**/Phase1Tests.swift"
+          - "**/Phase2Tests.swift"
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
