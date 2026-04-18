@@ -72,16 +72,18 @@ struct ChatView: View {
         }
         // Mark read when this channel is actively selected
         .onAppear { viewModel.markRead() }
-        // Member list sheet (full-screen on iPhone, popover on iPad)
+        // Member list sheet — Phase 3 MemberListView
         .sheet(isPresented: $showMemberList) {
-            MemberListPlaceholder(
+            MemberListView(
                 members: viewModel.members,
                 channelName: channelName,
-                onTapNick: { nick in
+                serverId: serverId,
+                onMention: { nick in
                     showMemberList = false
                     prefillText = "\(nick): "
                 }
             )
+            .environmentObject(ircManager)
         }
     }
 
@@ -182,67 +184,7 @@ struct ChatView: View {
     }
 }
 
-// MARK: - Member list placeholder (replaced by Phase 3's MemberListView)
-
-private struct MemberListPlaceholder: View {
-    let members: [ChannelMember]
-    let channelName: String
-    var onTapNick: ((String) -> Void)? = nil
-
-    @Environment(\.dismiss) private var dismiss
-    @State private var searchText = ""
-
-    private var filtered: [ChannelMember] {
-        searchText.isEmpty ? members :
-            members.filter { $0.nick.localizedCaseInsensitiveContains(searchText) }
-    }
-
-    var body: some View {
-        NavigationStack {
-            List(filtered) { member in
-                Button {
-                    onTapNick?(member.nick)
-                } label: {
-                    HStack(spacing: 10) {
-                        AvatarView(nick: member.nick, size: 36, showBorder: false)
-                        VStack(alignment: .leading, spacing: 2) {
-                            HStack(spacing: 4) {
-                                if member.mode != .none {
-                                    Text(member.mode.prefix)
-                                        .font(.caption)
-                                        .fontWeight(.bold)
-                                        .foregroundStyle(modeColor(member.mode))
-                                }
-                                Text(member.nick)
-                                    .font(.body)
-                                    .foregroundStyle(NickColorGenerator.color(for: member.nick))
-                            }
-                        }
-                    }
-                }
-                .buttonStyle(.plain)
-            }
-            .searchable(text: $searchText, prompt: "Search members")
-            .navigationTitle("\(channelName) — \(members.count)")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }
-                }
-            }
-        }
-    }
-
-    private func modeColor(_ mode: ChannelMember.MemberMode) -> Color {
-        switch mode {
-        case .founder, .admin: return .orange
-        case .operator_:       return .green
-        case .halfop:          return Color(.systemTeal)
-        case .voice:           return .blue
-        case .none:            return .secondary
-        }
-    }
-}
+// MARK: - Preview
 
 #Preview {
     NavigationStack {
