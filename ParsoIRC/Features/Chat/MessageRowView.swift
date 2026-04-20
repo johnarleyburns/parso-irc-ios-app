@@ -30,7 +30,7 @@ struct MessageRowView: View {
     private var isOutgoing: Bool { message.isFromCurrentUser }
     private var isSystem: Bool {
         switch message.type {
-        case .join, .part, .quit, .nick, .mode, .topic, .kick, .ban, .invite: return true
+        case .join, .part, .quit, .nick, .mode, .topic, .kick, .ban, .invite, .system: return true
         default: return false
         }
     }

@@ -502,7 +502,7 @@ enum DisplayMessage: Identifiable {
     var isSystemMessage: Bool {
         guard case .message(let msg, _) = self else { return false }
         switch msg.type {
-        case .join, .part, .quit, .nick, .mode, .topic, .kick, .ban, .invite: return true
+        case .join, .part, .quit, .nick, .mode, .topic, .kick, .ban, .invite, .system: return true
         default: return false
         }
     }

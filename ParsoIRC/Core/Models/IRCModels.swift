@@ -241,6 +241,7 @@ struct Message: Identifiable, Codable, Equatable {
         case kick
         case ban
         case invite
+        case system
     }
 
     init(
