@@ -1,5 +1,6 @@
 #if !os(Linux)
 import XCTest
+import SwiftUI
 @testable import ParsoIRC
 
 // MARK: - MemberRowView.modeColor Tests
