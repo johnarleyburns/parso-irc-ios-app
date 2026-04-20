@@ -14,11 +14,14 @@ struct MessageRowView: View {
     let message: Message
     let grouped: Bool
     let currentNick: String
+    var isFailed: Bool = false
 
     /// Called when the user taps a nick anywhere in the row.
     var onTapNick: ((String) -> Void)? = nil
     /// Called when the user long-presses the bubble (context menu parent).
     var onLongPress: ((Message) -> Void)? = nil
+    /// Called when the user taps the retry button on a failed outgoing message.
+    var onRetry: ((Message) -> Void)? = nil
 
     // Appearance settings
     @AppStorage("messageFontSize") private var messageFontSize: Double = 15
@@ -109,15 +112,27 @@ struct MessageRowView: View {
             Spacer(minLength: 60)
             VStack(alignment: .trailing, spacing: 2) {
                 bubbleText(message.content,
-                           background: Color.theme.sentBubble,
+                           background: isFailed ? Color(.systemRed).opacity(0.85) : Color.theme.sentBubble,
                            foreground: .white,
                            corners: grouped ? [.topLeft, .bottomLeft, .bottomRight]
                                             : [.topLeft, .topRight, .bottomLeft, .bottomRight])
-                if !grouped {
-                    Text(message.timestamp.formattedTime())
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
-                        .padding(.trailing, 4)
+                HStack(spacing: 4) {
+                    if isFailed {
+                        Button {
+                            onRetry?(message)
+                        } label: {
+                            Label("Not sent — tap to retry", systemImage: "exclamationmark.triangle.fill")
+                                .font(.caption2)
+                                .foregroundStyle(.red)
+                                .labelStyle(.titleAndIcon)
+                        }
+                        .buttonStyle(.plain)
+                    } else if !grouped {
+                        Text(message.timestamp.formattedTime())
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                            .padding(.trailing, 4)
+                    }
                 }
             }
         }

@@ -125,11 +125,15 @@ struct MessageListView: View {
                 message: msg,
                 grouped: grouped,
                 currentNick: viewModel.currentNick,
+                isFailed: viewModel.failedMessageIds.contains(msg.id),
                 onTapNick: onTapNick,
                 onLongPress: { tapped in
                     contextMessage = tapped
                     showContextMenu = true
                     HapticManager.mediumImpact()
+                },
+                onRetry: { failedMsg in
+                    viewModel.retrySend(message: failedMsg)
                 }
             )
         }

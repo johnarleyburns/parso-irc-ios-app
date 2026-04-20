@@ -45,6 +45,9 @@ struct AddServerSheet: View {
     @State private var autoConnect: Bool = true
     @State private var showValidationAlert = false
     @State private var validationMessage = ""
+    @State private var showGeneratedPassword = false
+    /// The auto-generated password shown to the user for new server adds.
+    @State private var generatedPassword: String = ""
 
     private var isEditing: Bool { existingServer != nil }
     private var port: Int { Int(portString) ?? 6697 }
@@ -81,8 +84,13 @@ struct AddServerSheet: View {
                             host = network.host
                             portString = String(network.port)
                             useTLS = network.ssl
-                            nickname = appState.globalNickname
+                            let globalNick = appState.globalNickname
+                            nickname = globalNick.isEmpty ? Self.generateNick() : globalNick
                             realName = appState.globalRealName
+                            if generatedPassword.isEmpty {
+                                generatedPassword = Self.generatePassword()
+                                serverPassword = generatedPassword
+                            }
                             autoConnect = true
                             showPicker = false
                         } label: {
@@ -118,8 +126,13 @@ struct AddServerSheet: View {
                 Section {
                     Button {
                         selectedPreset = .custom
-                        nickname = appState.globalNickname
+                        let globalNick = appState.globalNickname
+                        nickname = globalNick.isEmpty ? Self.generateNick() : globalNick
                         realName = appState.globalRealName
+                        if generatedPassword.isEmpty {
+                            generatedPassword = Self.generatePassword()
+                            serverPassword = generatedPassword
+                        }
                         autoConnect = true
                         showPicker = false
                     } label: {
@@ -291,11 +304,74 @@ struct AddServerSheet: View {
     }
 
     private var authSection: some View {
-        Section {
-            DisclosureGroup("Authentication", isExpanded: $showAuthSection) {
-                SecureField("Server Password (optional)", text: $serverPassword)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
+        if isEditing {
+            // Edit mode: keep existing auth section in disclosure group
+            return AnyView(Section {
+                DisclosureGroup("Authentication", isExpanded: $showAuthSection) {
+                    SecureField("Server Password (optional)", text: $serverPassword)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+
+                    Toggle("SASL Authentication", isOn: $saslEnabled)
+                        .tint(.accentColor)
+
+                    if saslEnabled {
+                        HStack {
+                            Label("SASL Username", systemImage: "person.badge.key")
+                            Spacer()
+                            TextField("username", text: $saslUsername)
+                                .textFieldStyle(.plain)
+                                .multilineTextAlignment(.trailing)
+                                .autocorrectionDisabled()
+                                .textInputAutocapitalization(.never)
+                        }
+                        HStack {
+                            Label("SASL Password", systemImage: "key.fill")
+                            Spacer()
+                            SecureField("password", text: $saslPassword)
+                                .textFieldStyle(.plain)
+                                .multilineTextAlignment(.trailing)
+                                .autocorrectionDisabled()
+                        }
+                    }
+                }
+            })
+        } else {
+            // New server: show auto-generated password prominently
+            return AnyView(Section {
+                // Generated password display
+                HStack {
+                    Label("Server Password", systemImage: "key.fill")
+                    Spacer()
+                    if showGeneratedPassword {
+                        Text(generatedPassword)
+                            .font(.system(.body, design: .monospaced))
+                            .foregroundStyle(.primary)
+                            .textSelection(.enabled)
+                    } else {
+                        SecureField("Auto-generated", text: $serverPassword)
+                            .textFieldStyle(.plain)
+                            .multilineTextAlignment(.trailing)
+                            .autocorrectionDisabled()
+                    }
+                    Button {
+                        showGeneratedPassword.toggle()
+                    } label: {
+                        Image(systemName: showGeneratedPassword ? "eye.slash" : "eye")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    Button {
+                        UIPasteboard.general.string = serverPassword.isEmpty ? generatedPassword : serverPassword
+                        HapticManager.selectionFeedback()
+                    } label: {
+                        Image(systemName: "doc.on.doc")
+                            .font(.caption)
+                            .foregroundStyle(.accentColor)
+                    }
+                    .buttonStyle(.plain)
+                }
 
                 Toggle("SASL Authentication", isOn: $saslEnabled)
                     .tint(.accentColor)
@@ -319,7 +395,12 @@ struct AddServerSheet: View {
                             .autocorrectionDisabled()
                     }
                 }
-            }
+            } header: {
+                Text("Authentication")
+            } footer: {
+                Text("A unique password has been generated for this server. Save it somewhere safe or tap the copy icon — you can always change it in server settings.")
+                    .font(.caption)
+            })
         }
     }
 
@@ -358,7 +439,15 @@ struct AddServerSheet: View {
     // MARK: - Helpers
 
     private func prefill() {
-        guard let s = existingServer else { return }
+        guard let s = existingServer else {
+            // New server: auto-generate nick and password
+            let globalNick = appState.globalNickname
+            nickname = globalNick.isEmpty ? Self.generateNick() : globalNick
+            realName = appState.globalRealName
+            generatedPassword = Self.generatePassword()
+            serverPassword = generatedPassword
+            return
+        }
         selectedPreset = PresetNetwork(host: s.host) ?? .custom
         name = s.name
         host = s.host
@@ -373,6 +462,17 @@ struct AddServerSheet: View {
         autoJoinChannels = s.channels.map(\.name)
         autoConnect = s.autoConnect
         showAuthSection = s.saslEnabled || !(s.password ?? "").isEmpty
+    }
+
+    /// Generates a random IRC-safe nickname like "parso1234".
+    static func generateNick() -> String {
+        "parso\(Int.random(in: 1000...9999))"
+    }
+
+    /// Generates a random 14-character alphanumeric password.
+    static func generatePassword() -> String {
+        let chars = "abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+        return String((0..<14).compactMap { _ in chars.randomElement() })
     }
 
     private func applyPreset(_ preset: PresetNetwork) {
@@ -408,9 +508,10 @@ struct AddServerSheet: View {
 
         let resolvedNick: String = {
             let n = nickname.trimmingCharacters(in: .whitespaces)
-            return n.isEmpty ? appState.globalNickname : n
+            if !n.isEmpty { return n }
+            if !appState.globalNickname.isEmpty { return appState.globalNickname }
+            return Self.generateNick()
         }()
-        let finalNick = resolvedNick.isEmpty ? "parso\(Int.random(in: 1000...9999))" : resolvedNick
 
         let resolvedReal: String = {
             let r = realName.trimmingCharacters(in: .whitespaces)
@@ -426,7 +527,7 @@ struct AddServerSheet: View {
             host: h,
             port: port,
             ssl: useTLS,
-            nickname: finalNick,
+            nickname: resolvedNick,
             realname: resolvedReal.isEmpty ? "Parso IRC" : resolvedReal,
             password: serverPassword.isEmpty ? nil : serverPassword,
             saslEnabled: saslEnabled,

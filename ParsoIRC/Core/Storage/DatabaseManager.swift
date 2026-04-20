@@ -43,6 +43,7 @@ final class DatabaseManager {
     private let channelLastCheckedAt = Expression<String?>("last_checked_at")
     private let channelNotifyOnAnyMessage = Expression<Int>("notify_on_any_message")
     private let channelIsDM = Expression<Int>("is_dm")
+    private let channelUnreadCount = Expression<Int>("unread_count")
     
     // Message columns
     private let messageId = Expression<String>("id")
@@ -123,6 +124,23 @@ final class DatabaseManager {
         } catch {
             print("Migration failed (channels is_dm): \(error)")
         }
+
+        // Phase 5: add unread_count column to channels
+        do {
+            let channelInfo = try db.prepare("PRAGMA table_info(channels)")
+            var hasUnreadCount = false
+            for row in channelInfo {
+                if let name = row[1] as? String, name == "unread_count" {
+                    hasUnreadCount = true
+                    break
+                }
+            }
+            if !hasUnreadCount {
+                try db.run(channels.addColumn(channelUnreadCount, defaultValue: 0))
+            }
+        } catch {
+            print("Migration failed (channels unread_count): \(error)")
+        }
     }
     
     private func createTables() {
@@ -160,6 +178,7 @@ final class DatabaseManager {
                 t.column(channelLastCheckedAt)
                 t.column(channelNotifyOnAnyMessage, defaultValue: 0)
                 t.column(channelIsDM, defaultValue: 0)
+                t.column(channelUnreadCount, defaultValue: 0)
                 t.unique(channelServerId, channelName)
             })
             
@@ -309,7 +328,8 @@ final class DatabaseManager {
             channelLastNotifiedAt <- channel.lastNotifiedAt.map { dateFormatter.string(from: $0) },
             channelLastCheckedAt <- channel.lastCheckedAt.map { dateFormatter.string(from: $0) },
             channelNotifyOnAnyMessage <- channel.notifyOnAnyMessage ? 1 : 0,
-            channelIsDM <- channel.isDM ? 1 : 0
+            channelIsDM <- channel.isDM ? 1 : 0,
+            channelUnreadCount <- channel.unreadCount
         )
         
         try db.run(insert)
@@ -335,7 +355,8 @@ final class DatabaseManager {
                 lastNotifiedAt: row[channelLastNotifiedAt].flatMap { dateFormatter.date(from: $0) },
                 lastCheckedAt: row[channelLastCheckedAt].flatMap { dateFormatter.date(from: $0) },
                 notifyOnAnyMessage: row[channelNotifyOnAnyMessage] == 1,
-                isDM: (try? row.get(channelIsDM) == 1) ?? false
+                isDM: (try? row.get(channelIsDM) == 1) ?? false,
+                unreadCount: (try? row.get(channelUnreadCount)) ?? 0
             )
             result.append(channel)
         }
@@ -365,7 +386,8 @@ final class DatabaseManager {
                 lastNotifiedAt: row[channelLastNotifiedAt].flatMap { dateFormatter.date(from: $0) },
                 lastCheckedAt: row[channelLastCheckedAt].flatMap { dateFormatter.date(from: $0) },
                 notifyOnAnyMessage: row[channelNotifyOnAnyMessage] == 1,
-                isDM: (try? row.get(channelIsDM) == 1) ?? false
+                isDM: (try? row.get(channelIsDM) == 1) ?? false,
+                unreadCount: (try? row.get(channelUnreadCount)) ?? 0
             )
             result.append(channel)
         }
@@ -533,6 +555,13 @@ final class DatabaseManager {
         guard let db = db else { return }
         let ch = channels.filter(channelId == cid)
         try db.run(ch.update(channelLastCheckedAt <- dateFormatter.string(from: date)))
+    }
+
+    /// Persists the unread count for a channel to the database.
+    func updateChannelUnreadCount(channelId cid: String, count: Int) throws {
+        guard let db = db else { return }
+        let ch = channels.filter(channelId == cid)
+        try db.run(ch.update(channelUnreadCount <- count))
     }
 
     // MARK: - Settings Operations

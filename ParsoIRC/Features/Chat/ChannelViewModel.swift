@@ -35,7 +35,20 @@ final class ChannelViewModel: ObservableObject {
     /// Unread count since the last time this channel was selected.
     @Published private(set) var unreadCount: Int = 0
 
-    // MARK: - Identity
+    // MARK: - Send error tracking
+
+    /// IDs of messages that failed to send (for UI retry indicator).
+    @Published private(set) var failedMessageIds: Set<String> = []
+
+    /// The first URL found in the channel topic, if any (used for "Rules" button).
+    var rulesURL: URL? {
+        guard !topic.isEmpty else { return nil }
+        guard let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue) else { return nil }
+        let range = NSRange(topic.startIndex..., in: topic)
+        let match = detector.firstMatch(in: topic, options: [], range: range)
+        guard let urlRange = match?.range, let swiftRange = Range(urlRange, in: topic) else { return nil }
+        return URL(string: String(topic[swiftRange]))
+    }
 
     let serverId: String
     let channelName: String   // e.g. "#linux"
@@ -90,6 +103,7 @@ final class ChannelViewModel: ObservableObject {
         client.onUnhandledMessage = nil
         client.onHistoryMessage = nil
         client.onZncBatchEnd = nil
+        client.onChathistoryBatchEnd = nil
         cancellables.removeAll()
     }
 
@@ -98,19 +112,45 @@ final class ChannelViewModel: ObservableObject {
     func send(_ text: String) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-        Task {
-            try? await ircManager.sendMessage(trimmed, to: channelName, on: serverId)
-        }
         // Optimistically append an outgoing message so the user sees it immediately.
+        // currentNick must be set before this point; we read it from the live manager state.
+        let resolvedNick = ircManager.currentNicknames[serverId] ?? currentNick
         let outgoing = Message(
             channelId: channelId,
-            sender: currentNick,
+            sender: resolvedNick.isEmpty ? currentNick : resolvedNick,
             content: trimmed.hasPrefix("/me ") ? String(trimmed.dropFirst(4)) : trimmed,
             type: trimmed.hasPrefix("/me ") ? .action : .message,
             isFromCurrentUser: true
         )
-        append(outgoing, persist: true)
+        append(outgoing, persist: false)  // don't persist until confirmed sent
         HapticManager.lightImpact()
+        Task {
+            do {
+                try await ircManager.sendMessage(trimmed, to: channelName, on: serverId)
+                // Persist only on success
+                if !failedMessageIds.contains(outgoing.id) {
+                    try? DatabaseManager.shared.saveMessage(outgoing)
+                }
+            } catch {
+                // Mark as failed so the UI can show a warning indicator
+                failedMessageIds.insert(outgoing.id)
+                rebuildDisplay()
+            }
+        }
+    }
+
+    /// Retry a previously failed message send.
+    func retrySend(message: Message) {
+        failedMessageIds.remove(message.id)
+        Task {
+            do {
+                try await ircManager.sendMessage(message.content, to: channelName, on: serverId)
+                try? DatabaseManager.shared.saveMessage(message)
+            } catch {
+                failedMessageIds.insert(message.id)
+                rebuildDisplay()
+            }
+        }
     }
 
     // MARK: - Mark read
@@ -124,7 +164,7 @@ final class ChannelViewModel: ObservableObject {
 
     // MARK: - Private helpers
 
-    private var channelId: String { _cachedChannelId }
+    var channelId: String { _cachedChannelId }
 
     // MARK: Persisted history
 
@@ -364,6 +404,23 @@ final class ChannelViewModel: ObservableObject {
             }
         }
 
+        // Wire standard IRCv3 chathistory batch-end notification — appends a visual separator.
+        client.onChathistoryBatchEnd = { [weak self] in
+            Task { @MainActor [weak self] in
+                guard let self, self.pendingHistoryMessageCount > 0 else { return }
+                let count = self.pendingHistoryMessageCount
+                self.pendingHistoryMessageCount = 0
+                let sep = Message(
+                    channelId: self.channelId,
+                    sender: "system",
+                    content: "── \(count) message\(count == 1 ? "" : "s") loaded from history ──",
+                    type: .system,
+                    isFromCurrentUser: false
+                )
+                self.append(sep, persist: false)
+            }
+        }
+
         // Subscribe to reconnect events so we re-register callbacks and re-fetch
         // history if the connection drops and recovers while ChatView is still open.
         ircManager.reconnectSubject
@@ -397,17 +454,19 @@ final class ChannelViewModel: ObservableObject {
         // We fetch if:
         //   (a) we have no persisted messages, OR
         //   (b) the app was foregrounded since we last fetched history for this channel
-        //       (i.e. we might have missed messages while backgrounded)
+        //       (i.e. we might have missed messages while backgrounded), OR
+        //   (c) no previous fetch has ever been recorded for this channel
         let lastFetchKey = "chathistory_lastfetch_\(channelId)"
         let lastFetchDate = UserDefaults.standard.object(forKey: lastFetchKey) as? Date
-        let lastForegroundDate = AppState.shared.lastForegroundedAt
 
         let needsFetch: Bool
         if rawMessages.isEmpty {
             needsFetch = true
-        } else if let lastFetch = lastFetchDate, let foreground = lastForegroundDate {
-            // If the app foregrounded AFTER our last fetch, we may have missed messages
-            needsFetch = foreground > lastFetch
+        } else if let lastFetch = lastFetchDate {
+            // Fetch if the app has been foregrounded since our last fetch, or if
+            // lastForegroundedAt is nil (cold launch — always fetch to get missed messages)
+            let lastForeground = AppState.shared.lastForegroundedAt
+            needsFetch = lastForeground == nil || lastForeground! > lastFetch
         } else {
             // No previous fetch recorded — always fetch
             needsFetch = true
@@ -416,7 +475,14 @@ final class ChannelViewModel: ObservableObject {
         guard needsFetch else { return }
 
         let limit = min(await client.getChathistoryLimit(), 100)
-        try? await client.requestHistory(target: channelName, limit: limit)
+
+        // If we have a known last-fetch date, only retrieve messages since then
+        // to avoid fetching messages we already have stored locally.
+        if let since = lastFetchDate, !rawMessages.isEmpty {
+            try? await client.requestHistorySince(since, target: channelName, limit: limit)
+        } else {
+            try? await client.requestHistory(target: channelName, limit: limit)
+        }
 
         // Record when we last fetched history for this channel
         UserDefaults.standard.set(Date(), forKey: lastFetchKey)

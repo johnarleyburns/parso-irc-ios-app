@@ -42,9 +42,26 @@ final class IRCClientManager: ObservableObject {
 
     func incrementUnread(channelId: String) {
         unreadCounts[channelId, default: 0] += 1
+        let count = unreadCounts[channelId] ?? 0
+        // Persist to DB so unread count survives app restart
+        try? DatabaseManager.shared.updateChannelUnreadCount(channelId: channelId, count: count)
     }
     func clearUnread(channelId: String) {
         unreadCounts[channelId] = 0
+        try? DatabaseManager.shared.updateChannelUnreadCount(channelId: channelId, count: 0)
+    }
+
+    /// Restores persisted unread counts from the database into the in-memory cache.
+    /// Called once at startup (from ServerSidebarView or the first connect).
+    func restorePersistedUnreadCounts() {
+        guard let servers = try? DatabaseManager.shared.fetchServers() else { return }
+        for server in servers {
+            if let channels = try? DatabaseManager.shared.fetchChannels(forServer: server.id) {
+                for ch in channels where ch.unreadCount > 0 {
+                    unreadCounts[ch.id] = ch.unreadCount
+                }
+            }
+        }
     }
 
     // MARK: - Channel list cache (app-lifetime, in-memory)
@@ -284,6 +301,24 @@ final class IRCClientManager: ObservableObject {
     func disconnectAll() {
         for serverId in connections.keys {
             disconnect(from: serverId)
+        }
+    }
+
+    /// Reconnects all servers that are currently disconnected and should be auto-connected
+    /// (i.e., were not explicitly disconnected by the user). Called when the app foregrounds.
+    func reconnectAllIfNeeded() {
+        let explicit = explicitlyDisconnectedServerIds
+        let lastConnected = lastConnectedServerIds
+        Task { @MainActor in
+            guard let servers = try? DatabaseManager.shared.fetchServers() else { return }
+            for server in servers {
+                guard !explicit.contains(server.id) else { continue }
+                let state = connectionStates[server.id]
+                let shouldReconnect = server.autoConnect || lastConnected.contains(server.id)
+                if (state == .disconnected || state == nil) && shouldReconnect {
+                    try? await self.connect(to: server)
+                }
+            }
         }
     }
     

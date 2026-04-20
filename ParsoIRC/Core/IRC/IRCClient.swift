@@ -38,6 +38,8 @@ actor IRCClient {
     nonisolated(unsafe) var onListEnd:   (() -> Void)?
     /// Called when a ZNC znc.in/playback BATCH closes — signals ChannelViewModel to flush the separator.
     nonisolated(unsafe) var onZncBatchEnd: (() -> Void)?
+    /// Called when a standard IRCv3 CHATHISTORY BATCH closes — signals end of history replay.
+    nonisolated(unsafe) var onChathistoryBatchEnd: (() -> Void)?
 
     // ZNC bouncer support
     var zncPlaybackEnabled: Bool = false
@@ -51,6 +53,9 @@ actor IRCClient {
     private var pendingCapabilities: Set<String> = []
     private var acknowledgedCapabilities: Set<String> = []
     private var isCapNegotiationComplete = false
+    /// Set to true when the server sends CAP ACK or CAP NAK after our CAP REQ.
+    /// Used to replace the old blind 500ms sleep with proper acknowledgment-driven flow.
+    private var isCapAckReceived = false
     private var saslRequested = false
     // MARK: - Connection
 
@@ -122,6 +127,7 @@ actor IRCClient {
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             Task {
                 do {
+                    // Wait for server's CAP LS response before requesting capabilities
                     try await self.waitForCapNegotiation(timeout: 10)
                     
                     var capsToRequest = ["batch", "server-time", "message-tags", "draft/chathistory", "chathistory", "znc.in/playback"]
@@ -130,9 +136,13 @@ actor IRCClient {
                     }
                     try await self.send_raw("CAP REQ :\(capsToRequest.joined(separator: " "))")
                     
-                    try await Task.sleep(nanoseconds: 500_000_000)
-                    
-                    self.isCapNegotiationComplete = true
+                    // Wait for CAP ACK/NAK — up to 5 seconds with 100ms polling.
+                    // isCapAckReceived is set to true inside handleCapMessage when ACK or NAK arrives.
+                    let ackStart = Date()
+                    while !self.isCapAckReceived {
+                        try await Task.sleep(nanoseconds: 100_000_000)
+                        if Date().timeIntervalSince(ackStart) > 5 { break }
+                    }
                     
                     if useSASL && self.acknowledgedCapabilities.contains("sasl") {
                         try await self.send_raw("AUTHENTICATE PLAIN")
@@ -451,6 +461,10 @@ actor IRCClient {
                     if closedType.contains("znc.in/playback") {
                         await MainActor.run { self.onZncBatchEnd?() }
                     }
+                    // Notify ChannelViewModel when a standard IRCv3 chathistory batch closes
+                    if closedType.contains("chathistory") {
+                        await MainActor.run { self.onChathistoryBatchEnd?() }
+                    }
                 }
             }
             // BATCH lines are not surfaced to onUnhandledMessage
@@ -684,9 +698,9 @@ actor IRCClient {
                     let capName = cap.trimmingCharacters(in: .init(charactersIn: "-~="))
                     acknowledgedCapabilities.insert(capName)
                     
-                    if capName == "batch" || capName.hasPrefix("batch") {
-                        chathistoryEnabled = true
-                    } else if capName == "server-time" {
+                    // NOTE: "batch" alone does NOT imply chathistory support.
+                    // Only set chathistoryEnabled when chathistory or znc.in/playback is explicitly ACKed.
+                    if capName == "server-time" {
                         serverTimeEnabled = true
                     } else if capName == "chathistory" || capName == "draft/chathistory" {
                         chathistoryEnabled = true
@@ -696,10 +710,12 @@ actor IRCClient {
                     }
                 }
             }
+            // Signal that the server has responded to our CAP REQ
+            isCapAckReceived = true
             
         case "NAK":
-            // Server rejected our CAP REQ; nothing to do
-            break
+            // Server rejected our CAP REQ; nothing to do, but signal that we got a response
+            isCapAckReceived = true
             
         case "END":
             isCapNegotiationComplete = true
@@ -731,12 +747,12 @@ actor IRCClient {
     
     private func isHistoryBatch(_ message: IRCMessage) -> Bool {
         guard let batchRef = message.tags?["batch"] else { return false }
-        // Standard IRCv3 CHATHISTORY batch
-        if batchRef.contains("chathistory") { return true }
-        // ZNC znc.in/playback batch — check if this ref belongs to an active playback batch
-        if let batchType = activeBatches[batchRef], batchType.contains("znc.in/playback") {
-            return true
-        }
+        // Batch refs are opaque tokens — look up the batch TYPE stored when BATCH + was received.
+        guard let batchType = activeBatches[batchRef] else { return false }
+        // Standard IRCv3 CHATHISTORY batch type contains "chathistory"
+        if batchType.contains("chathistory") { return true }
+        // ZNC znc.in/playback batch type
+        if batchType.contains("znc.in/playback") { return true }
         return false
     }
     

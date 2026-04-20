@@ -18,6 +18,8 @@ struct ParsoIRCApp: App {
                 .environmentObject(networkMonitor)
                 .task {
                     networkMonitor.startMonitoring()
+                    // Restore persisted unread counts from DB
+                    ircManager.restorePersistedUnreadCounts()
                 }
         }
         .backgroundTask(.appRefresh("com.parso.irc.refresh")) {
@@ -35,6 +37,10 @@ struct ParsoIRCApp: App {
                 // Record when app came to foreground so ChannelViewModel knows
                 // it may have missed messages and should re-fetch chat history.
                 appState.lastForegroundedAt = Date()
+                // Reconnect any servers that dropped while backgrounded.
+                // ServerSidebarView.onAppear also does this, but the scene phase
+                // handler fires earlier and more reliably on app resume.
+                ircManager.reconnectAllIfNeeded()
             }
         }
     }

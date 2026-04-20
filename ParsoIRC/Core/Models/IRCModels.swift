@@ -107,6 +107,9 @@ struct Channel: Identifiable, Codable, Equatable, Hashable {
     // Phase 4: direct message thread flag
     var isDM: Bool
 
+    /// Persisted unread message count (survives app restart).
+    var unreadCount: Int
+
     enum NotificationLevel: String, Codable, CaseIterable {
         case all = "all"
         case mentions = "mentions"
@@ -136,7 +139,8 @@ struct Channel: Identifiable, Codable, Equatable, Hashable {
         lastNotifiedAt: Date? = nil,
         lastCheckedAt: Date? = nil,
         notifyOnAnyMessage: Bool = false,
-        isDM: Bool = false
+        isDM: Bool = false,
+        unreadCount: Int = 0
     ) {
         self.id = id
         self.serverId = serverId
@@ -153,6 +157,7 @@ struct Channel: Identifiable, Codable, Equatable, Hashable {
         self.lastCheckedAt = lastCheckedAt
         self.notifyOnAnyMessage = notifyOnAnyMessage
         self.isDM = isDM
+        self.unreadCount = unreadCount
     }
 
     var displayName: String {

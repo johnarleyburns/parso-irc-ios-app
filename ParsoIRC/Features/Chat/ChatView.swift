@@ -1,4 +1,5 @@
 import SwiftUI
+import SafariServices
 
 /// The main chat screen for a single channel or DM.
 ///
@@ -25,6 +26,7 @@ struct ChatView: View {
 
     @EnvironmentObject private var ircManager: IRCClientManager
     @EnvironmentObject private var appState: AppState
+    @Environment(\.dismiss) private var dismiss
 
     @StateObject private var viewModel: ChannelViewModel
 
@@ -35,7 +37,9 @@ struct ChatView: View {
     @State private var showMemberList = false
     @State private var showChannelMenu = false
     @State private var showTopicPopover = false
+    @State private var showNickSheet = false
     @State private var tappedNick: String? = nil
+    @State private var safariURL: URL? = nil
 
     init(serverId: String, channelName: String, ircManager: IRCClientManager) {
         self.serverId = serverId
@@ -92,6 +96,18 @@ struct ChatView: View {
             )
             .environmentObject(ircManager)
         }
+        // Nick identity sheet
+        .sheet(isPresented: $showNickSheet) {
+            if let server = try? DatabaseManager.shared.fetchServers().first(where: { $0.id == serverId }) {
+                NickIdentitySheet(server: server)
+                    .environmentObject(ircManager)
+            }
+        }
+        // In-app Safari for rules URL
+        .sheet(item: $safariURL) { url in
+            SafariView(url: url)
+                .ignoresSafeArea()
+        }
     }
 
     // MARK: - Toolbar
@@ -119,8 +135,18 @@ struct ChatView: View {
             }
         }
 
-        // Right: member count + menu
+        // Right: rules (if URL in topic) + member count + menu
         ToolbarItemGroup(placement: .navigationBarTrailing) {
+            // Rules button — shown when the topic contains a URL
+            if let url = viewModel.rulesURL {
+                Button {
+                    safariURL = url
+                } label: {
+                    Image(systemName: "book.closed")
+                }
+                .accessibilityLabel("Channel Rules")
+            }
+
             Button {
                 showMemberList = true
             } label: {
@@ -181,17 +207,50 @@ struct ChatView: View {
             Label("Refresh Members", systemImage: "arrow.clockwise")
         }
 
+        Button {
+            showNickSheet = true
+        } label: {
+            Label("Change Nick…", systemImage: "person.badge.plus")
+        }
+
         Divider()
 
         Button(role: .destructive) {
             Task {
                 guard let client = ircManager.getClient(for: serverId) else { return }
                 try? await client.leave(channel: channelName)
+                // Update the DB: clear joinedAt so the channel isn't auto-rejoined
+                if let ch = try? DatabaseManager.shared.fetchChannels(forServer: serverId)
+                    .first(where: { $0.name.lowercased() == channelName.lowercased() }) {
+                    var updated = ch
+                    updated.joinedAt = nil
+                    try? DatabaseManager.shared.saveChannel(updated, serverId: serverId)
+                }
+                // Clear unread badge
+                ircManager.clearUnread(channelId: viewModel.channelId)
+                // Navigate back to server sidebar
+                await MainActor.run { dismiss() }
             }
         } label: {
             Label("Leave Channel", systemImage: "rectangle.portrait.and.arrow.right")
         }
     }
+}
+
+// MARK: - URL identity for sheet(item:)
+
+extension URL: @retroactive Identifiable {
+    public var id: String { absoluteString }
+}
+
+// MARK: - UIViewControllerRepresentable Safari wrapper
+
+struct SafariView: UIViewControllerRepresentable {
+    let url: URL
+    func makeUIViewController(context: Context) -> SFSafariViewController {
+        SFSafariViewController(url: url)
+    }
+    func updateUIViewController(_ uiViewController: SFSafariViewController, context: Context) {}
 }
 
 // MARK: - Preview
