@@ -53,34 +53,38 @@ struct RootView: View {
         } detail: {
             if let sid = selectedServerId,
                let cid = selectedChannelId,
-               let channelName = resolveChannelName(serverId: sid, channelId: cid) {
-                ChatView(serverId: sid, channelName: channelName, ircManager: ircManager)
-                    // Key forces a full rebuild when the channel changes so
-                    // ChannelViewModel re-registers callbacks for the new channel.
+               let channel = resolveChannel(serverId: sid, channelId: cid) {
+                if channel.isDM {
+                    DirectMessageView(
+                        serverId: sid,
+                        nick: channel.name,
+                        ircManager: ircManager
+                    )
                     .id("\(sid):\(cid)")
+                } else {
+                    ChatView(serverId: sid, channelName: channel.name, ircManager: ircManager)
+                        .id("\(sid):\(cid)")
+                }
             } else {
                 detailPlaceholder
             }
         }
-        // Pass current selection into AppState so other views can observe it
         .onChange(of: selectedServerId) { _, newVal in
             appState.selectedServerId = newVal
         }
         .onChange(of: selectedChannelId) { _, newVal in
             appState.selectedChannelId = newVal
         }
-        // Reconnect on network restore
         .onChange(of: networkMonitor.isConnected) { _, isNow in
             if isNow { reconnectDroppedServers() }
         }
     }
 
-    /// Looks up the channel name from the DB given a server + channel ID.
-    /// Falls back to `selectedChannelId` itself if the DB lookup fails (e.g.
-    /// the channel was added in-memory but not yet persisted).
-    private func resolveChannelName(serverId: String, channelId: String) -> String? {
+    private func resolveChannel(serverId: String, channelId: String) -> Channel? {
         let channels = (try? DatabaseManager.shared.fetchChannels(forServer: serverId)) ?? []
-        return channels.first(where: { $0.id == channelId })?.name ?? channelId
+        if let ch = channels.first(where: { $0.id == channelId }) { return ch }
+        // Fallback: construct a minimal channel from the ID itself
+        return Channel(id: channelId, serverId: serverId, name: channelId)
     }
 
     // MARK: - Detail placeholder (shown when no channel is selected)

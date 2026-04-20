@@ -61,6 +61,7 @@ final class ChannelViewModel: ObservableObject {
         await loadPersistedMessages()
         registerCallbacks()
         await requestNamesIfNeeded()
+        await requestChatHistoryIfSupported()
     }
 
     func stop() {
@@ -77,6 +78,7 @@ final class ChannelViewModel: ObservableObject {
         client.onKick = nil
         client.onMode = nil
         client.onUnhandledMessage = nil
+        client.onHistoryMessage = nil
     }
 
     // MARK: - Sending
@@ -103,6 +105,7 @@ final class ChannelViewModel: ObservableObject {
 
     func markRead() {
         unreadCount = 0
+        ircManager.clearUnread(channelId: channelId)
     }
 
     // MARK: - Private helpers
@@ -159,7 +162,13 @@ final class ChannelViewModel: ObservableObject {
                     isFromCurrentUser: nick == self.currentNick
                 )
                 self.append(msg, persist: true)
-                if nick != self.currentNick { self.unreadCount += 1 }
+                if nick != self.currentNick {
+                    self.unreadCount += 1
+                    // Only bump manager-level unread if this channel isn't currently viewed
+                    if AppState.shared.selectedChannelId != self.channelId {
+                        self.ircManager.incrementUnread(channelId: self.channelId)
+                    }
+                }
             }
         }
 
@@ -300,6 +309,32 @@ final class ChannelViewModel: ObservableObject {
                 }
             }
         }
+
+        // History messages from CHATHISTORY — append without unread increment
+        client.onHistoryMessage = { [weak self] ircMsg in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                let target = ircMsg.parameters.first ?? ""
+                guard target.lowercased() == self.channelName.lowercased()
+                    || target.lowercased() == self.currentNick.lowercased() else { return }
+
+                let nick = ircMsg.source?.nick ?? "server"
+                let body = ircMsg.parameters.count > 1 ? ircMsg.parameters[1] : ""
+                let isAction = body.hasPrefix("\u{0001}ACTION ") && body.hasSuffix("\u{0001}")
+                let content = isAction ? String(body.dropFirst(8).dropLast()) : body
+
+                let msg = Message(
+                    channelId: self.channelId,
+                    sender: nick,
+                    senderHost: ircMsg.source?.host,
+                    content: content,
+                    type: isAction ? .action : (ircMsg.command == "NOTICE" ? .notice : .message),
+                    isFromCurrentUser: nick == self.currentNick
+                )
+                // append without persisting (history is already on server) and no unread bump
+                self.append(msg, persist: true)
+            }
+        }
     }
 
     // MARK: NAMES request
@@ -307,6 +342,14 @@ final class ChannelViewModel: ObservableObject {
     private func requestNamesIfNeeded() async {
         guard let client = ircManager.getClient(for: serverId), members.isEmpty else { return }
         try? await client.names(channelName)
+    }
+
+    private func requestChatHistoryIfSupported() async {
+        guard let client = ircManager.getClient(for: serverId) else { return }
+        let supported = await client.hasChathistorySupport()
+        guard supported else { return }
+        let limit = min(await client.getChathistoryLimit(), 50)
+        try? await client.requestHistory(target: channelName, limit: limit)
     }
 
     // MARK: Message appending

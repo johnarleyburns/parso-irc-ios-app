@@ -56,8 +56,8 @@ final class ConversationsViewModel: ObservableObject {
     // MARK: - Delete a DM thread
 
     func deleteConversation(_ channel: Channel) {
-        // Remove from DB (cascade removes messages too via cleanupOldMessages)
-        // For now just remove from display list; proper cascade is Phase 6
+        // Remove from DB (cascade deletes messages too)
+        try? DatabaseManager.shared.deleteChannel(channel.id)
         conversations.removeAll { $0.id == channel.id }
     }
 }

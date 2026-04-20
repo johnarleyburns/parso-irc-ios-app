@@ -3,9 +3,10 @@ import SwiftUI
 /// Channel browser sheet — sends LIST, streams results, lets user search and join.
 ///
 /// Opens when the user taps "+ Join a channel" in the sidebar.
-/// Fires `LIST` immediately on appear, then appends channels as RPL_LIST (322)
-/// numerics arrive via `onUnhandledMessage`.  Results are searchable and sortable
-/// client-side.  Tapping a row sends JOIN and dismisses.
+///
+/// Results are cached in `IRCClientManager.channelListCache` for the app lifetime
+/// so repeated opens are instant.  A Refresh button clears the cache entry and
+/// re-fires LIST.  Results are sorted by member count descending by default.
 struct ChannelBrowserSheet: View {
     let server: Server
     var onJoined: (() -> Void)? = nil
@@ -13,12 +14,13 @@ struct ChannelBrowserSheet: View {
     @EnvironmentObject private var ircManager: IRCClientManager
     @Environment(\.dismiss) private var dismiss
 
-    // LIST results
+    // LIST results (local, built from cache or live stream)
     @State private var channels: [ListEntry] = []
     @State private var isLoading = false
     @State private var listDone = false
     @State private var searchText = ""
     @State private var sortOrder: SortOrder = .members
+    @State private var cacheDate: Date? = nil
 
     // Manual join fallback
     @State private var manualChannel = ""
@@ -40,7 +42,7 @@ struct ChannelBrowserSheet: View {
         case topic    = "Topic"
     }
 
-    // MARK: - Filtered + sorted
+    // MARK: - Filtered + sorted (default: members descending)
 
     private var filtered: [ListEntry] {
         let base = searchText.isEmpty ? channels :
@@ -72,7 +74,7 @@ struct ChannelBrowserSheet: View {
                         prompt: "Search channels")
             .toolbar { toolbarContent }
         }
-        .onAppear { startList() }
+        .onAppear { loadOrFetch() }
         .onDisappear { deregister() }
         .alert("Join Error", isPresented: Binding(
             get: { joinError != nil },
@@ -121,7 +123,14 @@ struct ChannelBrowserSheet: View {
                 }
             } header: {
                 HStack {
-                    Text("\(filtered.count) channel\(filtered.count == 1 ? "" : "s")")
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("\(filtered.count) channel\(filtered.count == 1 ? "" : "s")")
+                        if let date = cacheDate {
+                            Text("Updated \(date.timeAgo())")
+                                .font(.caption2)
+                                .foregroundStyle(.tertiary)
+                        }
+                    }
                     Spacer()
                     if isLoading {
                         ProgressView()
@@ -211,9 +220,7 @@ struct ChannelBrowserSheet: View {
                 }
                 Divider()
                 Button {
-                    channels = []
-                    listDone = false
-                    startList()
+                    refresh()
                 } label: {
                     Label("Refresh", systemImage: "arrow.clockwise")
                 }
@@ -223,33 +230,47 @@ struct ChannelBrowserSheet: View {
         }
     }
 
-    // MARK: - LIST request
+    // MARK: - Cache-aware load
+
+    private func loadOrFetch() {
+        // If cache exists for this server, use it immediately
+        if let cached = ircManager.channelListCache[server.id] {
+            channels = cached.entries.map {
+                ListEntry(id: $0.name, name: $0.name, members: $0.members, topic: $0.topic)
+            }
+            cacheDate = cached.fetchedAt
+            listDone = true
+            isLoading = false
+            return
+        }
+        startList()
+    }
+
+    private func refresh() {
+        ircManager.clearChannelListCache(for: server.id)
+        channels = []
+        cacheDate = nil
+        listDone = false
+        startList()
+    }
 
     private func startList() {
         guard let client = ircManager.getClient(for: server.id) else { return }
         isLoading = true
 
-        // Register callback to receive LIST replies
-        client.onUnhandledMessage = { [weak ircManager] msg in
+        // Use dedicated LIST callbacks — do NOT touch onUnhandledMessage
+        client.onListEntry = { name, count, topic in
             Task { @MainActor in
-                switch msg.command {
-                case "321": // RPL_LISTSTART — nothing to do
-                    break
-                case "322": // RPL_LIST: params = [nick, channel, count, :topic]
-                    guard msg.parameters.count >= 3 else { return }
-                    let name  = msg.parameters[1]
-                    let count = Int(msg.parameters[2]) ?? 0
-                    let topic = msg.parameters.count > 3 ? msg.parameters[3] : ""
-                    // Avoid duplicates
-                    if !self.channels.contains(where: { $0.name == name }) {
-                        self.channels.append(ListEntry(id: name, name: name, members: count, topic: topic))
-                    }
-                case "323": // RPL_LISTEND
-                    self.isLoading = false
-                    self.listDone = true
-                default:
-                    break
+                if !self.channels.contains(where: { $0.name == name }) {
+                    self.channels.append(ListEntry(id: name, name: name, members: count, topic: topic))
                 }
+            }
+        }
+        client.onListEnd = {
+            Task { @MainActor in
+                self.isLoading = false
+                self.listDone = true
+                self.cacheDate = self.ircManager.channelListCache[self.server.id]?.fetchedAt
             }
         }
 
@@ -259,7 +280,9 @@ struct ChannelBrowserSheet: View {
     }
 
     private func deregister() {
-        ircManager.getClient(for: server.id)?.onUnhandledMessage = nil
+        // Only clear the LIST-specific callbacks, leave onUnhandledMessage alone
+        ircManager.getClient(for: server.id)?.onListEntry = nil
+        ircManager.getClient(for: server.id)?.onListEnd   = nil
     }
 
     // MARK: - JOIN

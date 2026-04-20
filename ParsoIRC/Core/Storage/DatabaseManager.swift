@@ -271,6 +271,15 @@ final class DatabaseManager {
         
         // Messages will be deleted via cascade or manually
     }
+
+    /// Deletes a channel and all its messages in a single transaction.
+    func deleteChannel(_ cid: String) throws {
+        guard let db = db else { return }
+        try db.transaction {
+            try db.run(messages.filter(messageChannelId == cid).delete())
+            try db.run(channels.filter(channelId == cid).delete())
+        }
+    }
     
     func updateLastActiveChannel(serverId: String, channelName: String) throws {
         guard let db = db else { return }

@@ -19,6 +19,8 @@ struct MemberListView: View {
 
     /// Called when the user taps "Mention" in UserProfileSheet or taps a nick directly.
     var onMention: ((String) -> Void)? = nil
+    /// Called when the user taps "Send Direct Message". Provides (nick, serverId).
+    var onDM: ((String, String) -> Void)? = nil
 
     @Environment(\.dismiss) private var dismiss
     @State private var searchText = ""
@@ -87,6 +89,11 @@ struct MemberListView: View {
                     selectedMember = nil
                     dismiss()
                     onMention?(nick)
+                },
+                onDM: { nick, sid in
+                    selectedMember = nil
+                    dismiss()
+                    onDM?(nick, sid)
                 }
             )
         }

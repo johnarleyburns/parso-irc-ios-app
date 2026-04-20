@@ -72,7 +72,7 @@ struct ChatView: View {
         }
         // Mark read when this channel is actively selected
         .onAppear { viewModel.markRead() }
-        // Member list sheet — Phase 3 MemberListView
+        // Member list sheet
         .sheet(isPresented: $showMemberList) {
             MemberListView(
                 members: viewModel.members,
@@ -81,6 +81,13 @@ struct ChatView: View {
                 onMention: { nick in
                     showMemberList = false
                     prefillText = "\(nick): "
+                },
+                onDM: { nick, sid in
+                    showMemberList = false
+                    // Open or create DM channel, then navigate to it
+                    let dm = ConversationsViewModel(ircManager: ircManager).openDM(with: nick, serverId: sid)
+                    appState.selectedServerId = sid
+                    appState.selectedChannelId = dm.id
                 }
             )
             .environmentObject(ircManager)

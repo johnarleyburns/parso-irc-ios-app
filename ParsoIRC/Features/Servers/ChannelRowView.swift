@@ -7,11 +7,11 @@ import SwiftUI
 struct ChannelRowView: View {
     let channel: Channel
     let serverId: String
-    @Binding var selectedChannelId: String?
 
-    /// Unread message count injected from the parent (will be driven
-    /// by ChannelViewModel in Phase 2; for now defaults to 0).
-    var unreadCount: Int = 0
+    /// Called when the user taps this row. Provides (serverId, channelId) so
+    /// the parent can set both selection bindings atomically — required for
+    /// iPhone NavigationSplitView to navigate to the detail column.
+    var onSelect: ((String, String) -> Void)?
 
     // Callback so the sidebar can refresh after leave
     var onLeave: (() -> Void)?
@@ -19,11 +19,16 @@ struct ChannelRowView: View {
     @EnvironmentObject private var ircManager: IRCClientManager
     @State private var showLeaveConfirm = false
 
-    private var isSelected: Bool { selectedChannelId == channel.id }
+    // Live unread count from IRCClientManager (always up-to-date)
+    private var unreadCount: Int { ircManager.unreadCounts[channel.id] ?? 0 }
+    // Selection is derived from IRCClientManager's published unreadCounts observation
+    // — the parent controls the actual selection state, so we read AppState instead.
+    @EnvironmentObject private var appState: AppState
+    private var isSelected: Bool { appState.selectedChannelId == channel.id }
 
     var body: some View {
         Button {
-            selectedChannelId = channel.id
+            onSelect?(serverId, channel.id)
             // Persist last-active channel
             try? DatabaseManager.shared.updateLastActiveChannel(
                 serverId: serverId,
@@ -109,7 +114,7 @@ struct ChannelRowView: View {
     @ViewBuilder
     private var contextMenuContent: some View {
         Button {
-            selectedChannelId = channel.id
+            onSelect?(serverId, channel.id)
         } label: {
             Label("Open", systemImage: "bubble.left")
         }
@@ -167,7 +172,7 @@ struct ChannelRowView: View {
     }
 
     private func markAsRead() {
-        // Will be driven by ChannelViewModel in Phase 2
+        ircManager.clearUnread(channelId: channel.id)
     }
 }
 
@@ -175,15 +180,13 @@ struct ChannelRowView: View {
     List {
         ChannelRowView(
             channel: Channel(name: "#linux"),
-            serverId: "preview",
-            selectedChannelId: .constant(nil),
-            unreadCount: 3
+            serverId: "preview"
         )
         ChannelRowView(
             channel: Channel(name: "#muted", isMuted: true),
-            serverId: "preview",
-            selectedChannelId: .constant(nil)
+            serverId: "preview"
         )
     }
     .environmentObject(IRCClientManager.shared)
+    .environmentObject(AppState.shared)
 }

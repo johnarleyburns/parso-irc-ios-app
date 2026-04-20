@@ -1,6 +1,7 @@
 import SwiftUI
 
-/// Left-column sidebar that shows all saved servers and their joined channels.
+/// Left-column sidebar that shows all saved servers and their joined channels,
+/// plus a Direct Messages section below.
 ///
 /// Structure:
 /// ```
@@ -12,8 +13,8 @@ import SwiftUI
 /// │   #rust                 │
 /// │   + Join a channel      │
 /// ├──────────────────────────┤
-/// │ ● OFTC              ⋯   │
-/// │   …                     │
+/// │ Direct Messages         │  ← DM section (when non-empty)
+/// │   alice                 │
 /// ├──────────────────────────┤
 /// │  + Add Server           │  ← footer button
 /// └──────────────────────────┘
@@ -27,6 +28,7 @@ struct ServerSidebarView: View {
 
     @State private var servers: [Server] = []
     @State private var expandedServers: Set<String> = []
+    @StateObject private var conversationsVM = ConversationsViewModel(ircManager: IRCClientManager.shared)
 
     // Sheet state
     @State private var showAddServer = false
@@ -37,6 +39,18 @@ struct ServerSidebarView: View {
         List {
             ForEach(servers) { server in
                 serverSection(for: server)
+            }
+
+            // Direct Messages section
+            if !conversationsVM.conversations.isEmpty {
+                Section("Direct Messages") {
+                    ForEach(conversationsVM.conversations) { dm in
+                        dmRow(dm)
+                    }
+                    .onDelete { indices in
+                        indices.forEach { conversationsVM.deleteConversation(conversationsVM.conversations[$0]) }
+                    }
+                }
             }
         }
         .listStyle(.sidebar)
@@ -102,16 +116,16 @@ struct ServerSidebarView: View {
                     ChannelRowView(
                         channel: channel,
                         serverId: server.id,
-                        selectedChannelId: $selectedChannelId,
+                        onSelect: { sid, cid in
+                            // Set both atomically so iPhone NavigationSplitView
+                            // navigates to the detail column in a single update cycle.
+                            selectedServerId = sid
+                            selectedChannelId = cid
+                        },
                         onLeave: reloadServers
                     )
                     .environmentObject(ircManager)
-                    // Update top-level selection when channel is tapped
-                    .onChange(of: selectedChannelId) { _, newId in
-                        if newId == channel.id {
-                            selectedServerId = server.id
-                        }
-                    }
+                    .environmentObject(appState)
                 }
                 .onMove { indices, dest in
                     reorderChannels(for: server, from: indices, to: dest)
@@ -165,31 +179,67 @@ struct ServerSidebarView: View {
         .background(.regularMaterial)
     }
 
+    // MARK: - DM row
+
+    private func dmRow(_ dm: Channel) -> some View {
+        let isSelected = appState.selectedChannelId == dm.id
+        return Button {
+            selectedServerId = dm.serverId
+            selectedChannelId = dm.id
+        } label: {
+            HStack(spacing: 10) {
+                AvatarView(nick: dm.name, size: 28)
+                Text(dm.name)
+                    .font(.subheadline)
+                    .foregroundStyle(isSelected ? .primary : .secondary)
+                Spacer()
+                let unread = ircManager.unreadCounts[dm.id] ?? 0
+                if unread > 0 {
+                    Text(unread < 100 ? "\(unread)" : "99+")
+                        .font(.caption2).fontWeight(.semibold)
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 6).padding(.vertical, 2)
+                        .background(Color.accentColor, in: Capsule())
+                }
+            }
+            .padding(.vertical, 2)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .listRowBackground(isSelected ? Color.accentColor.opacity(0.15) : Color.clear)
+    }
+
     // MARK: - Data helpers
 
     private func reloadServers() {
         let loaded = (try? DatabaseManager.shared.fetchServers()) ?? []
-        // Merge live connection state
         servers = loaded.map { server in
             var s = server
             s.isConnected = ircManager.connectionState(for: s.id) == .connected
             return s
         }
-        // Auto-expand servers that are connected or have an active channel selected
         for server in servers {
             if server.isConnected {
                 expandedServers.insert(server.id)
             }
         }
+        conversationsVM.loadConversations()
     }
 
     private func reloadAndConnect() {
         reloadServers()
         Task {
             let loaded = (try? DatabaseManager.shared.fetchServers()) ?? []
-            for server in loaded where server.autoConnect {
+            let lastConnected = Set(ircManager.lastConnectedServerIds)
+            let explicit = ircManager.explicitlyDisconnectedServerIds
+            for server in loaded {
                 let state = ircManager.connectionState(for: server.id)
-                if state == .disconnected {
+                guard state == .disconnected else { continue }
+                // Connect if: autoConnect flag is set, OR was connected last session
+                // AND the user has not explicitly disconnected since then.
+                let shouldConnect = server.autoConnect
+                    || (lastConnected.contains(server.id) && !explicit.contains(server.id))
+                if shouldConnect {
                     try? await ircManager.connect(to: server)
                 }
             }

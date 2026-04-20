@@ -1,4 +1,5 @@
 import SwiftUI
+import BackgroundTasks
 
 @main
 struct ParsoIRCApp: App {
@@ -6,6 +7,7 @@ struct ParsoIRCApp: App {
     @StateObject private var appState = AppState.shared
     @StateObject private var debugLog = DebugLogManager.shared
     @StateObject private var networkMonitor = NetworkMonitor()
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {
         WindowGroup {
@@ -17,6 +19,16 @@ struct ParsoIRCApp: App {
                 .task {
                     networkMonitor.startMonitoring()
                 }
+        }
+        .backgroundTask(.appRefresh("com.parso.irc.refresh")) {
+            await IRCClientManager.shared.pingAllServers()
+            WatchManager.shared.scheduleNextBackgroundTask()
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .background {
+                ircManager.saveConnectedServerIds()
+                WatchManager.shared.scheduleNextBackgroundTask()
+            }
         }
     }
 }

@@ -48,6 +48,7 @@ targets:
           - "**/Phase2Tests.swift"
           - "**/Phase3Tests.swift"
           - "**/Phase4and5Tests.swift"
+          - "**/Phase6Tests.swift"
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES
@@ -62,6 +63,7 @@ targets:
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         ENABLE_PREVIEWS: YES
         ENABLE_TESTABILITY: YES
+        INFOPLIST_KEY_BGTaskSchedulerPermittedIdentifiers: "com.parso.irc.refresh"
       configs:
         Debug:
           CODE_SIGN_STYLE: Automatic

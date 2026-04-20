@@ -1,4 +1,5 @@
 import Foundation
+import BackgroundTasks
 #if canImport(Combine)
 import Combine
 #endif
@@ -20,6 +21,8 @@ struct WatchSettings: Codable, Equatable {
 @MainActor
 class WatchManager: ObservableObject {
     static let shared = WatchManager()
+
+    static let backgroundTaskIdentifier = "com.parso.irc.refresh"
     
     @Published var settings: WatchSettings = .default
     @Published var lastNotificationSent: Date?
@@ -77,9 +80,16 @@ class WatchManager: ObservableObject {
         return Date().timeIntervalSince(lastSent) >= Double(settings.debounceSeconds)
     }
     
-    func scheduleBackgroundTask() {
-        // This will be called from AppDelegate
-        // The actual scheduling is done in WatchBackgroundTask
-        isBackgroundTaskScheduled = true
+    /// Schedules the next background app-refresh task at the configured poll interval.
+    nonisolated func scheduleNextBackgroundTask() {
+        let request = BGAppRefreshTaskRequest(identifier: WatchManager.backgroundTaskIdentifier)
+        request.earliestBeginDate = Date(timeIntervalSinceNow: Double(
+            (UserDefaults.standard.object(forKey: "watch_settings")
+                .flatMap { try? JSONDecoder().decode(WatchSettings.self, from: $0 as! Data) }
+                ?? WatchSettings.default
+            ).pollIntervalMinutes * 60
+        ))
+        try? BGTaskScheduler.shared.submit(request)
+        Task { @MainActor in self.isBackgroundTaskScheduled = true }
     }
 }

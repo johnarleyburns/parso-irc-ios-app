@@ -36,6 +36,48 @@ final class IRCClientManager: ObservableObject {
     @Published var connectionStates: [String: ConnectionState] = [:]
     @Published var currentNicknames: [String: String] = [:]
 
+    // MARK: - Unread counts (keyed by channel ID)
+    @Published private(set) var unreadCounts: [String: Int] = [:]
+
+    func incrementUnread(channelId: String) {
+        unreadCounts[channelId, default: 0] += 1
+    }
+    func clearUnread(channelId: String) {
+        unreadCounts[channelId] = 0
+    }
+
+    // MARK: - Channel list cache (app-lifetime, in-memory)
+    struct CachedListEntry: Equatable {
+        let name: String
+        let members: Int
+        let topic: String
+    }
+    struct CachedChannelList {
+        var entries: [CachedListEntry]
+        let fetchedAt: Date
+    }
+    @Published private(set) var channelListCache: [String: CachedChannelList] = [:]
+    private var listStagingBuffer: [String: [CachedListEntry]] = [:]
+
+    func clearChannelListCache(for serverId: String) {
+        channelListCache.removeValue(forKey: serverId)
+    }
+
+    // MARK: - Explicit disconnect tracking
+    var explicitlyDisconnectedServerIds: Set<String> {
+        get { Set(UserDefaults.standard.stringArray(forKey: "explicitDisconnects") ?? []) }
+        set { UserDefaults.standard.set(Array(newValue), forKey: "explicitDisconnects") }
+    }
+
+    // MARK: - Last-foregrounded connected servers
+    func saveConnectedServerIds() {
+        let ids = connections.keys.filter { connectionStates[$0] == .connected }
+        UserDefaults.standard.set(Array(ids), forKey: "lastConnectedServerIds")
+    }
+    var lastConnectedServerIds: [String] {
+        UserDefaults.standard.stringArray(forKey: "lastConnectedServerIds") ?? []
+    }
+
     func getClient(for serverId: String) -> IRCClient? {
         return connections[serverId]
     }
@@ -58,6 +100,11 @@ final class IRCClientManager: ObservableObject {
     // MARK: - Connection Management
     
     func connect(to server: Server) async throws {
+        // Remove from explicit-disconnect set — user is re-connecting
+        var explicit = explicitlyDisconnectedServerIds
+        explicit.remove(server.id)
+        explicitlyDisconnectedServerIds = explicit
+
         connectionStates[server.id] = .connecting
         
         let client = IRCClient()
@@ -66,6 +113,22 @@ final class IRCClientManager: ObservableObject {
             Task { @MainActor in
                 self?.currentNicknames[server.id] = nick
                 self?.connectionStates[server.id] = .connected
+            }
+        }
+
+        // Wire LIST callbacks to populate cache
+        client.onListEntry = { [weak self] name, count, topic in
+            Task { @MainActor in
+                guard let self else { return }
+                let entry = CachedListEntry(name: name, members: count, topic: topic)
+                self.listStagingBuffer[server.id, default: []].append(entry)
+            }
+        }
+        client.onListEnd = { [weak self] in
+            Task { @MainActor in
+                guard let self else { return }
+                let entries = self.listStagingBuffer.removeValue(forKey: server.id) ?? []
+                self.channelListCache[server.id] = CachedChannelList(entries: entries, fetchedAt: Date())
             }
         }
         
@@ -178,6 +241,11 @@ final class IRCClientManager: ObservableObject {
     func disconnect(from serverId: String) {
         reconnectTimers[serverId]?.invalidate()
         reconnectTimers[serverId] = nil
+
+        // Track as explicitly disconnected so auto-connect won't reconnect it
+        var explicit = explicitlyDisconnectedServerIds
+        explicit.insert(serverId)
+        explicitlyDisconnectedServerIds = explicit
         
         Task {
             try? await connections[serverId]?.quit(message: "Parso IRC signing off")
@@ -221,6 +289,16 @@ final class IRCClientManager: ObservableObject {
         }
     }
     
+    // MARK: - Keepalive ping
+
+    /// Sends a PING to every connected server. Called from the background
+    /// refresh task and WatchManager to keep sockets alive.
+    func pingAllServers() async {
+        for (_, client) in connections {
+            try? await client.send_raw("PING :parso-keepalive")
+        }
+    }
+
     // MARK: - Message Sending
     
     func sendMessage(_ content: String, to channel: String, on serverId: String) async throws {

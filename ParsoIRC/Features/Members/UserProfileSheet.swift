@@ -16,6 +16,8 @@ struct UserProfileSheet: View {
     let serverId: String
 
     var onMention: ((String) -> Void)? = nil
+    /// Called when the user taps "Send Direct Message". Provides (nick, serverId).
+    var onDM: ((String, String) -> Void)? = nil
 
     @EnvironmentObject private var ircManager: IRCClientManager
     @Environment(\.dismiss) private var dismiss
@@ -214,8 +216,11 @@ struct UserProfileSheet: View {
                     .clipShape(RoundedRectangle(cornerRadius: 14))
             }
 
-            // Send DM (Phase 4 – shown as disabled until then)
-            Button {} label: {
+            // Send DM
+            Button {
+                onDM?(nick, serverId)
+                dismiss()
+            } label: {
                 Label("Send Direct Message", systemImage: "envelope")
                     .font(.headline)
                     .frame(maxWidth: .infinity)
@@ -224,8 +229,6 @@ struct UserProfileSheet: View {
                     .foregroundStyle(.primary)
                     .clipShape(RoundedRectangle(cornerRadius: 14))
             }
-            .disabled(true)
-            .opacity(0.5)
         }
     }
 

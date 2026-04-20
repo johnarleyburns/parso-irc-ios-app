@@ -134,8 +134,14 @@ class NotificationManager: NSObject, ObservableObject {
             // App will open - handle in scene delegate
             break
         case snoozeAction:
-            // Schedule another notification in 1 hour
-            break
+            // Re-schedule the same notification 1 hour from now
+            let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 3600, repeats: false)
+            let snoozed = UNNotificationRequest(
+                identifier: "snoozed-\(response.notification.request.identifier)",
+                content: response.notification.request.content,
+                trigger: trigger
+            )
+            try? await UNUserNotificationCenter.current().add(snoozed)
         case dismissAction:
             break
         default:

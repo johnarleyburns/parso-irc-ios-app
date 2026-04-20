@@ -35,6 +35,9 @@ actor IRCClient {
     nonisolated(unsafe) var onMode: ((String, String, [String]) -> Void)?          // target, modestring, params
     // Catch-all for server messages not handled by a specific callback above
     nonisolated(unsafe) var onUnhandledMessage: ((IRCMessage) -> Void)?
+    // Dedicated LIST result callbacks (avoids clobbering onUnhandledMessage)
+    nonisolated(unsafe) var onListEntry: ((String, Int, String) -> Void)?   // name, count, topic
+    nonisolated(unsafe) var onListEnd:   (() -> Void)?
     
     private var readStream: InputStream?
     private var writeStream: OutputStream?
@@ -575,6 +578,20 @@ actor IRCClient {
             isConnected = false
 
         default:
+            // RPL_LIST entries get their own dedicated callback in addition to the
+            // generic onUnhandledMessage so ChannelBrowserSheet doesn't clobber the latter.
+            if command == "322" {
+                // RPL_LIST: params = [nick, channel, count, :topic]
+                if message.parameters.count >= 3 {
+                    let name  = message.parameters[1]
+                    let count = Int(message.parameters[2]) ?? 0
+                    let topic = message.parameters.count > 3 ? message.parameters[3] : ""
+                    await MainActor.run { self.onListEntry?(name, count, topic) }
+                }
+            } else if command == "323" {
+                // RPL_LISTEND
+                await MainActor.run { self.onListEnd?() }
+            }
             // All other server messages (numerics, etc.) are passed to the UI
             // via onUnhandledMessage so they can be displayed in the terminal.
             await MainActor.run {
