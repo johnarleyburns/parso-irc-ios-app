@@ -178,12 +178,15 @@ struct Channel: Identifiable, Codable, Equatable, Hashable {
     var joinedAt: Date?
     var memberCount: Int
     var members: [ChannelMember]
-    
+
     // Watch functionality
     var isWatched: Bool
     var lastNotifiedAt: Date?
     var lastCheckedAt: Date?
     var notifyOnAnyMessage: Bool
+
+    // Phase 4: direct message thread flag
+    var isDM: Bool
 
     enum NotificationLevel: String, Codable, CaseIterable {
         case all = "all"
@@ -213,7 +216,8 @@ struct Channel: Identifiable, Codable, Equatable, Hashable {
         isWatched: Bool = false,
         lastNotifiedAt: Date? = nil,
         lastCheckedAt: Date? = nil,
-        notifyOnAnyMessage: Bool = false
+        notifyOnAnyMessage: Bool = false,
+        isDM: Bool = false
     ) {
         self.id = id
         self.serverId = serverId
@@ -229,6 +233,7 @@ struct Channel: Identifiable, Codable, Equatable, Hashable {
         self.lastNotifiedAt = lastNotifiedAt
         self.lastCheckedAt = lastCheckedAt
         self.notifyOnAnyMessage = notifyOnAnyMessage
+        self.isDM = isDM
     }
 
     var displayName: String {

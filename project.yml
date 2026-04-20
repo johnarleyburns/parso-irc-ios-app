@@ -47,6 +47,7 @@ targets:
           - "**/Phase1Tests.swift"
           - "**/Phase2Tests.swift"
           - "**/Phase3Tests.swift"
+          - "**/Phase4and5Tests.swift"
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES

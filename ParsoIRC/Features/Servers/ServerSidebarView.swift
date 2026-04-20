@@ -65,7 +65,7 @@ struct ServerSidebarView: View {
             .environmentObject(appState)
         }
         .sheet(isPresented: $showSettings) {
-            SettingsPlaceholderView()
+            SettingsView()
                 .environmentObject(appState)
                 .environmentObject(ircManager)
         }
@@ -141,8 +141,7 @@ struct ServerSidebarView: View {
             ),
             onDismiss: reloadServers
         ) {
-            // ChannelBrowserSheet added in Phase 4; placeholder for now
-            ChannelJoinPlaceholder(server: server, onJoined: reloadServers)
+            ChannelBrowserSheet(server: server, onJoined: reloadServers)
                 .environmentObject(ircManager)
         }
     }
@@ -207,90 +206,7 @@ struct ServerSidebarView: View {
     }
 }
 
-// MARK: - Placeholder views (replaced in later phases)
-
-/// Minimal "join a channel" prompt until Phase 4's ChannelBrowserSheet lands.
-private struct ChannelJoinPlaceholder: View {
-    let server: Server
-    var onJoined: (() -> Void)?
-
-    @EnvironmentObject private var ircManager: IRCClientManager
-    @Environment(\.dismiss) private var dismiss
-
-    @State private var channelName = ""
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section("Channel Name") {
-                    TextField("#channel", text: $channelName)
-                        .autocorrectionDisabled()
-                        .textInputAutocapitalization(.never)
-                        .font(.system(.body, design: .monospaced))
-                }
-            }
-            .navigationTitle("Join Channel")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Join") { joinAndDismiss() }
-                        .disabled(channelName.trimmingCharacters(in: .whitespaces).isEmpty)
-                }
-            }
-        }
-    }
-
-    private func joinAndDismiss() {
-        var ch = channelName.trimmingCharacters(in: .whitespaces)
-        if !ch.hasPrefix("#") && !ch.hasPrefix("&") { ch = "#\(ch)" }
-        Task {
-            if let client = ircManager.getClient(for: server.id) {
-                try? await client.join(channel: ch)
-                // Also persist channel to DB so it survives restart
-                let channel = Channel(serverId: server.id, name: ch, joinedAt: Date())
-                try? DatabaseManager.shared.saveChannel(channel, serverId: server.id)
-                onJoined?()
-            }
-        }
-        dismiss()
-    }
-}
-
-/// Settings entry point placeholder (replaced by Phase 5's SettingsView).
-private struct SettingsPlaceholderView: View {
-    @EnvironmentObject private var appState: AppState
-    @EnvironmentObject private var ircManager: IRCClientManager
-    @Environment(\.dismiss) private var dismiss
-
-    var body: some View {
-        NavigationStack {
-            List {
-                Section("Debug") {
-                    NavigationLink("Debug Terminal") {
-                        DebugTerminalView()
-                            .environmentObject(DebugLogManager.shared)
-                            .environmentObject(ircManager)
-                    }
-                }
-                Section("Identity") {
-                    LabeledContent("Nickname", value: appState.globalNickname.isEmpty ? "(not set)" : appState.globalNickname)
-                    LabeledContent("Real Name", value: appState.globalRealName.isEmpty ? "(not set)" : appState.globalRealName)
-                }
-                Section("About") {
-                    LabeledContent("Version", value: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0")
-                }
-            }
-            .navigationTitle("Settings")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }
-                }
-            }
-        }
-    }
-}
+// MARK: - Preview
 
 #Preview {
     NavigationSplitView {

@@ -42,6 +42,7 @@ final class DatabaseManager {
     private let channelLastNotifiedAt = Expression<String?>("last_notified_at")
     private let channelLastCheckedAt = Expression<String?>("last_checked_at")
     private let channelNotifyOnAnyMessage = Expression<Int>("notify_on_any_message")
+    private let channelIsDM = Expression<Int>("is_dm")
     
     // Message columns
     private let messageId = Expression<String>("id")
@@ -89,7 +90,7 @@ final class DatabaseManager {
     
     private func migrateIfNeeded() {
         guard let db = db else { return }
-        
+
         do {
             let tableInfo = try db.prepare("PRAGMA table_info(servers)")
             var hasLastActiveChannel = false
@@ -99,12 +100,28 @@ final class DatabaseManager {
                     break
                 }
             }
-            
             if !hasLastActiveChannel {
                 try db.run(servers.addColumn(serverLastActiveChannel, defaultValue: nil))
             }
         } catch {
-            print("Migration failed: \(error)")
+            print("Migration failed (servers): \(error)")
+        }
+
+        // Phase 4: add is_dm column to channels
+        do {
+            let channelInfo = try db.prepare("PRAGMA table_info(channels)")
+            var hasIsDM = false
+            for row in channelInfo {
+                if let name = row[1] as? String, name == "is_dm" {
+                    hasIsDM = true
+                    break
+                }
+            }
+            if !hasIsDM {
+                try db.run(channels.addColumn(channelIsDM, defaultValue: 0))
+            }
+        } catch {
+            print("Migration failed (channels is_dm): \(error)")
         }
     }
     
@@ -142,6 +159,7 @@ final class DatabaseManager {
                 t.column(channelLastNotifiedAt)
                 t.column(channelLastCheckedAt)
                 t.column(channelNotifyOnAnyMessage, defaultValue: 0)
+                t.column(channelIsDM, defaultValue: 0)
                 t.unique(channelServerId, channelName)
             })
             
@@ -278,7 +296,8 @@ final class DatabaseManager {
             channelIsWatched <- channel.isWatched ? 1 : 0,
             channelLastNotifiedAt <- channel.lastNotifiedAt.map { dateFormatter.string(from: $0) },
             channelLastCheckedAt <- channel.lastCheckedAt.map { dateFormatter.string(from: $0) },
-            channelNotifyOnAnyMessage <- channel.notifyOnAnyMessage ? 1 : 0
+            channelNotifyOnAnyMessage <- channel.notifyOnAnyMessage ? 1 : 0,
+            channelIsDM <- channel.isDM ? 1 : 0
         )
         
         try db.run(insert)
@@ -303,7 +322,8 @@ final class DatabaseManager {
                 isWatched: row[channelIsWatched] == 1,
                 lastNotifiedAt: row[channelLastNotifiedAt].flatMap { dateFormatter.date(from: $0) },
                 lastCheckedAt: row[channelLastCheckedAt].flatMap { dateFormatter.date(from: $0) },
-                notifyOnAnyMessage: row[channelNotifyOnAnyMessage] == 1
+                notifyOnAnyMessage: row[channelNotifyOnAnyMessage] == 1,
+                isDM: (try? row.get(channelIsDM) == 1) ?? false
             )
             result.append(channel)
         }
@@ -332,7 +352,8 @@ final class DatabaseManager {
                 isWatched: true,
                 lastNotifiedAt: row[channelLastNotifiedAt].flatMap { dateFormatter.date(from: $0) },
                 lastCheckedAt: row[channelLastCheckedAt].flatMap { dateFormatter.date(from: $0) },
-                notifyOnAnyMessage: row[channelNotifyOnAnyMessage] == 1
+                notifyOnAnyMessage: row[channelNotifyOnAnyMessage] == 1,
+                isDM: (try? row.get(channelIsDM) == 1) ?? false
             )
             result.append(channel)
         }

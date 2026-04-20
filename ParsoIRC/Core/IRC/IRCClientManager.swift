@@ -340,8 +340,28 @@ final class IRCClientManager: ObservableObject {
         client.onMessage = { message in
             Task { @MainActor in
                 handler(message)
+                // Fire watch notification if the target channel is watched
+                await self.maybeNotify(serverId: serverId, ircMessage: message)
             }
         }
+    }
+
+    // MARK: - Watch notifications
+
+    private func maybeNotify(serverId: String, ircMessage: IRCMessage) async {
+        guard ircMessage.command == "PRIVMSG" else { return }
+        let target = ircMessage.parameters.first ?? ""
+        guard target.hasPrefix("#") || target.hasPrefix("&") else { return }
+
+        // Look up channel in DB
+        guard let channel = (try? DatabaseManager.shared.fetchChannels(forServer: serverId))
+                .flatMap({ $0 })?.first(where: { $0.name.lowercased() == target.lowercased() }),
+              channel.isWatched else { return }
+
+        let nick = ircMessage.source?.nick ?? "someone"
+        let body = ircMessage.parameters.count > 1 ? ircMessage.parameters[1] : ""
+        let msg = Message(channelId: channel.id, sender: nick, content: body)
+        await NotificationManager.shared.sendWatchNotification(channel: channel, message: msg)
     }
     
     func onJoin(serverId: String, handler: @escaping (String, String) -> Void) {
