@@ -5,16 +5,14 @@ import UserNotifications
 
 // MARK: - ChannelListCacheTests
 
+@MainActor
 final class ChannelListCacheTests: XCTestCase {
 
     func testCacheStoresEntriesByServerId() async {
         let manager = IRCClientManager.shared
-        // Inject a cache entry directly via the staging mechanism by simulating list-end
-        // We test the public interface: channelListCache is @Published and readable.
-        let entry = IRCClientManager.CachedListEntry(name: "#swift", members: 42, topic: "Swift chat")
-        // Since we can't inject without a live connection, we verify the type exists and is readable
         XCTAssertNotNil(manager.channelListCache)
-        _ = entry // suppress unused warning
+        let entry = IRCClientManager.CachedListEntry(name: "#swift", members: 42, topic: "Swift chat")
+        _ = entry
     }
 
     func testCacheEntriesHaveCorrectFields() {
@@ -24,15 +22,13 @@ final class ChannelListCacheTests: XCTestCase {
         XCTAssertEqual(entry.topic, "Rust lang")
     }
 
-    func testCacheListIsInitiallyEmpty() async {
-        // A fresh server ID should have no cache
+    func testCacheListIsInitiallyEmpty() {
         let manager = IRCClientManager.shared
         XCTAssertNil(manager.channelListCache["nonexistent-server-id-12345"])
     }
 
-    func testClearChannelListCacheRemovesEntry() async {
+    func testClearChannelListCacheRemovesEntry() {
         let manager = IRCClientManager.shared
-        // clearChannelListCache on a non-existent key should not crash
         manager.clearChannelListCache(for: "nonexistent-server-id")
         XCTAssertNil(manager.channelListCache["nonexistent-server-id"])
     }
@@ -99,21 +95,20 @@ final class UnreadCountTests: XCTestCase {
 
 // MARK: - ExplicitDisconnectTrackingTests
 
+@MainActor
 final class ExplicitDisconnectTrackingTests: XCTestCase {
 
     private let testServerId = "explicit-disconnect-test-server"
 
     override func setUp() {
         super.setUp()
-        // Clean up test key
         var explicit = IRCClientManager.shared.explicitlyDisconnectedServerIds
         explicit.remove(testServerId)
         IRCClientManager.shared.explicitlyDisconnectedServerIds = explicit
     }
 
     func testServerNotInSetByDefault() {
-        let explicit = IRCClientManager.shared.explicitlyDisconnectedServerIds
-        XCTAssertFalse(explicit.contains(testServerId))
+        XCTAssertFalse(IRCClientManager.shared.explicitlyDisconnectedServerIds.contains(testServerId))
     }
 
     func testAddingToSet() {
@@ -136,7 +131,6 @@ final class ExplicitDisconnectTrackingTests: XCTestCase {
         var explicit = IRCClientManager.shared.explicitlyDisconnectedServerIds
         explicit.insert(testServerId)
         IRCClientManager.shared.explicitlyDisconnectedServerIds = explicit
-        // Re-read from UserDefaults to confirm persistence
         let stored = Set(UserDefaults.standard.stringArray(forKey: "explicitDisconnects") ?? [])
         XCTAssertTrue(stored.contains(testServerId))
     }
@@ -283,13 +277,13 @@ final class WatchSettingsPhase6Tests: XCTestCase {
     }
 
     func testPollIntervalClamped() async {
-        let wm = await WatchManager.shared
+        let wm = WatchManager.shared
         await wm.updatePollInterval(0)
-        await XCTAssertEqual(wm.settings.pollIntervalMinutes, 1)
+        XCTAssertEqual(wm.settings.pollIntervalMinutes, 1)
         await wm.updatePollInterval(99)
-        await XCTAssertEqual(wm.settings.pollIntervalMinutes, 5)
+        XCTAssertEqual(wm.settings.pollIntervalMinutes, 5)
         await wm.updatePollInterval(3)
-        await XCTAssertEqual(wm.settings.pollIntervalMinutes, 3)
+        XCTAssertEqual(wm.settings.pollIntervalMinutes, 3)
     }
 
     func testCodable() throws {
@@ -357,6 +351,7 @@ final class IRCListCallbackTests: XCTestCase {
 
 // MARK: - AutoConnectPolicyTests
 
+@MainActor
 final class AutoConnectPolicyTests: XCTestCase {
 
     func testAutoConnectFlagPredicates() {
