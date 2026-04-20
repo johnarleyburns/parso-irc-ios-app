@@ -35,7 +35,8 @@ struct UserProfileSheet: View {
     @State private var whoisDone: Bool = false
 
     // Saved handler — restored when this sheet closes so ChatView's topic feed keeps working
-    private var _savedUnhandledHandler: ((IRCMessage) -> Void)? = nil
+    // Must be internal (not private) because SwiftUI synthesizes a memberwise init
+    var _savedUnhandledHandler: ((IRCMessage) -> Void)? = nil
 
     var body: some View {
         NavigationStack {
