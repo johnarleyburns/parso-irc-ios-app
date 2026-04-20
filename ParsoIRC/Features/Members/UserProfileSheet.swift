@@ -34,9 +34,7 @@ struct UserProfileSheet: View {
     @State private var isLoadingWhois: Bool = false
     @State private var whoisDone: Bool = false
 
-    // Saved handler — restored when this sheet closes so ChatView's topic feed keeps working
-    // Must be internal (not private) because SwiftUI synthesizes a memberwise init
-    var _savedUnhandledHandler: ((IRCMessage) -> Void)? = nil
+    @State private var savedUnhandledHandler: ((IRCMessage) -> Void)? = nil
 
     var body: some View {
         NavigationStack {
@@ -269,7 +267,7 @@ struct UserProfileSheet: View {
         }
 
         // Store existing so deregister can restore it
-        _savedUnhandledHandler = existing
+        savedUnhandledHandler = existing
     }
 
     private func handleWhoisNumeric(_ msg: IRCMessage, for targetNick: String) {
@@ -324,7 +322,7 @@ struct UserProfileSheet: View {
     private func deregisterWhoisCallback() {
         // Restore the previous handler rather than setting nil,
         // so ChatView's topic feed (numeric 332) continues working.
-        ircManager.getClient(for: serverId)?.onUnhandledMessage = _savedUnhandledHandler
+        ircManager.getClient(for: serverId)?.onUnhandledMessage = savedUnhandledHandler
     }
 
     // MARK: - Helpers
