@@ -349,8 +349,34 @@ final class ChannelViewModel: ObservableObject {
         guard let client = ircManager.getClient(for: serverId) else { return }
         let supported = await client.hasChathistorySupport()
         guard supported else { return }
-        let limit = min(await client.getChathistoryLimit(), 50)
+
+        // Determine if we need to fetch history.
+        // We fetch if:
+        //   (a) we have no persisted messages, OR
+        //   (b) the app was foregrounded since we last fetched history for this channel
+        //       (i.e. we might have missed messages while backgrounded)
+        let lastFetchKey = "chathistory_lastfetch_\(channelId)"
+        let lastFetchDate = UserDefaults.standard.object(forKey: lastFetchKey) as? Date
+        let lastForegroundDate = AppState.shared.lastForegroundedAt
+
+        let needsFetch: Bool
+        if rawMessages.isEmpty {
+            needsFetch = true
+        } else if let lastFetch = lastFetchDate, let foreground = lastForegroundDate {
+            // If the app foregrounded AFTER our last fetch, we may have missed messages
+            needsFetch = foreground > lastFetch
+        } else {
+            // No previous fetch recorded — always fetch
+            needsFetch = true
+        }
+
+        guard needsFetch else { return }
+
+        let limit = min(await client.getChathistoryLimit(), 100)
         try? await client.requestHistory(target: channelName, limit: limit)
+
+        // Record when we last fetched history for this channel
+        UserDefaults.standard.set(Date(), forKey: lastFetchKey)
     }
 
     // MARK: Message appending

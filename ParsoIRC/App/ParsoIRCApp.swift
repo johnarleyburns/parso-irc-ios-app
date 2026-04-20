@@ -29,6 +29,11 @@ struct ParsoIRCApp: App {
                 ircManager.saveConnectedServerIds()
                 WatchManager.shared.scheduleNextBackgroundTask()
             }
+            if phase == .active {
+                // Record when app came to foreground so ChannelViewModel knows
+                // it may have missed messages and should re-fetch chat history.
+                appState.lastForegroundedAt = Date()
+            }
         }
     }
 }
@@ -51,10 +56,13 @@ class AppState: ObservableObject {
         didSet { UserDefaults.standard.set(globalRealName, forKey: "globalRealName") }
     }
 
-    // Currently selected server / channel — driven by RootView's NavigationSplitView.
-    // Phase-2 ChatView will read these to know what to display.
+    // Currently selected server / channel — driven by RootView's NavigationStack.
     @Published var selectedServerId: String? = nil
     @Published var selectedChannelId: String? = nil
+
+    /// Set to Date() every time the app returns to the foreground (.active scene phase).
+    /// ChannelViewModel uses this to decide whether to re-fetch chat history.
+    @Published var lastForegroundedAt: Date? = nil
 
     init() {
         self.globalNickname = UserDefaults.standard.string(forKey: "globalNickname") ?? ""

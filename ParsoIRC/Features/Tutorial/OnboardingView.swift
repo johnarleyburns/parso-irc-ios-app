@@ -200,8 +200,17 @@ private struct AddFirstServerPage: View {
     @Binding var isPresented: Bool
     @EnvironmentObject private var appState: AppState
 
-    @State private var selectedPresetIndex: Int = 0
+    /// Multi-select: set of indices into Server.defaultNetworks
+    @State private var selectedIndices: Set<Int> = [0]
     @State private var showAddServer = false
+
+    private var buttonLabel: String {
+        switch selectedIndices.count {
+        case 0: return "Select at least one network"
+        case 1: return "Connect to \(Server.defaultNetworks[selectedIndices.first!].name)"
+        default: return "Connect to \(selectedIndices.count) Networks"
+        }
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -213,10 +222,10 @@ private struct AddFirstServerPage: View {
                     .padding(.top, 80)
                     .padding(.bottom, 8)
 
-                Text("Choose a Network")
+                Text("Choose Networks")
                     .font(.system(size: 26, weight: .bold, design: .rounded))
 
-                Text("Pick a server to get started. You can add more later.")
+                Text("Select one or more servers to get started. You can add more later.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -224,15 +233,19 @@ private struct AddFirstServerPage: View {
             }
             .padding(.bottom, 16)
 
-            // Scrollable 2-column network grid
+            // Scrollable 2-column network grid — tap to toggle, checkmark when selected
             ScrollView {
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
                     ForEach(Array(Server.defaultNetworks.enumerated()), id: \.offset) { index, network in
                         NetworkCard(
                             network: network,
-                            isSelected: selectedPresetIndex == index
+                            isSelected: selectedIndices.contains(index)
                         ) {
-                            selectedPresetIndex = index
+                            if selectedIndices.contains(index) {
+                                selectedIndices.remove(index)
+                            } else {
+                                selectedIndices.insert(index)
+                            }
                         }
                     }
                 }
@@ -246,15 +259,16 @@ private struct AddFirstServerPage: View {
                 Button {
                     saveAndConnect()
                 } label: {
-                    Text("Connect to \(Server.defaultNetworks[selectedPresetIndex].name)")
+                    Text(buttonLabel)
                         .font(.headline)
                         .frame(maxWidth: .infinity)
                         .padding()
-                        .background(Color.accentColor)
+                        .background(selectedIndices.isEmpty ? Color.gray : Color.accentColor)
                         .foregroundStyle(.white)
                         .clipShape(RoundedRectangle(cornerRadius: 16))
                 }
                 .padding(.horizontal, 24)
+                .disabled(selectedIndices.isEmpty)
 
                 Button {
                     showAddServer = true
@@ -287,22 +301,30 @@ private struct AddFirstServerPage: View {
     }
 
     private func saveAndConnect() {
-        let template = Server.defaultNetworks[selectedPresetIndex]
-        let server = Server(
-            id: UUID().uuidString,
-            name: template.name,
-            host: template.host,
-            port: template.port,
-            ssl: template.ssl,
-            nickname: appState.globalNickname.isEmpty ? "parso\(Int.random(in: 1000...9999))" : appState.globalNickname,
-            realname: appState.globalRealName.isEmpty ? "Parso IRC" : appState.globalRealName,
-            password: nil,
-            saslEnabled: false,
-            autoConnect: true,
-            channels: [],   // user adds channels manually via the browser
-            lastActiveChannel: nil
-        )
-        try? DatabaseManager.shared.saveServer(server)
+        guard !selectedIndices.isEmpty else { return }
+        let nick = appState.globalNickname.isEmpty
+            ? "parso\(Int.random(in: 1000...9999))"
+            : appState.globalNickname
+        let real = appState.globalRealName.isEmpty ? "Parso IRC" : appState.globalRealName
+
+        for index in selectedIndices.sorted() {
+            let template = Server.defaultNetworks[index]
+            let server = Server(
+                id: UUID().uuidString,
+                name: template.name,
+                host: template.host,
+                port: template.port,
+                ssl: template.ssl,
+                nickname: nick,
+                realname: real,
+                password: nil,
+                saslEnabled: false,
+                autoConnect: true,
+                channels: [],
+                lastActiveChannel: nil
+            )
+            try? DatabaseManager.shared.saveServer(server)
+        }
         isPresented = false
     }
 }

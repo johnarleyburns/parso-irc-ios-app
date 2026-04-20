@@ -1,11 +1,12 @@
 import SwiftUI
 
-/// Form sheet for adding a new server or editing an existing one.
+/// Sheet for adding a new server or editing an existing one.
 ///
-/// - `existingServer`: pass a `Server` to pre-fill the form for editing, or
-///   `nil` when creating a new one.
-/// - `onSave`: called with the saved `Server` after the user taps Connect/Save.
-///   The caller is responsible for dismissing the sheet.
+/// When adding a new server, shows a **picker screen** listing all 25 popular
+/// networks. Selecting one pre-fills the form. "Custom Server" at the bottom
+/// opens the full configuration form directly.
+///
+/// When editing an existing server, goes straight to the configuration form.
 struct AddServerSheet: View {
     let existingServer: Server?
     let onSave: (Server) -> Void
@@ -13,32 +14,35 @@ struct AddServerSheet: View {
     @EnvironmentObject private var appState: AppState
     @Environment(\.dismiss) private var dismiss
 
-    // MARK: - Form state
+    // MARK: - Navigation state
+
+    /// In add-new mode, start with the picker; jump to form once preset chosen.
+    @State private var showPicker: Bool
+    @State private var pickerSearch: String = ""
+
+    init(existingServer: Server?, onSave: @escaping (Server) -> Void) {
+        self.existingServer = existingServer
+        self.onSave = onSave
+        _showPicker = State(initialValue: existingServer == nil)
+    }
+
+    // MARK: - Form state (used in both picker-confirmation and edit mode)
 
     @State private var selectedPreset: PresetNetwork = .custom
     @State private var name: String = ""
     @State private var host: String = ""
     @State private var portString: String = "6697"
     @State private var useTLS: Bool = true
-
-    // Identity (overrides the global default if non-empty)
     @State private var nickname: String = ""
     @State private var realName: String = ""
-
-    // Auth
     @State private var serverPassword: String = ""
     @State private var saslEnabled: Bool = false
     @State private var saslUsername: String = ""
     @State private var saslPassword: String = ""
     @State private var showAuthSection: Bool = false
-
-    // Auto-join channels
     @State private var autoJoinChannels: [String] = []
     @State private var newChannelName: String = ""
-
-    // Connection behaviour
     @State private var autoConnect: Bool = true
-
     @State private var showValidationAlert = false
     @State private var validationMessage = ""
 
@@ -48,6 +52,115 @@ struct AddServerSheet: View {
     // MARK: - Body
 
     var body: some View {
+        if showPicker {
+            pickerScreen
+        } else {
+            formScreen
+        }
+    }
+
+    // MARK: - Picker screen (list of 25 networks)
+
+    private var filteredNetworks: [(Int, Server)] {
+        let all = Array(Server.defaultNetworks.enumerated())
+        guard !pickerSearch.isEmpty else { return all }
+        return all.filter { _, s in
+            s.name.localizedCaseInsensitiveContains(pickerSearch) ||
+            s.host.localizedCaseInsensitiveContains(pickerSearch)
+        }
+    }
+
+    private var pickerScreen: some View {
+        NavigationStack {
+            List {
+                Section {
+                    ForEach(filteredNetworks, id: \.0) { _, network in
+                        Button {
+                            applyPreset(PresetNetwork(host: network.host) ?? .custom)
+                            name = network.name
+                            host = network.host
+                            portString = String(network.port)
+                            useTLS = network.ssl
+                            nickname = appState.globalNickname
+                            realName = appState.globalRealName
+                            autoConnect = true
+                            showPicker = false
+                        } label: {
+                            HStack(spacing: 12) {
+                                // TLS lock icon
+                                Image(systemName: network.ssl ? "lock.fill" : "lock.open")
+                                    .font(.caption)
+                                    .foregroundStyle(network.ssl ? .green : .orange)
+                                    .frame(width: 16)
+
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(network.name)
+                                        .font(.headline)
+                                        .foregroundStyle(.primary)
+                                    Text(network.host)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .font(.caption)
+                                    .foregroundStyle(.tertiary)
+                            }
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                } header: {
+                    Text("Popular IRC Networks")
+                        .textCase(nil)
+                }
+
+                Section {
+                    Button {
+                        selectedPreset = .custom
+                        nickname = appState.globalNickname
+                        realName = appState.globalRealName
+                        autoConnect = true
+                        showPicker = false
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "wrench.and.screwdriver.fill")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .frame(width: 16)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Custom Server")
+                                    .font(.headline)
+                                    .foregroundStyle(.primary)
+                                Text("Enter host, port, and credentials manually")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundStyle(.tertiary)
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .listStyle(.insetGrouped)
+            .searchable(text: $pickerSearch, prompt: "Search networks")
+            .navigationTitle("Add Server")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+            }
+        }
+    }
+
+    // MARK: - Form screen (configuration detail)
+
+    private var formScreen: some View {
         NavigationStack {
             Form {
                 networkSection
@@ -60,14 +173,26 @@ struct AddServerSheet: View {
                 } header: {
                     Text("Connection")
                 } footer: {
-                    Text("When enabled, Parso IRC will connect to this server automatically each time you open the app.")
+                    Text("When enabled, Parso IRC connects to this server automatically each time you open the app.")
                 }
             }
-            .navigationTitle(isEditing ? "Edit Server" : "Add Server")
+            .navigationTitle(isEditing ? "Edit Server" : (host.isEmpty ? "Custom Server" : name))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    if isEditing {
+                        Button("Cancel") { dismiss() }
+                    } else {
+                        Button {
+                            showPicker = true
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: "chevron.left")
+                                    .font(.caption.weight(.semibold))
+                                Text("Networks")
+                            }
+                        }
+                    }
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(isEditing ? "Save" : "Connect") { attemptSave() }
@@ -83,18 +208,10 @@ struct AddServerSheet: View {
         .onAppear(perform: prefill)
     }
 
-    // MARK: - Sections
+    // MARK: - Form sections
 
     private var networkSection: some View {
         Section {
-            // Preset picker
-            Picker("Network", selection: $selectedPreset) {
-                ForEach(PresetNetwork.allCases) { preset in
-                    Text(preset.displayName).tag(preset)
-                }
-            }
-            .onChange(of: selectedPreset) { _, preset in applyPreset(preset) }
-
             // Host
             HStack {
                 Label("Host", systemImage: "network")
@@ -128,7 +245,7 @@ struct AddServerSheet: View {
                 if portString == "6697" && !tls { portString = "6667" }
             }
 
-            // Display name (auto-derived but editable)
+            // Display name
             HStack {
                 Label("Display Name", systemImage: "tag")
                 Spacer()
@@ -148,29 +265,27 @@ struct AddServerSheet: View {
     private var identitySection: some View {
         Section {
             HStack {
-                Label("Nickname", systemImage: "person")
+                Label("Nickname", systemImage: "person.fill")
                 Spacer()
-                TextField(appState.globalNickname.isEmpty ? "nick" : appState.globalNickname,
+                TextField(appState.globalNickname.isEmpty ? "nickname" : appState.globalNickname,
                           text: $nickname)
                     .textFieldStyle(.plain)
                     .multilineTextAlignment(.trailing)
                     .autocorrectionDisabled()
                     .textInputAutocapitalization(.never)
             }
-
             HStack {
                 Label("Real Name", systemImage: "person.text.rectangle")
                 Spacer()
-                TextField(appState.globalRealName.isEmpty ? "Parso IRC" : appState.globalRealName,
+                TextField(appState.globalRealName.isEmpty ? "Real Name" : appState.globalRealName,
                           text: $realName)
                     .textFieldStyle(.plain)
                     .multilineTextAlignment(.trailing)
-                    .autocorrectionDisabled()
             }
         } header: {
             Text("Identity")
         } footer: {
-            Text("Leave blank to use your global default.")
+            Text("Leave blank to use your global identity from Settings.")
                 .font(.caption)
         }
     }
@@ -195,9 +310,14 @@ struct AddServerSheet: View {
                             .autocorrectionDisabled()
                             .textInputAutocapitalization(.never)
                     }
-                    SecureField("SASL Password", text: $saslPassword)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
+                    HStack {
+                        Label("SASL Password", systemImage: "key.fill")
+                        Spacer()
+                        SecureField("password", text: $saslPassword)
+                            .textFieldStyle(.plain)
+                            .multilineTextAlignment(.trailing)
+                            .autocorrectionDisabled()
+                    }
                 }
             }
         }
@@ -238,30 +358,21 @@ struct AddServerSheet: View {
     // MARK: - Helpers
 
     private func prefill() {
-        if let s = existingServer {
-            // Edit mode: fill all fields from existing server
-            selectedPreset = PresetNetwork(host: s.host) ?? .custom
-            name = s.name
-            host = s.host
-            portString = String(s.port)
-            useTLS = s.ssl
-            nickname = s.nickname
-            realName = s.realname
-            serverPassword = s.password ?? ""
-            saslEnabled = s.saslEnabled
-            saslUsername = s.nickname  // SASL username is often the nick (TODO: store separately)
-            saslPassword = s.password ?? ""
-            autoJoinChannels = s.channels.map(\.name)
-            autoConnect = s.autoConnect
-            showAuthSection = s.saslEnabled || !(s.password ?? "").isEmpty
-        } else {
-            // New server: apply global defaults
-            nickname = appState.globalNickname
-            realName = appState.globalRealName
-            autoConnect = true
-            // Default to Libera.Chat
-            applyPreset(.libera)
-        }
+        guard let s = existingServer else { return }
+        selectedPreset = PresetNetwork(host: s.host) ?? .custom
+        name = s.name
+        host = s.host
+        portString = String(s.port)
+        useTLS = s.ssl
+        nickname = s.nickname
+        realName = s.realname
+        serverPassword = s.password ?? ""
+        saslEnabled = s.saslEnabled
+        saslUsername = s.nickname
+        saslPassword = s.password ?? ""
+        autoJoinChannels = s.channels.map(\.name)
+        autoConnect = s.autoConnect
+        showAuthSection = s.saslEnabled || !(s.password ?? "").isEmpty
     }
 
     private func applyPreset(_ preset: PresetNetwork) {
@@ -278,14 +389,11 @@ struct AddServerSheet: View {
         var ch = newChannelName.trimmingCharacters(in: .whitespaces)
         guard !ch.isEmpty else { return }
         if !ch.hasPrefix("#") && !ch.hasPrefix("&") { ch = "#" + ch }
-        if !autoJoinChannels.contains(ch) {
-            autoJoinChannels.append(ch)
-        }
+        if !autoJoinChannels.contains(ch) { autoJoinChannels.append(ch) }
         newChannelName = ""
     }
 
     private func attemptSave() {
-        // Validation
         let h = host.trimmingCharacters(in: .whitespaces)
         guard !h.isEmpty else {
             validationMessage = "Please enter a server host name."
@@ -338,6 +446,11 @@ struct AddServerSheet: View {
             showValidationAlert = true
         }
     }
+}
+
+#Preview {
+    AddServerSheet(existingServer: nil) { _ in }
+        .environmentObject(AppState.shared)
 }
 
 // MARK: - Preset networks
