@@ -267,9 +267,12 @@ final class DMChannelTests: XCTestCase {
     }
 }
 
-// MARK: - WatchSettingsTests
+// MARK: - WatchSettingsPhase6Tests
+// (WatchSettingsTests already exists in Phase4and5Tests; this extends it with
+//  Phase 6 additions: poll-interval clamping and canSend logic.)
 
-final class WatchSettingsTests: XCTestCase {
+@MainActor
+final class WatchSettingsPhase6Tests: XCTestCase {
 
     func testDefaultValues() {
         let s = WatchSettings.default
