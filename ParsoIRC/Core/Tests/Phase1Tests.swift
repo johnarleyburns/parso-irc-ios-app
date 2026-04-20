@@ -336,8 +336,8 @@ final class PresetNetworkTests: XCTestCase {
     }
 
     func testAllCasesCount() {
-        // Ensure we have all 10 presets + custom
-        XCTAssertEqual(PresetNetwork.allCases.count, 10)
+        // 10 networks + custom = 11
+        XCTAssertEqual(PresetNetwork.allCases.count, 11)
     }
 }
 
