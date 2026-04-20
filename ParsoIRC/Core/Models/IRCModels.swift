@@ -63,30 +63,7 @@ struct Server: Identifiable, Codable, Equatable, Hashable {
             nickname: "",
             realname: "",
             saslEnabled: false,
-            channels: [
-                Channel(name: "#linux"),
-                Channel(name: "#kde"),
-                Channel(name: "#libera"),
-                Channel(name: "#archlinux"),
-                Channel(name: "#python"),
-                Channel(name: "#debian"),
-                Channel(name: "#rust"),
-                Channel(name: "#emacs"),
-                Channel(name: "#bash"),
-                Channel(name: "#ubuntu"),
-                Channel(name: "#gentoo"),
-                Channel(name: "#golang"),
-                Channel(name: "#javascript"),
-                Channel(name: "#vim"),
-                Channel(name: "#fedora"),
-                Channel(name: "#opensuse"),
-                Channel(name: "#nginx"),
-                Channel(name: "#systemd"),
-                Channel(name: "#kernel"),
-                Channel(name: "#security"),
-                Channel(name: "#lxc")
-            ],
-            lastActiveChannel: "#linux"
+            channels: []
         ),
         Server(
             name: "OFTC",
@@ -95,34 +72,7 @@ struct Server: Identifiable, Codable, Equatable, Hashable {
             ssl: true,
             nickname: "",
             realname: "",
-            channels: [
-                Channel(name: "#debian"),
-                Channel(name: "#linux")
-            ]
-        ),
-        Server(
-            name: "hackint",
-            host: "irc.hackint.org",
-            port: 6697,
-            ssl: true,
-            nickname: "",
-            realname: ""
-        ),
-        Server(
-            name: "IRCnet",
-            host: "ircnet.ircchat.de",
-            port: 6667,
-            ssl: false,
-            nickname: "",
-            realname: ""
-        ),
-        Server(
-            name: "Undernet",
-            host: "irc.undernet.org",
-            port: 6667,
-            ssl: false,
-            nickname: "",
-            realname: ""
+            channels: []
         ),
         Server(
             name: "Rizon",
@@ -130,23 +80,17 @@ struct Server: Identifiable, Codable, Equatable, Hashable {
             port: 6697,
             ssl: true,
             nickname: "",
-            realname: ""
+            realname: "",
+            channels: []
         ),
         Server(
-            name: "QuakeNet",
-            host: "irc.quakenet.org",
+            name: "IRCnet",
+            host: "open.ircnet.net",
             port: 6667,
             ssl: false,
             nickname: "",
-            realname: ""
-        ),
-        Server(
-            name: "DALnet",
-            host: "irc.dal.net",
-            port: 6667,
-            ssl: false,
-            nickname: "",
-            realname: ""
+            realname: "",
+            channels: []
         ),
         Server(
             name: "EFnet",
@@ -154,7 +98,44 @@ struct Server: Identifiable, Codable, Equatable, Hashable {
             port: 6667,
             ssl: false,
             nickname: "",
-            realname: ""
+            realname: "",
+            channels: []
+        ),
+        Server(
+            name: "QuakeNet",
+            host: "irc.quakenet.org",
+            port: 6667,
+            ssl: false,
+            nickname: "",
+            realname: "",
+            channels: []
+        ),
+        Server(
+            name: "Undernet",
+            host: "irc.undernet.org",
+            port: 6667,
+            ssl: false,
+            nickname: "",
+            realname: "",
+            channels: []
+        ),
+        Server(
+            name: "DALnet",
+            host: "irc.dal.net",
+            port: 6667,
+            ssl: false,
+            nickname: "",
+            realname: "",
+            channels: []
+        ),
+        Server(
+            name: "hackint",
+            host: "irc.hackint.org",
+            port: 6697,
+            ssl: true,
+            nickname: "",
+            realname: "",
+            channels: []
         ),
         Server(
             name: "Snoonet",
@@ -162,8 +143,9 @@ struct Server: Identifiable, Codable, Equatable, Hashable {
             port: 6697,
             ssl: true,
             nickname: "",
-            realname: ""
-        )
+            realname: "",
+            channels: []
+        ),
     ]
 }
 

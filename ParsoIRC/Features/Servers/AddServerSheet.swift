@@ -343,7 +343,7 @@ struct AddServerSheet: View {
 // MARK: - Preset networks
 
 enum PresetNetwork: String, CaseIterable, Identifiable {
-    case libera, oftc, efnet, hackint, undernet, rizon, quakenet, dalnet, snoonet, custom
+    case libera, oftc, rizon, ircnet, efnet, quakenet, undernet, dalnet, hackint, snoonet, custom
 
     var id: String { rawValue }
 
@@ -351,12 +351,13 @@ enum PresetNetwork: String, CaseIterable, Identifiable {
         switch self {
         case .libera:    return "Libera.Chat"
         case .oftc:      return "OFTC"
-        case .efnet:     return "EFnet"
-        case .hackint:   return "hackint"
-        case .undernet:  return "Undernet"
         case .rizon:     return "Rizon"
+        case .ircnet:    return "IRCnet"
+        case .efnet:     return "EFnet"
         case .quakenet:  return "QuakeNet"
+        case .undernet:  return "Undernet"
         case .dalnet:    return "DALnet"
+        case .hackint:   return "hackint"
         case .snoonet:   return "Snoonet"
         case .custom:    return "Custom…"
         }
@@ -366,12 +367,13 @@ enum PresetNetwork: String, CaseIterable, Identifiable {
         switch self {
         case .libera:    return "irc.libera.chat"
         case .oftc:      return "irc.oftc.net"
-        case .efnet:     return "irc.efnet.org"
-        case .hackint:   return "irc.hackint.org"
-        case .undernet:  return "irc.undernet.org"
         case .rizon:     return "irc.rizon.net"
+        case .ircnet:    return "open.ircnet.net"
+        case .efnet:     return "irc.efnet.org"
         case .quakenet:  return "irc.quakenet.org"
+        case .undernet:  return "irc.undernet.org"
         case .dalnet:    return "irc.dal.net"
+        case .hackint:   return "irc.hackint.org"
         case .snoonet:   return "irc.snoonet.org"
         case .custom:    return ""
         }
@@ -379,7 +381,7 @@ enum PresetNetwork: String, CaseIterable, Identifiable {
 
     var port: Int {
         switch self {
-        case .libera, .oftc, .hackint, .rizon, .snoonet: return 6697
+        case .libera, .oftc, .rizon, .hackint, .snoonet: return 6697
         default: return 6667
         }
     }

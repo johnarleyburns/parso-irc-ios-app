@@ -1,56 +1,91 @@
 import SwiftUI
+import Combine
 
-/// Channel browser sheet — sends LIST, streams results, lets user search and join.
+/// Channel browser — shows curated popular channels for known servers instantly,
+/// lets users search by prefix (fires `LIST #query*`), or optionally loads the
+/// full channel list with a warning popup.
 ///
-/// Opens when the user taps "+ Join a channel" in the sidebar.
-///
-/// Results are cached in `IRCClientManager.channelListCache` for the app lifetime
-/// so repeated opens are instant.  A Refresh button clears the cache entry and
-/// re-fires LIST.  Results are sorted by member count descending by default.
+/// Cache behaviour: results are stored in `IRCClientManager.channelListCache`
+/// for the app's lifetime so re-opening the sheet is always instant.
+/// The manager-level cache-population callbacks are saved and restored on dismiss
+/// so the cache continues to populate even after the sheet is closed.
 struct ChannelBrowserSheet: View {
     let server: Server
-    var onJoined: (() -> Void)? = nil
+    /// Called with the channel name after a successful JOIN.
+    var onJoined: ((String) -> Void)? = nil
 
     @EnvironmentObject private var ircManager: IRCClientManager
     @Environment(\.dismiss) private var dismiss
 
-    // LIST results (local, built from cache or live stream)
-    @State private var channels: [ListEntry] = []
-    @State private var seenNames: Set<String> = []   // O(1) dedup guard
-    @State private var isLoading = false
-    @State private var listDone = false
+    // Display state
     @State private var searchText = ""
-    @State private var sortOrder: SortOrder = .members
+    @State private var searchResults: [ListEntry] = []
+    @State private var isSearching = false      // prefix-search in flight
+    @State private var isFullListLoading = false // full LIST in flight
+    @State private var fullListLoaded = false
+    @State private var allChannels: [ListEntry] = []   // populated by full LIST
+    @State private var seenNames: Set<String> = []
     @State private var cacheDate: Date? = nil
+    @State private var sortOrder: SortOrder = .members
+    @State private var showFullListWarning = false
 
-    // Manual join fallback
-    @State private var manualChannel = ""
-    @State private var showManualJoin = false
+    // Inline join
+    @State private var joinName = ""
     @State private var joinError: String? = nil
 
-    // MARK: - Entry model
+    // Debounce search
+    @State private var searchDebounceTask: Task<Void, Never>? = nil
+
+    // Cache-safe handler references (saved before we overwrite, restored on dismiss)
+    @State private var savedListEntryHandler: ((String, Int, String) -> Void)? = nil
+    @State private var savedListEndHandler: (() -> Void)? = nil
+
+    // MARK: - Models
 
     struct ListEntry: Identifiable {
-        let id: String       // channel name
+        let id: String
         let name: String
         let members: Int
         let topic: String
     }
 
     enum SortOrder: String, CaseIterable {
-        case members  = "Members"
-        case name     = "Name"
-        case topic    = "Topic"
+        case members = "Members"
+        case name    = "Name"
+        case topic   = "Topic"
     }
 
-    // MARK: - Filtered + sorted (default: members descending)
+    // MARK: - Curated popular channels per known server
 
-    private var filtered: [ListEntry] {
-        let base = searchText.isEmpty ? channels :
-            channels.filter {
-                $0.name.localizedCaseInsensitiveContains(searchText) ||
-                $0.topic.localizedCaseInsensitiveContains(searchText)
-            }
+    private static let popularChannels: [String: [String]] = [
+        "irc.libera.chat":   ["#linux", "#python", "#debian", "#ubuntu", "#rust", "#archlinux", "#kde", "#bash", "#emacs", "#vim"],
+        "irc.oftc.net":      ["#debian", "#ubuntu", "#tor", "#git", "#qemu", "#debian-next", "#postfix", "#notmuch", "#tor-dev", "#samba"],
+        "irc.rizon.net":     ["#rice", "#chat", "#anime", "#programming", "#games", "#music", "#help", "#tech", "#random", "#offtopic"],
+        "open.ircnet.net":   ["#chat", "#linux", "#windows", "#mp3", "#java", "#php", "#suomi", "#deutsch", "#france", "#help"],
+        "irc.efnet.org":     ["#chat", "#linux", "#windows", "#games", "#mac", "#security", "#python", "#help", "#tech", "#programming"],
+        "irc.quakenet.org":  ["#quake", "#quake4", "#games", "#chat", "#help", "#coding", "#counterstrike", "#warcraft", "#wow", "#fps"],
+        "irc.undernet.org":  ["#chat", "#teen", "#help", "#linux", "#windows", "#games", "#music", "#movies", "#sports", "#politics"],
+        "irc.dal.net":       ["#chat", "#music", "#games", "#movies", "#help", "#linux", "#windows", "#sports", "#anime", "#random"],
+        "irc.hackint.org":   ["#ccc", "#hackint", "#tor", "#crypto", "#privacy", "#security", "#hardware", "#software", "#hacking", "#tech"],
+        "irc.snoonet.org":   ["#gamesack", "#chat", "#politics", "#gaming", "#news", "#random", "#linux", "#tech", "#sports", "#anime"],
+    ]
+
+    private var curatedChannels: [String] {
+        ChannelBrowserSheet.popularChannels[server.host] ?? []
+    }
+
+    // MARK: - Displayed list
+
+    private var displayedEntries: [ListEntry] {
+        let base: [ListEntry]
+        if !searchText.isEmpty {
+            base = searchResults
+        } else if fullListLoaded {
+            base = allChannels
+        } else {
+            // Show curated list as ListEntry stubs
+            return curatedChannels.map { ListEntry(id: $0, name: $0, members: -1, topic: "") }
+        }
         switch sortOrder {
         case .members: return base.sorted { $0.members > $1.members }
         case .name:    return base.sorted { $0.name.lowercased() < $1.name.lowercased() }
@@ -58,25 +93,69 @@ struct ChannelBrowserSheet: View {
         }
     }
 
+    private var headerSubtitle: String {
+        if isFullListLoading { return "Loading full list…" }
+        if isSearching        { return "Searching…" }
+        if fullListLoaded     { return "\(allChannels.count) channels · updated \(cacheDate?.timeAgo() ?? "")" }
+        if !searchText.isEmpty { return "\(searchResults.count) results" }
+        return "Popular channels"
+    }
+
     // MARK: - Body
 
     var body: some View {
         NavigationStack {
-            Group {
-                if isLoading && channels.isEmpty {
-                    loadingView
-                } else {
-                    channelList
+            List {
+                // Quick-join by name
+                quickJoinSection
+
+                // Channel list
+                Section {
+                    ForEach(displayedEntries) { entry in
+                        channelRow(entry)
+                    }
+                    if displayedEntries.isEmpty && !isSearching && !isFullListLoading {
+                        emptyRow
+                    }
+                } header: {
+                    HStack {
+                        Text(headerSubtitle)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .textCase(nil)
+                        Spacer()
+                        if isSearching || isFullListLoading {
+                            ProgressView().scaleEffect(0.7)
+                        }
+                    }
+                }
+
+                // Load full list button (only shown when not yet loaded)
+                if !fullListLoaded && !isFullListLoading {
+                    fullListButtonSection
                 }
             }
-            .navigationTitle("Channels — \(server.name)")
+            .listStyle(.insetGrouped)
+            .navigationTitle("Join a Channel")
             .navigationBarTitleDisplayMode(.inline)
-            .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always),
-                        prompt: "Search channels")
+            .searchable(text: $searchText, prompt: "Search \(server.name) channels")
             .toolbar { toolbarContent }
+            .onChange(of: searchText) { _, newVal in
+                handleSearchChange(newVal)
+            }
         }
-        .onAppear { loadOrFetch() }
+        .onAppear { restoreFromCacheIfAvailable() }
         .onDisappear { deregister() }
+        .confirmationDialog(
+            "Load Full Channel List?",
+            isPresented: $showFullListWarning,
+            titleVisibility: .visible
+        ) {
+            Button("Load Full List", role: .destructive) { startFullList() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Large servers like \(server.name) can have thousands of channels. Loading the full list may take several minutes and use significant data.")
+        }
         .alert("Join Error", isPresented: Binding(
             get: { joinError != nil },
             set: { if !$0 { joinError = nil } }
@@ -87,87 +166,57 @@ struct ChannelBrowserSheet: View {
         }
     }
 
-    // MARK: - Loading view
+    // MARK: - Quick-join section
 
-    private var loadingView: some View {
-        VStack(spacing: 16) {
-            ProgressView()
-                .scaleEffect(1.4)
-            Text("Loading channel list…")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
+    private var quickJoinSection: some View {
+        Section {
+            HStack(spacing: 10) {
+                Image(systemName: "number")
+                    .foregroundStyle(.secondary)
+                    .frame(width: 16)
+                TextField("Channel name", text: $joinName)
+                    .autocorrectionDisabled()
+                    .textInputAutocapitalization(.never)
+                    .font(.system(.body, design: .monospaced))
+                    .onSubmit { joinChannel(joinName) }
+                Button("Join") { joinChannel(joinName) }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                    .disabled(joinName.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+        } header: {
+            Text("Join by Name")
+                .textCase(nil)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(.systemGroupedBackground))
     }
 
-    // MARK: - Channel list
-
-    private var channelList: some View {
-        List {
-            // Manual join row at the top
-            Section {
-                Button {
-                    showManualJoin = true
-                } label: {
-                    Label("Join by name…", systemImage: "number.circle.fill")
-                        .foregroundStyle(Color.accentColor)
-                }
-                .sheet(isPresented: $showManualJoin) {
-                    manualJoinSheet
-                }
-            }
-
-            Section {
-                ForEach(filtered) { entry in
-                    channelRow(entry)
-                }
-            } header: {
-                HStack {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("\(filtered.count) channel\(filtered.count == 1 ? "" : "s")")
-                        if let date = cacheDate {
-                            Text("Updated \(date.timeAgo())")
-                                .font(.caption2)
-                                .foregroundStyle(.tertiary)
-                        }
-                    }
-                    Spacer()
-                    if isLoading {
-                        ProgressView()
-                            .scaleEffect(0.7)
-                    }
-                }
-            }
-        }
-        .listStyle(.insetGrouped)
-    }
+    // MARK: - Channel row
 
     private func channelRow(_ entry: ListEntry) -> some View {
-        Button {
-            joinChannel(entry.name)
-        } label: {
-            VStack(alignment: .leading, spacing: 4) {
-                HStack {
+        Button { joinChannel(entry.name) } label: {
+            HStack(alignment: .top, spacing: 10) {
+                VStack(alignment: .leading, spacing: 3) {
                     Text(entry.name)
                         .font(.headline)
                         .foregroundStyle(.primary)
-                    Spacer()
-                    HStack(spacing: 4) {
+                    if !entry.topic.isEmpty {
+                        Text(IRCTextFormatter.stripped(entry.topic))
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                    }
+                }
+                Spacer()
+                if entry.members >= 0 {
+                    VStack(alignment: .trailing, spacing: 2) {
                         Image(systemName: "person.2.fill")
                             .font(.caption2)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(.tertiary)
                         Text("\(entry.members)")
                             .font(.caption)
                             .fontWeight(.medium)
                             .foregroundStyle(.secondary)
                     }
-                }
-                if !entry.topic.isEmpty {
-                    Text(IRCTextFormatter.stripped(entry.topic))
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
                 }
             }
             .contentShape(Rectangle())
@@ -175,34 +224,42 @@ struct ChannelBrowserSheet: View {
         .buttonStyle(.plain)
     }
 
-    // MARK: - Manual join sheet
+    private var emptyRow: some View {
+        HStack {
+            Spacer()
+            Text(searchText.isEmpty ? "No channels" : "No matches for \"\(searchText)\"")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+            Spacer()
+        }
+        .listRowBackground(Color.clear)
+    }
 
-    private var manualJoinSheet: some View {
-        NavigationStack {
-            Form {
-                Section("Channel name") {
-                    TextField("#channel", text: $manualChannel)
-                        .autocorrectionDisabled()
-                        .textInputAutocapitalization(.never)
-                        .font(.system(.body, design: .monospaced))
-                }
-            }
-            .navigationTitle("Join Channel")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { showManualJoin = false }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Join") {
-                        showManualJoin = false
-                        joinChannel(manualChannel)
+    // MARK: - Full list button
+
+    private var fullListButtonSection: some View {
+        Section {
+            Button {
+                showFullListWarning = true
+            } label: {
+                HStack {
+                    Image(systemName: "list.bullet.below.rectangle")
+                        .foregroundStyle(.secondary)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Load Full Channel List")
+                            .foregroundStyle(.primary)
+                        Text("May take several minutes for large servers")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
-                    .disabled(manualChannel.trimmingCharacters(in: .whitespaces).isEmpty)
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
                 }
             }
         }
-        .presentationDetents([.medium])
     }
 
     // MARK: - Toolbar
@@ -219,73 +276,130 @@ struct ChannelBrowserSheet: View {
                         Text(order.rawValue).tag(order)
                     }
                 }
-                Divider()
-                Button {
-                    refresh()
-                } label: {
-                    Label("Refresh", systemImage: "arrow.clockwise")
-                }
             } label: {
                 Image(systemName: "line.3.horizontal.decrease.circle")
             }
         }
     }
 
-    // MARK: - Cache-aware load
+    // MARK: - Search (debounced, prefix-filtered LIST)
 
-    private func loadOrFetch() {
-        // If cache exists for this server, use it immediately
-        if let cached = ircManager.channelListCache[server.id] {
-            channels = cached.entries.map {
-                ListEntry(id: $0.name, name: $0.name, members: $0.members, topic: $0.topic)
-            }
-            cacheDate = cached.fetchedAt
-            listDone = true
-            isLoading = false
+    private func handleSearchChange(_ query: String) {
+        searchDebounceTask?.cancel()
+        if query.isEmpty {
+            searchResults = []
+            isSearching = false
             return
         }
-        startList()
+        searchDebounceTask = Task {
+            try? await Task.sleep(nanoseconds: 400_000_000) // 0.4s debounce
+            guard !Task.isCancelled else { return }
+            await startPrefixSearch(query)
+        }
     }
 
-    private func refresh() {
-        ircManager.clearChannelListCache(for: server.id)
-        channels = []
-        seenNames = []
-        cacheDate = nil
-        listDone = false
-        startList()
-    }
-
-    private func startList() {
+    @MainActor
+    private func startPrefixSearch(_ query: String) {
+        // If we have the full list cached, just filter locally — no network needed
+        if fullListLoaded {
+            searchResults = allChannels.filter {
+                $0.name.localizedCaseInsensitiveContains(query) ||
+                $0.topic.localizedCaseInsensitiveContains(query)
+            }
+            return
+        }
         guard let client = ircManager.getClient(for: server.id) else { return }
-        isLoading = true
+        isSearching = true
+        var localResults: [ListEntry] = []
+        var localSeen: Set<String> = []
 
-        // Use dedicated LIST callbacks — do NOT touch onUnhandledMessage
         client.onListEntry = { name, count, topic in
             Task { @MainActor in
-                // O(1) dedup using Set
-                guard !self.seenNames.contains(name) else { return }
-                self.seenNames.insert(name)
-                self.channels.append(ListEntry(id: name, name: name, members: count, topic: topic))
+                guard !localSeen.contains(name) else { return }
+                localSeen.insert(name)
+                localResults.append(ListEntry(id: name, name: name, members: count, topic: topic))
+                self.searchResults = localResults
             }
         }
         client.onListEnd = {
             Task { @MainActor in
-                self.isLoading = false
-                self.listDone = true
-                self.cacheDate = self.ircManager.channelListCache[self.server.id]?.fetchedAt
+                self.isSearching = false
+                // Re-wire manager-level cache handlers after our search completes
+                self.rewireManagerHandlers()
             }
         }
 
         Task {
-            try? await client.list()
+            try? await client.list(filter: query)
         }
     }
 
+    // MARK: - Full list load
+
+    private func startFullList() {
+        guard let client = ircManager.getClient(for: server.id) else { return }
+        isFullListLoading = true
+
+        // Save manager-level handlers before we overwrite them
+        savedListEntryHandler = client.onListEntry
+        savedListEndHandler   = client.onListEnd
+
+        client.onListEntry = { [self] name, count, topic in
+            Task { @MainActor in
+                guard !self.seenNames.contains(name) else { return }
+                self.seenNames.insert(name)
+                let entry = ListEntry(id: name, name: name, members: count, topic: topic)
+                self.allChannels.append(entry)
+                // Also populate manager cache staging buffer directly
+                let cacheEntry = IRCClientManager.CachedListEntry(name: name, members: count, topic: topic)
+                self.ircManager.appendToListStagingBuffer(serverId: self.server.id, entry: cacheEntry)
+            }
+        }
+        client.onListEnd = {
+            Task { @MainActor in
+                self.isFullListLoading = false
+                self.fullListLoaded = true
+                // Commit to manager cache
+                self.ircManager.commitListStagingBuffer(serverId: self.server.id)
+                self.cacheDate = self.ircManager.channelListCache[self.server.id]?.fetchedAt
+                // Re-wire manager-level handlers
+                self.rewireManagerHandlers()
+            }
+        }
+
+        Task { try? await client.list() }
+    }
+
+    // MARK: - Cache restore on appear
+
+    private func restoreFromCacheIfAvailable() {
+        if let cached = ircManager.channelListCache[server.id] {
+            allChannels = cached.entries.map {
+                ListEntry(id: $0.name, name: $0.name, members: $0.members, topic: $0.topic)
+            }
+            seenNames = Set(allChannels.map(\.name))
+            cacheDate = cached.fetchedAt
+            fullListLoaded = true
+        }
+    }
+
+    // MARK: - Deregister (save/restore to preserve manager-level cache population)
+
     private func deregister() {
-        // Only clear the LIST-specific callbacks, leave onUnhandledMessage alone
-        ircManager.getClient(for: server.id)?.onListEntry = nil
-        ircManager.getClient(for: server.id)?.onListEnd   = nil
+        searchDebounceTask?.cancel()
+        guard let client = ircManager.getClient(for: server.id) else { return }
+        // Restore previously-saved manager handlers, NOT nil
+        if let saved = savedListEntryHandler { client.onListEntry = saved }
+        if let saved = savedListEndHandler   { client.onListEnd   = saved }
+    }
+
+    private func rewireManagerHandlers() {
+        guard let client = ircManager.getClient(for: server.id) else { return }
+        if let saved = savedListEntryHandler { client.onListEntry = saved }
+        if let saved = savedListEndHandler   { client.onListEnd   = saved }
+        // Clear our local saves so a future search correctly re-saves the manager handlers
+        savedListEntryHandler = nil
+        savedListEndHandler   = nil
     }
 
     // MARK: - JOIN
@@ -302,10 +416,9 @@ struct ChannelBrowserSheet: View {
             }
             do {
                 try await client.join(channel: name)
-                // Persist to DB
                 let ch = Channel(serverId: server.id, name: name, joinedAt: Date())
                 try? DatabaseManager.shared.saveChannel(ch, serverId: server.id)
-                onJoined?()
+                onJoined?(name)
                 dismiss()
             } catch {
                 joinError = error.localizedDescription

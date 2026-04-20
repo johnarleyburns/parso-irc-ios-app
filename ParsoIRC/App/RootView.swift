@@ -1,23 +1,23 @@
 import SwiftUI
 
+/// Navigation destination type for the app's NavigationStack.
+enum NavDestination: Hashable {
+    case channel(serverId: String, channelId: String, channelName: String)
+    case dm(serverId: String, channelId: String, nick: String)
+}
+
 /// Root view of the app.
 ///
-/// Responsibilities:
-/// - Shows SplashScreenView on every cold launch (2.5 s)
-/// - Shows OnboardingView when no servers have been saved yet (first-ever launch)
-/// - Otherwise shows the main NavigationSplitView with ServerSidebarView on the left
-///   and ChatView on the right (Phase 2) when a server + channel are both selected.
-///
-/// The `selectedServerId` / `selectedChannelId` pair are the source of truth for
-/// what the detail column displays.
+/// Uses a NavigationStack (not NavigationSplitView) for reliable push-navigation
+/// on iPhone. The sidebar is the root of the stack; tapping a channel pushes
+/// ChatView onto the stack.
 struct RootView: View {
     @EnvironmentObject private var ircManager: IRCClientManager
     @EnvironmentObject private var appState: AppState
     @EnvironmentObject private var networkMonitor: NetworkMonitor
 
-    // Navigation state – driven by the sidebar
-    @State private var selectedServerId: String? = nil
-    @State private var selectedChannelId: String? = nil
+    // Single source of truth for navigation
+    @State private var navPath: [NavDestination] = []
 
     // Sheet / overlay state
     @State private var showSplash: Bool = true
@@ -25,8 +25,33 @@ struct RootView: View {
 
     var body: some View {
         ZStack {
-            mainContent
-                .opacity(showSplash ? 0 : 1)
+            NavigationStack(path: $navPath) {
+                ServerSidebarView(
+                    navPath: $navPath,
+                    onSelectChannel: { serverId, channelId, channelName, isDM, nick in
+                        let dest: NavDestination = isDM
+                            ? .dm(serverId: serverId, channelId: channelId, nick: nick ?? channelName)
+                            : .channel(serverId: serverId, channelId: channelId, channelName: channelName)
+                        // Replace path so back always goes to sidebar
+                        navPath = [dest]
+                        // Keep AppState in sync for unread tracking
+                        appState.selectedServerId  = serverId
+                        appState.selectedChannelId = channelId
+                    }
+                )
+                .navigationDestination(for: NavDestination.self) { dest in
+                    switch dest {
+                    case .channel(let sid, _, let name):
+                        ChatView(serverId: sid, channelName: name, ircManager: ircManager)
+                    case .dm(let sid, _, let nick):
+                        DirectMessageView(serverId: sid, nick: nick, ircManager: ircManager)
+                    }
+                }
+            }
+            .opacity(showSplash ? 0 : 1)
+            .onChange(of: networkMonitor.isConnected) { _, isNow in
+                if isNow { reconnectDroppedServers() }
+            }
 
             if showSplash {
                 SplashScreenView(isPresented: $showSplash)
@@ -41,79 +66,11 @@ struct RootView: View {
         }
     }
 
-    // MARK: - Main content
-
-    @ViewBuilder
-    private var mainContent: some View {
-        NavigationSplitView {
-            ServerSidebarView(
-                selectedServerId: $selectedServerId,
-                selectedChannelId: $selectedChannelId
-            )
-        } detail: {
-            if let sid = selectedServerId,
-               let cid = selectedChannelId,
-               let channel = resolveChannel(serverId: sid, channelId: cid) {
-                if channel.isDM {
-                    DirectMessageView(
-                        serverId: sid,
-                        nick: channel.name,
-                        ircManager: ircManager
-                    )
-                    .id("\(sid):\(cid)")
-                } else {
-                    ChatView(serverId: sid, channelName: channel.name, ircManager: ircManager)
-                        .id("\(sid):\(cid)")
-                }
-            } else {
-                detailPlaceholder
-            }
-        }
-        .onChange(of: selectedServerId) { _, newVal in
-            appState.selectedServerId = newVal
-        }
-        .onChange(of: selectedChannelId) { _, newVal in
-            appState.selectedChannelId = newVal
-        }
-        .onChange(of: networkMonitor.isConnected) { _, isNow in
-            if isNow { reconnectDroppedServers() }
-        }
-    }
-
-    private func resolveChannel(serverId: String, channelId: String) -> Channel? {
-        let channels = (try? DatabaseManager.shared.fetchChannels(forServer: serverId)) ?? []
-        if let ch = channels.first(where: { $0.id == channelId }) { return ch }
-        // Fallback: construct a minimal channel from the ID itself
-        return Channel(id: channelId, serverId: serverId, name: channelId)
-    }
-
-    // MARK: - Detail placeholder (shown when no channel is selected)
-
-    private var detailPlaceholder: some View {
-        VStack(spacing: 24) {
-            Image(systemName: "bubble.left.and.bubble.right")
-                .font(.system(size: 64))
-                .foregroundStyle(.tertiary)
-            Text("Select a channel")
-                .font(.title3)
-                .foregroundStyle(.secondary)
-            Text("Pick a server and channel from the sidebar to start chatting.")
-                .font(.subheadline)
-                .foregroundStyle(.tertiary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 40)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(.systemGroupedBackground))
-        .navigationTitle("")
-    }
-
     // MARK: - First-launch logic
 
     private func checkFirstLaunch() {
         let servers = (try? DatabaseManager.shared.fetchServers()) ?? []
         if servers.isEmpty {
-            // Delay slightly so splash shows first
             DispatchQueue.main.asyncAfter(deadline: .now() + 2.6) {
                 showOnboarding = true
             }
@@ -121,7 +78,6 @@ struct RootView: View {
     }
 
     private func handleOnboardingDismiss() {
-        // After onboarding, auto-connect servers with autoConnect = true
         Task {
             let servers = (try? DatabaseManager.shared.fetchServers()) ?? []
             for server in servers where server.autoConnect {
@@ -137,7 +93,7 @@ struct RootView: View {
             let servers = (try? DatabaseManager.shared.fetchServers()) ?? []
             for server in servers {
                 let state = ircManager.connectionState(for: server.id)
-                if state == .disconnected || state == .failed(IRCError.maxReconnectAttemptsReached) {
+                if state == .disconnected {
                     try? await ircManager.connect(to: server)
                 }
             }

@@ -1,46 +1,65 @@
 import SwiftUI
 
-/// A single collapsible server section in the sidebar.
-///
-/// Shows the server name with a live connection-state indicator dot,
-/// an options menu (⋯), and the list of joined channels underneath
-/// when expanded.
+/// A single collapsible server section header in the sidebar.
+/// Shows the server name, live connection-state dot, tappable nick subtitle,
+/// and an options menu.
 struct ServerRowView: View {
     let server: Server
-    @Binding var selectedChannelId: String?
     @Binding var isExpanded: Bool
 
     @EnvironmentObject private var ircManager: IRCClientManager
 
     @State private var showEditSheet = false
+    @State private var showNickSheet = false
     @State private var showDisconnectConfirm = false
     @State private var showDeleteConfirm = false
 
-    // Callback so the sidebar can reload its list after edit/delete
     var onServerUpdated: (() -> Void)?
 
     private var connectionState: ConnectionState {
         ircManager.connectionState(for: server.id)
     }
 
+    private var currentNick: String {
+        ircManager.currentNicknames[server.id] ?? server.nickname
+    }
+
     var body: some View {
         DisclosureGroup(isExpanded: $isExpanded) {
-            // Channels are rendered by the parent (ServerSidebarView) so they
-            // appear indented as list rows — we just provide the header here.
+            // Channels are rendered by the parent (ServerSidebarView)
         } label: {
             HStack(spacing: 10) {
-                // Status dot
                 ConnectionDot(state: connectionState)
 
-                // Server name
-                Text(server.name)
-                    .font(.headline)
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
+                // Server name + nick subtitle
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(server.name)
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+
+                    if !currentNick.isEmpty {
+                        Button {
+                            showNickSheet = true
+                        } label: {
+                            HStack(spacing: 3) {
+                                Image(systemName: "person.fill")
+                                    .font(.system(size: 9))
+                                Text(currentNick)
+                                    .font(.caption)
+                            }
+                            .foregroundStyle(
+                                connectionState == .connected
+                                    ? Color.accentColor
+                                    : Color.secondary
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
 
                 Spacer()
 
-                // Options menu
                 Menu {
                     menuContent
                 } label: {
@@ -57,6 +76,10 @@ struct ServerRowView: View {
         .sheet(isPresented: $showEditSheet, onDismiss: onServerUpdated) {
             AddServerSheet(existingServer: server) { _ in }
                 .environmentObject(AppState.shared)
+        }
+        .sheet(isPresented: $showNickSheet, onDismiss: onServerUpdated) {
+            NickIdentitySheet(server: server)
+                .environmentObject(ircManager)
         }
         .confirmationDialog(
             "Disconnect from \(server.name)?",
@@ -97,6 +120,12 @@ struct ServerRowView: View {
         }
 
         Divider()
+
+        Button {
+            showNickSheet = true
+        } label: {
+            Label("Change Nick…", systemImage: "person.badge.key")
+        }
 
         Button {
             showEditSheet = true
@@ -150,7 +179,9 @@ struct ConnectionDot: View {
         }
         .frame(width: 14, height: 14)
         .onAppear { pulse = isAnimating && !reduceMotion }
-        .onChange(of: state) { _, new in pulse = (new == .connecting || new == .reconnecting) && !reduceMotion }
+        .onChange(of: state) { _, new in
+            pulse = (new == .connecting || new == .reconnecting) && !reduceMotion
+        }
     }
 }
 
@@ -158,7 +189,6 @@ struct ConnectionDot: View {
     List {
         ServerRowView(
             server: Server.defaultNetworks[0],
-            selectedChannelId: .constant(nil),
             isExpanded: .constant(true)
         )
         .environmentObject(IRCClientManager.shared)

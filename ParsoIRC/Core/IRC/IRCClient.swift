@@ -298,6 +298,17 @@ actor IRCClient {
     func list() async throws {
         try await send_raw("LIST")
     }
+
+    /// Sends a filtered LIST request. If filter is non-empty, sends `LIST #filter*`
+    /// which most modern servers support for fast prefix-matching.
+    func list(filter: String) async throws {
+        if filter.isEmpty {
+            try await send_raw("LIST")
+        } else {
+            let pattern = filter.hasPrefix("#") ? "\(filter)*" : "#\(filter)*"
+            try await send_raw("LIST \(pattern)")
+        }
+    }
     
     func names(_ channel: String) async throws {
         // RFC 2812 §3.2.5: NAMES [<channel>]

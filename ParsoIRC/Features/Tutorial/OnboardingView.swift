@@ -223,9 +223,9 @@ private struct AddFirstServerPage: View {
                 .padding(.horizontal, 32)
                 .padding(.bottom, 32)
 
-            // Quick-pick network grid
+            // Quick-pick network grid — all 10 presets
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                ForEach(Array(Server.defaultNetworks.prefix(6).enumerated()), id: \.offset) { index, network in
+                ForEach(Array(Server.defaultNetworks.enumerated()), id: \.offset) { index, network in
                     NetworkCard(
                         network: network,
                         isSelected: selectedPresetIndex == index
@@ -284,20 +284,20 @@ private struct AddFirstServerPage: View {
     }
 
     private func saveAndConnect() {
-        var server = Server.defaultNetworks[selectedPresetIndex]
-        server = Server(
+        let template = Server.defaultNetworks[selectedPresetIndex]
+        let server = Server(
             id: UUID().uuidString,
-            name: server.name,
-            host: server.host,
-            port: server.port,
-            ssl: server.ssl,
+            name: template.name,
+            host: template.host,
+            port: template.port,
+            ssl: template.ssl,
             nickname: appState.globalNickname.isEmpty ? "parso\(Int.random(in: 1000...9999))" : appState.globalNickname,
             realname: appState.globalRealName.isEmpty ? "Parso IRC" : appState.globalRealName,
             password: nil,
             saslEnabled: false,
             autoConnect: true,
-            channels: server.channels,
-            lastActiveChannel: server.channels.first?.name
+            channels: [],   // user adds channels manually via the browser
+            lastActiveChannel: nil
         )
         try? DatabaseManager.shared.saveServer(server)
         isPresented = false

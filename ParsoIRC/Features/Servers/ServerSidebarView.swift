@@ -1,27 +1,31 @@
 import SwiftUI
 
-/// Left-column sidebar that shows all saved servers and their joined channels,
-/// plus a Direct Messages section below.
+/// Left-column sidebar (root of the NavigationStack) that shows saved servers
+/// and their joined channels. Tapping a channel calls `onSelectChannel` which
+/// pushes ChatView onto the stack from RootView.
 ///
 /// Structure:
 /// ```
 /// ┌──────────────────────────┐
-/// │  Parso IRC          ⚙   │  ← nav title + settings gear
+/// │  Parso IRC          ⚙   │
 /// ├──────────────────────────┤
-/// │ ● Libera.Chat       ⋯   │  ← ServerRowView (disclosure header)
-/// │   #linux            3   │  ← ChannelRowView
+/// │ ● Libera.Chat       ⋯   │
+/// │   johnarleyburns         │  ← tappable nick line
+/// │   #linux            3   │
 /// │   #rust                 │
 /// │   + Join a channel      │
 /// ├──────────────────────────┤
-/// │ Direct Messages         │  ← DM section (when non-empty)
+/// │ Direct Messages         │
 /// │   alice                 │
 /// ├──────────────────────────┤
-/// │  + Add Server           │  ← footer button
+/// │  + Add Server           │
 /// └──────────────────────────┘
 /// ```
 struct ServerSidebarView: View {
-    @Binding var selectedServerId: String?
-    @Binding var selectedChannelId: String?
+    // Navigation path binding — allows the sidebar to push destinations
+    @Binding var navPath: [NavDestination]
+    /// Called to navigate to a channel or DM.
+    var onSelectChannel: (String, String, String, Bool, String?) -> Void
 
     @EnvironmentObject private var ircManager: IRCClientManager
     @EnvironmentObject private var appState: AppState
@@ -53,9 +57,9 @@ struct ServerSidebarView: View {
                 }
             }
         }
-        .listStyle(.sidebar)
+        .listStyle(.insetGrouped)
         .navigationTitle("Parso IRC")
-        .navigationBarTitleDisplayMode(.inline)
+        .navigationBarTitleDisplayMode(.large)
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button {
@@ -73,7 +77,6 @@ struct ServerSidebarView: View {
         }
         .sheet(isPresented: $showAddServer, onDismiss: reloadServers) {
             AddServerSheet(existingServer: nil) { newServer in
-                // Auto-connect when added
                 Task { try? await ircManager.connect(to: newServer) }
             }
             .environmentObject(appState)
@@ -84,8 +87,10 @@ struct ServerSidebarView: View {
                 .environmentObject(ircManager)
         }
         .onAppear(perform: reloadAndConnect)
-        // Refresh when IRCClientManager publishes state changes
         .onChange(of: ircManager.connectionStates) { _, _ in
+            reloadServers()
+        }
+        .onChange(of: ircManager.currentNicknames) { _, _ in
             reloadServers()
         }
     }
@@ -95,10 +100,8 @@ struct ServerSidebarView: View {
     @ViewBuilder
     private func serverSection(for server: Server) -> some View {
         Section {
-            // Server header row (disclosure toggle + options menu)
             ServerRowView(
                 server: server,
-                selectedChannelId: $selectedChannelId,
                 isExpanded: Binding(
                     get: { expandedServers.contains(server.id) },
                     set: { expanded in
@@ -110,17 +113,13 @@ struct ServerSidebarView: View {
             )
             .environmentObject(ircManager)
 
-            // Channel rows (only when expanded)
             if expandedServers.contains(server.id) {
                 ForEach(server.channels) { channel in
                     ChannelRowView(
                         channel: channel,
                         serverId: server.id,
                         onSelect: { sid, cid in
-                            // Set both atomically so iPhone NavigationSplitView
-                            // navigates to the detail column in a single update cycle.
-                            selectedServerId = sid
-                            selectedChannelId = cid
+                            onSelectChannel(sid, cid, channel.name, false, nil)
                         },
                         onLeave: reloadServers
                     )
@@ -131,7 +130,6 @@ struct ServerSidebarView: View {
                     reorderChannels(for: server, from: indices, to: dest)
                 }
 
-                // Join a channel button
                 joinChannelRow(server: server)
             }
         }
@@ -155,8 +153,15 @@ struct ServerSidebarView: View {
             ),
             onDismiss: reloadServers
         ) {
-            ChannelBrowserSheet(server: server, onJoined: reloadServers)
-                .environmentObject(ircManager)
+            ChannelBrowserSheet(server: server, onJoined: { name in
+                reloadServers()
+                // Navigate directly to the joined channel
+                if let ch = (try? DatabaseManager.shared.fetchChannels(forServer: server.id))?
+                    .first(where: { $0.name == name }) {
+                    onSelectChannel(server.id, ch.id, name, false, nil)
+                }
+            })
+            .environmentObject(ircManager)
         }
     }
 
@@ -182,16 +187,15 @@ struct ServerSidebarView: View {
     // MARK: - DM row
 
     private func dmRow(_ dm: Channel) -> some View {
-        let isSelected = appState.selectedChannelId == dm.id
+        let isActive = appState.selectedChannelId == dm.id
         return Button {
-            selectedServerId = dm.serverId
-            selectedChannelId = dm.id
+            onSelectChannel(dm.serverId, dm.id, dm.name, true, dm.name)
         } label: {
             HStack(spacing: 10) {
                 AvatarView(nick: dm.name, size: 28)
                 Text(dm.name)
                     .font(.subheadline)
-                    .foregroundStyle(isSelected ? .primary : .secondary)
+                    .foregroundStyle(isActive ? .primary : .secondary)
                 Spacer()
                 let unread = ircManager.unreadCounts[dm.id] ?? 0
                 if unread > 0 {
@@ -200,13 +204,14 @@ struct ServerSidebarView: View {
                         .foregroundStyle(.white)
                         .padding(.horizontal, 6).padding(.vertical, 2)
                         .background(Color.accentColor, in: Capsule())
+                        .accessibilityLabel("\(unread) unread messages")
                 }
             }
             .padding(.vertical, 2)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .listRowBackground(isSelected ? Color.accentColor.opacity(0.15) : Color.clear)
+        .listRowBackground(isActive ? Color.accentColor.opacity(0.15) : Color.clear)
     }
 
     // MARK: - Data helpers
@@ -218,10 +223,8 @@ struct ServerSidebarView: View {
             s.isConnected = ircManager.connectionState(for: s.id) == .connected
             return s
         }
-        for server in servers {
-            if server.isConnected {
-                expandedServers.insert(server.id)
-            }
+        for server in servers where server.isConnected {
+            expandedServers.insert(server.id)
         }
         conversationsVM.loadConversations()
     }
@@ -235,8 +238,6 @@ struct ServerSidebarView: View {
             for server in loaded {
                 let state = ircManager.connectionState(for: server.id)
                 guard state == .disconnected else { continue }
-                // Connect if: autoConnect flag is set, OR was connected last session
-                // AND the user has not explicitly disconnected since then.
                 let shouldConnect = server.autoConnect
                     || (lastConnected.contains(server.id) && !explicit.contains(server.id))
                 if shouldConnect {
@@ -259,14 +260,12 @@ struct ServerSidebarView: View {
 // MARK: - Preview
 
 #Preview {
-    NavigationSplitView {
+    NavigationStack {
         ServerSidebarView(
-            selectedServerId: .constant(nil),
-            selectedChannelId: .constant(nil)
+            navPath: .constant([]),
+            onSelectChannel: { _, _, _, _, _ in }
         )
         .environmentObject(IRCClientManager.shared)
         .environmentObject(AppState.shared)
-    } detail: {
-        Text("Select a channel")
     }
 }

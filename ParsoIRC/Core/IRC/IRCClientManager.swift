@@ -63,6 +63,17 @@ final class IRCClientManager: ObservableObject {
         channelListCache.removeValue(forKey: serverId)
     }
 
+    /// Appended by ChannelBrowserSheet when it owns the list callbacks during a full LIST.
+    func appendToListStagingBuffer(serverId: String, entry: CachedListEntry) {
+        listStagingBuffer[serverId, default: []].append(entry)
+    }
+
+    /// Commits staging buffer to the cache (called on RPL_LISTEND).
+    func commitListStagingBuffer(serverId: String) {
+        let entries = listStagingBuffer.removeValue(forKey: serverId) ?? []
+        channelListCache[serverId] = CachedChannelList(entries: entries, fetchedAt: Date())
+    }
+
     // MARK: - Explicit disconnect tracking
     var explicitlyDisconnectedServerIds: Set<String> {
         get { Set(UserDefaults.standard.stringArray(forKey: "explicitDisconnects") ?? []) }
@@ -163,7 +174,8 @@ final class IRCClientManager: ObservableObject {
             
             connections[server.id] = client
             
-            for channel in server.channels {
+            // Only join channels the user explicitly joined (joinedAt != nil)
+            for channel in server.channels where channel.joinedAt != nil {
                 try await client.join(channel: channel.name)
             }
             
