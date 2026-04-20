@@ -41,9 +41,16 @@ final class ConversationsViewModel: ObservableObject {
 
     /// Returns (or creates) a DM channel for `nick` on `serverId`.
     func openDM(with nick: String, serverId: String) -> Channel {
-        // Look for existing DM channel
+        // Look for existing DM channel in memory first
         let existing = conversations.first { $0.name == nick && $0.serverId == serverId && $0.isDM }
         if let ch = existing { return ch }
+
+        // Check DB in case it exists but isn't loaded yet
+        let dbChannels = (try? DatabaseManager.shared.fetchChannels(forServer: serverId)) ?? []
+        if let dbCh = dbChannels.first(where: { $0.name == nick && $0.isDM }) {
+            loadConversations()
+            return dbCh
+        }
 
         // Create a new DM channel
         var ch = Channel(serverId: serverId, name: nick)
