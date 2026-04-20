@@ -49,15 +49,15 @@ struct ChatView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            MessageListView(
-                viewModel: viewModel,
-                onTapNick: { nick in
-                    prefillText = "\(nick): "
-                }
-            )
-
+        MessageListView(
+            viewModel: viewModel,
+            onTapNick: { nick in
+                prefillText = "\(nick): "
+            }
+        )
+        .safeAreaInset(edge: .bottom, spacing: 0) {
             InputBarView(viewModel: viewModel, prefillText: $prefillText)
+                .background(Color(.systemBackground))
         }
         .navigationTitle(channelName)
         .navigationBarTitleDisplayMode(.inline)
@@ -104,11 +104,14 @@ struct ChatView: View {
                 Text(channelName)
                     .font(.headline)
                 if !viewModel.topic.isEmpty {
-                    Text(viewModel.topic)
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .onTapGesture { showTopicPopover = true }
+                    Button { showTopicPopover = true } label: {
+                        Text(viewModel.topic)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityHint("Double-tap to view full topic")
                 }
             }
             .popover(isPresented: $showTopicPopover) {

@@ -95,6 +95,16 @@ struct NotificationSettingsView: View {
         .navigationTitle("Notifications")
         .navigationBarTitleDisplayMode(.inline)
         .task { await checkPermission() }
+        .alert("Notifications Blocked", isPresented: $showingPermissionAlert) {
+            Button("Open Settings") {
+                if let url = URL(string: UIApplication.openSettingsURLString) {
+                    UIApplication.shared.open(url)
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Go to Settings → Parso IRC to enable notifications.")
+        }
     }
 
     private func checkPermission() async {

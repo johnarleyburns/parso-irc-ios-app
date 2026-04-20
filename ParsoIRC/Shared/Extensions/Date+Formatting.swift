@@ -1,30 +1,41 @@
 import Foundation
 
 extension Date {
+    // MARK: - Cached formatters (DateFormatter is expensive to init)
+
+    private static let relativeFormatter: RelativeDateTimeFormatter = {
+        let f = RelativeDateTimeFormatter()
+        f.unitsStyle = .abbreviated
+        return f
+    }()
+
+    private static let timeFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "h:mm a"
+        return f
+    }()
+
+    private static let longDateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "MMMM d, yyyy"
+        return f
+    }()
+
+    // MARK: - API
+
     func timeAgo() -> String {
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .abbreviated
-        return formatter.localizedString(for: self, relativeTo: Date())
+        Date.relativeFormatter.localizedString(for: self, relativeTo: Date())
     }
     
     func formattedTime() -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "h:mm a"
-        return formatter.string(from: self)
+        Date.timeFormatter.string(from: self)
     }
     
     func formattedDate() -> String {
         let calendar = Calendar.current
-        
-        if calendar.isDateInToday(self) {
-            return "Today"
-        } else if calendar.isDateInYesterday(self) {
-            return "Yesterday"
-        } else {
-            let formatter = DateFormatter()
-            formatter.dateFormat = "MMMM d, yyyy"
-            return formatter.string(from: self)
-        }
+        if calendar.isDateInToday(self)     { return "Today" }
+        if calendar.isDateInYesterday(self) { return "Yesterday" }
+        return Date.longDateFormatter.string(from: self)
     }
     
     func isSameDay(as other: Date) -> Bool {

@@ -2,38 +2,45 @@ import SwiftUI
 import UIKit
 
 struct HapticManager {
+    // Cached generators — created once, prepared before use to reduce latency
+    private static let lightGenerator   = UIImpactFeedbackGenerator(style: .light)
+    private static let mediumGenerator  = UIImpactFeedbackGenerator(style: .medium)
+    private static let heavyGenerator   = UIImpactFeedbackGenerator(style: .heavy)
+    private static let notifyGenerator  = UINotificationFeedbackGenerator()
+    private static let selectGenerator  = UISelectionFeedbackGenerator()
+
     static func lightImpact() {
-        let generator = UIImpactFeedbackGenerator(style: .light)
-        generator.impactOccurred()
+        lightGenerator.prepare()
+        lightGenerator.impactOccurred()
     }
     
     static func mediumImpact() {
-        let generator = UIImpactFeedbackGenerator(style: .medium)
-        generator.impactOccurred()
+        mediumGenerator.prepare()
+        mediumGenerator.impactOccurred()
     }
     
     static func heavyImpact() {
-        let generator = UIImpactFeedbackGenerator(style: .heavy)
-        generator.impactOccurred()
+        heavyGenerator.prepare()
+        heavyGenerator.impactOccurred()
     }
     
     static func successFeedback() {
-        let generator = UINotificationFeedbackGenerator()
-        generator.notificationOccurred(.success)
+        notifyGenerator.prepare()
+        notifyGenerator.notificationOccurred(.success)
     }
     
     static func warningFeedback() {
-        let generator = UINotificationFeedbackGenerator()
-        generator.notificationOccurred(.warning)
+        notifyGenerator.prepare()
+        notifyGenerator.notificationOccurred(.warning)
     }
     
     static func errorFeedback() {
-        let generator = UINotificationFeedbackGenerator()
-        generator.notificationOccurred(.error)
+        notifyGenerator.prepare()
+        notifyGenerator.notificationOccurred(.error)
     }
     
     static func selectionFeedback() {
-        let generator = UISelectionFeedbackGenerator()
-        generator.selectionChanged()
+        selectGenerator.prepare()
+        selectGenerator.selectionChanged()
     }
 }

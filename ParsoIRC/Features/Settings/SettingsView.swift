@@ -170,7 +170,9 @@ struct SettingsView: View {
 
     // MARK: - Developer section
 
+    @ViewBuilder
     private var developerSection: some View {
+        #if DEBUG
         Section {
             NavigationLink("Debug Terminal") {
                 DebugTerminalView()
@@ -180,6 +182,9 @@ struct SettingsView: View {
         } header: {
             Text("Developer")
         }
+        #else
+        EmptyView()
+        #endif
     }
 
     // MARK: - About section

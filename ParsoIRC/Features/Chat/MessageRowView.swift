@@ -20,6 +20,13 @@ struct MessageRowView: View {
     /// Called when the user long-presses the bubble (context menu parent).
     var onLongPress: ((Message) -> Void)? = nil
 
+    // Appearance settings
+    @AppStorage("messageFontSize") private var messageFontSize: Double = 15
+    @AppStorage("messageDensity") private var messageDensity: String = "comfortable"
+
+    private var verticalBubblePad: CGFloat { messageDensity == "compact" ? 6 : 8 }
+    private var rowTopPad: CGFloat { grouped ? 1 : (messageDensity == "compact" ? 3 : 6) }
+
     private var isOutgoing: Bool { message.isFromCurrentUser }
     private var isSystem: Bool {
         switch message.type {
@@ -30,10 +37,13 @@ struct MessageRowView: View {
     private var isAction: Bool { message.type == .action }
     private var isNotice: Bool { message.type == .notice }
 
-    // True when our nick appears in the message content (mention highlight)
+    // True when our nick appears as a whole word in the message (mention highlight)
     private var isMention: Bool {
         guard !isOutgoing && !currentNick.isEmpty else { return false }
-        return message.content.localizedCaseInsensitiveContains(currentNick)
+        let escaped = NSRegularExpression.escapedPattern(for: currentNick)
+        // Match nick as a whole word, optionally followed by : or ,
+        let pattern = "(?i)(?<![\\w])\\Q\(escaped)\\E(?![\\w])"
+        return message.content.range(of: pattern, options: .regularExpression) != nil
     }
 
     var body: some View {
@@ -49,7 +59,7 @@ struct MessageRowView: View {
             }
         }
         // Tighter spacing when grouped, generous when not
-        .padding(.top, grouped ? 1 : 6)
+        .padding(.top, rowTopPad)
         .padding(.bottom, 1)
     }
 
@@ -188,11 +198,11 @@ struct MessageRowView: View {
         foreground: Color,
         corners: UIRectCorner
     ) -> some View {
-        Text(content)
-            .font(.body)
+        Text(IRCTextFormatter.attributedString(from: content, foreground: foreground))
+            .font(.system(size: messageFontSize))
             .foregroundStyle(foreground)
             .padding(.horizontal, 12)
-            .padding(.vertical, 8)
+            .padding(.vertical, verticalBubblePad)
             .background(
                 BubbleShape(corners: corners)
                     .fill(background)

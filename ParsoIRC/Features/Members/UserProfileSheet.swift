@@ -34,6 +34,9 @@ struct UserProfileSheet: View {
     @State private var isLoadingWhois: Bool = false
     @State private var whoisDone: Bool = false
 
+    // Saved handler — restored when this sheet closes so ChatView's topic feed keeps working
+    private var _savedUnhandledHandler: ((IRCMessage) -> Void)? = nil
+
     var body: some View {
         NavigationStack {
             ScrollView {
@@ -251,7 +254,9 @@ struct UserProfileSheet: View {
         isLoadingWhois = true
         whoisDone = false
 
-        // Register a one-shot callback on onUnhandledMessage to catch WHOIS numerics
+        // Save the existing handler so we can restore it when the sheet closes,
+        // preventing this WHOIS observer from permanently severing ChatView's topic feed.
+        let existing = client.onUnhandledMessage
         client.onUnhandledMessage = { [nick] ircMsg in
             Task { @MainActor in
                 self.handleWhoisNumeric(ircMsg, for: nick)
@@ -261,6 +266,9 @@ struct UserProfileSheet: View {
         Task {
             try? await client.whois(nick)
         }
+
+        // Store existing so deregister can restore it
+        _savedUnhandledHandler = existing
     }
 
     private func handleWhoisNumeric(_ msg: IRCMessage, for targetNick: String) {
@@ -313,8 +321,9 @@ struct UserProfileSheet: View {
     }
 
     private func deregisterWhoisCallback() {
-        // Restore a nil handler so we don't intercept messages meant for ChatView
-        ircManager.getClient(for: serverId)?.onUnhandledMessage = nil
+        // Restore the previous handler rather than setting nil,
+        // so ChatView's topic feed (numeric 332) continues working.
+        ircManager.getClient(for: serverId)?.onUnhandledMessage = _savedUnhandledHandler
     }
 
     // MARK: - Helpers

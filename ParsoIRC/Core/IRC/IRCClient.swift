@@ -458,6 +458,16 @@ actor IRCClient {
                 self.onWelcome?(nick)
             }
 
+        case "433", "432", "436":
+            // ERR_NICKNAMEINUSE / ERR_ERRONEUSNICKNAME / ERR_NICKCOLLISION
+            // Auto-append underscore and retry
+            currentNick = currentNick + "_"
+            debugLog.log("Nick in use, trying: \(currentNick)", type: .info)
+            try? await send_raw("NICK \(currentNick)")
+            await MainActor.run {
+                self.onUnhandledMessage?(message)
+            }
+
         case "JOIN":
             // RFC 2812 §3.2.1: :nick!user@host JOIN <channel>
             let channel = message.parameters.first ?? ""

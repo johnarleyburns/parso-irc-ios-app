@@ -132,10 +132,11 @@ struct ConnectionDot: View {
     }
 
     @State private var pulse = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         ZStack {
-            if isAnimating {
+            if isAnimating && !reduceMotion {
                 Circle()
                     .fill(color.opacity(0.3))
                     .frame(width: 14, height: 14)
@@ -148,8 +149,8 @@ struct ConnectionDot: View {
                 .frame(width: 8, height: 8)
         }
         .frame(width: 14, height: 14)
-        .onAppear { pulse = isAnimating }
-        .onChange(of: state) { _, new in pulse = new == .connecting || new == .reconnecting }
+        .onAppear { pulse = isAnimating && !reduceMotion }
+        .onChange(of: state) { _, new in pulse = (new == .connecting || new == .reconnecting) && !reduceMotion }
     }
 }
 

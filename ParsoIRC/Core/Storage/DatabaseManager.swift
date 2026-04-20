@@ -263,13 +263,16 @@ final class DatabaseManager {
     func deleteServer(id: String) throws {
         guard let db = db else { return }
         
-        let server = servers.filter(serverId == id)
-        try db.run(server.delete())
-        
-        let serverChannels = channels.filter(channelServerId == id)
-        try db.run(serverChannels.delete())
-        
-        // Messages will be deleted via cascade or manually
+        // Delete messages for all channels of this server first
+        let serverChannelIds = try db.prepare(
+            channels.filter(channelServerId == id).select(channelId)
+        ).map { $0[channelId] }
+        for cid in serverChannelIds {
+            try db.run(messages.filter(messageChannelId == cid).delete())
+        }
+
+        try db.run(channels.filter(channelServerId == id).delete())
+        try db.run(servers.filter(serverId == id).delete())
     }
 
     /// Deletes a channel and all its messages in a single transaction.

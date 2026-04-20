@@ -16,6 +16,7 @@ struct ChannelBrowserSheet: View {
 
     // LIST results (local, built from cache or live stream)
     @State private var channels: [ListEntry] = []
+    @State private var seenNames: Set<String> = []   // O(1) dedup guard
     @State private var isLoading = false
     @State private var listDone = false
     @State private var searchText = ""
@@ -163,7 +164,7 @@ struct ChannelBrowserSheet: View {
                     }
                 }
                 if !entry.topic.isEmpty {
-                    Text(entry.topic)
+                    Text(IRCTextFormatter.stripped(entry.topic))
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
@@ -249,6 +250,7 @@ struct ChannelBrowserSheet: View {
     private func refresh() {
         ircManager.clearChannelListCache(for: server.id)
         channels = []
+        seenNames = []
         cacheDate = nil
         listDone = false
         startList()
@@ -261,9 +263,10 @@ struct ChannelBrowserSheet: View {
         // Use dedicated LIST callbacks — do NOT touch onUnhandledMessage
         client.onListEntry = { name, count, topic in
             Task { @MainActor in
-                if !self.channels.contains(where: { $0.name == name }) {
-                    self.channels.append(ListEntry(id: name, name: name, members: count, topic: topic))
-                }
+                // O(1) dedup using Set
+                guard !self.seenNames.contains(name) else { return }
+                self.seenNames.insert(name)
+                self.channels.append(ListEntry(id: name, name: name, members: count, topic: topic))
             }
         }
         client.onListEnd = {

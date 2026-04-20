@@ -83,6 +83,7 @@ final class IRCClientManager: ObservableObject {
     }
     
     private var reconnectTimers: [String: Timer] = [:]
+    private var reconnectAttempts: [String: Int] = [:]
     private var maxReconnectAttempts = 5
     
     private init() {}
@@ -113,6 +114,7 @@ final class IRCClientManager: ObservableObject {
             Task { @MainActor in
                 self?.currentNicknames[server.id] = nick
                 self?.connectionStates[server.id] = .connected
+                self?.reconnectAttempts[server.id] = 0  // reset on successful connect
             }
         }
 
@@ -264,23 +266,25 @@ final class IRCClientManager: ObservableObject {
     
     private func handleDisconnect(serverId: String) {
         connectionStates[serverId] = .disconnected
-        
         scheduleReconnect(serverId: serverId)
     }
     
     private func scheduleReconnect(serverId: String) {
-        let attempts = reconnectTimers.filter { $0.key == serverId }.count
+        let attempts = reconnectAttempts[serverId, default: 0]
         
         guard attempts < maxReconnectAttempts else {
             connectionStates[serverId] = .failed(IRCError.maxReconnectAttemptsReached)
+            reconnectAttempts[serverId] = 0
             return
         }
         
         connectionStates[serverId] = .reconnecting
+        reconnectAttempts[serverId] = attempts + 1
+
+        let delay = pow(2.0, Double(attempts))  // 1s, 2s, 4s, 8s, 16s
         
-        let delay = pow(2.0, Double(attempts))
-        
-        Timer.scheduledTimer(withTimeInterval: delay, repeats: false) { [weak self] _ in
+        reconnectTimers[serverId]?.invalidate()
+        reconnectTimers[serverId] = Timer.scheduledTimer(withTimeInterval: delay, repeats: false) { [weak self] _ in
             Task { @MainActor in
                 if let server = try? DatabaseManager.shared.fetchServers().first(where: { $0.id == serverId }) {
                     try? await self?.connect(to: server)

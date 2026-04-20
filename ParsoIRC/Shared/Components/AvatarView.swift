@@ -16,8 +16,7 @@ struct AvatarView: View {
     }
     
     private var initials: String {
-        let firstChar = nick.prefix(1).uppercased()
-        return firstChar
+        nick.prefix(1).uppercased()
     }
     
     var body: some View {
@@ -31,6 +30,8 @@ struct AvatarView: View {
                 Circle()
                     .strokeBorder(Color(uiColor: .systemBackground), lineWidth: showBorder ? 2 : 0)
             )
+            .accessibilityLabel("\(nick)'s avatar")
+            .accessibilityHidden(false)
     }
 }
 

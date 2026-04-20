@@ -36,6 +36,9 @@ struct AddServerSheet: View {
     @State private var autoJoinChannels: [String] = []
     @State private var newChannelName: String = ""
 
+    // Connection behaviour
+    @State private var autoConnect: Bool = true
+
     @State private var showValidationAlert = false
     @State private var validationMessage = ""
 
@@ -51,6 +54,14 @@ struct AddServerSheet: View {
                 identitySection
                 authSection
                 channelsSection
+                Section {
+                    Toggle("Auto-connect on launch", isOn: $autoConnect)
+                        .tint(.accentColor)
+                } header: {
+                    Text("Connection")
+                } footer: {
+                    Text("When enabled, Parso IRC will connect to this server automatically each time you open the app.")
+                }
             }
             .navigationTitle(isEditing ? "Edit Server" : "Add Server")
             .navigationBarTitleDisplayMode(.inline)
@@ -238,14 +249,16 @@ struct AddServerSheet: View {
             realName = s.realname
             serverPassword = s.password ?? ""
             saslEnabled = s.saslEnabled
-            saslUsername = s.nickname  // SASL username is often the nick
+            saslUsername = s.nickname  // SASL username is often the nick (TODO: store separately)
             saslPassword = s.password ?? ""
             autoJoinChannels = s.channels.map(\.name)
+            autoConnect = s.autoConnect
             showAuthSection = s.saslEnabled || !(s.password ?? "").isEmpty
         } else {
             // New server: apply global defaults
             nickname = appState.globalNickname
             realName = appState.globalRealName
+            autoConnect = true
             // Default to Libera.Chat
             applyPreset(.libera)
         }
@@ -310,7 +323,7 @@ struct AddServerSheet: View {
             password: serverPassword.isEmpty ? nil : serverPassword,
             saslEnabled: saslEnabled,
             saslMechanism: "PLAIN",
-            autoConnect: true,
+            autoConnect: autoConnect,
             createdAt: existingServer?.createdAt ?? Date(),
             channels: channels,
             lastActiveChannel: channels.first?.name

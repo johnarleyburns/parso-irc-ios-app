@@ -4,6 +4,7 @@ import SwiftUI
 ///
 /// Automatically scrolls to the bottom when new messages arrive and keeps
 /// position when the user has scrolled up to read history.
+/// Shows a jump-to-bottom button when the user has scrolled up.
 struct MessageListView: View {
     @ObservedObject var viewModel: ChannelViewModel
 
@@ -20,51 +21,84 @@ struct MessageListView: View {
 
     // ID of the bottom anchor
     private let bottomAnchorId = "BOTTOM_ANCHOR"
+    private let nearBottomSentinelId = "NEAR_BOTTOM_SENTINEL"
 
     var body: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 0) {
-                    // History loading spinner at the top
-                    if viewModel.isLoadingHistory {
-                        HStack {
-                            Spacer()
-                            ProgressView()
-                                .padding()
-                            Spacer()
+        ZStack(alignment: .bottomTrailing) {
+            ScrollViewReader { proxy in
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 0) {
+                        // History loading spinner at the top
+                        if viewModel.isLoadingHistory {
+                            HStack {
+                                Spacer()
+                                ProgressView()
+                                    .padding()
+                                Spacer()
+                            }
+                            .id("LOADING")
                         }
-                        .id("LOADING")
-                    }
 
-                    // Message rows
-                    ForEach(viewModel.displayMessages) { item in
-                        displayRow(for: item)
-                            .id(item.id)
-                    }
+                        // Message rows
+                        ForEach(viewModel.displayMessages) { item in
+                            displayRow(for: item)
+                                .id(item.id)
+                        }
 
-                    // Invisible bottom anchor
-                    Color.clear
-                        .frame(height: 1)
-                        .id(bottomAnchorId)
+                        // Sentinel: when this is visible, user is near bottom
+                        Color.clear.frame(height: 1)
+                            .id(nearBottomSentinelId)
+                            .onAppear  { isNearBottom = true  }
+                            .onDisappear { isNearBottom = false }
+
+                        // Invisible bottom anchor
+                        Color.clear
+                            .frame(height: 1)
+                            .id(bottomAnchorId)
+                    }
+                    .padding(.bottom, 8)
                 }
-                .padding(.bottom, 8)
-            }
-            .background(Color(.systemGroupedBackground))
-            .onAppear {
-                scrollProxy = proxy
-                scrollToBottom(proxy: proxy, animated: false)
-            }
-            // Scroll to bottom when new messages arrive (only if already near bottom)
-            .onChange(of: viewModel.displayMessages.count) { _, _ in
-                if isNearBottom {
-                    scrollToBottom(proxy: proxy, animated: true)
-                }
-            }
-            // Always scroll to bottom when the view first appears with messages
-            .onChange(of: viewModel.isLoadingHistory) { _, loading in
-                if !loading {
+                .background(Color(.systemGroupedBackground))
+                .onAppear {
+                    scrollProxy = proxy
                     scrollToBottom(proxy: proxy, animated: false)
                 }
+                // Scroll to bottom when new messages arrive (only if already near bottom)
+                .onChange(of: viewModel.displayMessages.count) { _, _ in
+                    if isNearBottom {
+                        scrollToBottom(proxy: proxy, animated: true)
+                    }
+                }
+                // Always scroll to bottom when history finishes loading
+                .onChange(of: viewModel.isLoadingHistory) { _, loading in
+                    if !loading {
+                        scrollToBottom(proxy: proxy, animated: false)
+                    }
+                }
+            }
+
+            // Jump-to-bottom button (appears when user has scrolled up)
+            if !isNearBottom {
+                Button {
+                    if let proxy = scrollProxy {
+                        scrollToBottom(proxy: proxy, animated: true)
+                    }
+                } label: {
+                    ZStack {
+                        Circle()
+                            .fill(.regularMaterial)
+                            .frame(width: 40, height: 40)
+                            .shadow(radius: 3)
+                        Image(systemName: "arrow.down")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(Color.accentColor)
+                    }
+                }
+                .padding(.trailing, 12)
+                .padding(.bottom, 8)
+                .transition(.scale.combined(with: .opacity))
+                .animation(.spring(duration: 0.25), value: isNearBottom)
+                .accessibilityLabel("Scroll to latest message")
             }
         }
         .confirmationDialog(

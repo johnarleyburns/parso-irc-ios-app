@@ -2,8 +2,10 @@ import SwiftUI
 
 /// The bottom input bar: text field, send button, and a `+` action menu.
 ///
-/// When the user types `/` as the first character a compact command suggestion
-/// strip appears above the keyboard listing matching slash commands.
+/// Features:
+/// - Slash-command autocomplete strip when the user types `/`
+/// - Nick completion strip when the user types `@` or starts a word that matches members
+/// - Keyboard submit on Return (single-line messages only)
 struct InputBarView: View {
     @ObservedObject var viewModel: ChannelViewModel
 
@@ -37,16 +39,39 @@ struct InputBarView: View {
         return slashCommands.filter { $0.cmd.hasPrefix(lower) }
     }
 
-    private var showAutocomplete: Bool { !filteredCommands.isEmpty && inputText != filteredCommands.first?.cmd }
+    // Nick completion: active when last word starts with @ or just letters
+    private var nickCompletionPrefix: String? {
+        guard !inputText.hasPrefix("/") else { return nil }
+        let words = inputText.split(separator: " ", omittingEmptySubsequences: false)
+        let last = String(words.last ?? "")
+        guard !last.isEmpty else { return nil }
+        let stripped = last.hasPrefix("@") ? String(last.dropFirst()) : last
+        guard !stripped.isEmpty else { return nil }
+        return stripped.lowercased()
+    }
+
+    private var nickSuggestions: [String] {
+        guard let prefix = nickCompletionPrefix else { return [] }
+        return viewModel.members
+            .filter { $0.nick.lowercased().hasPrefix(prefix) }
+            .map(\.nick)
+            .sorted()
+    }
+
+    private var showSlashAutocomplete: Bool { !filteredCommands.isEmpty && inputText != filteredCommands.first?.cmd }
+    private var showNickCompletion: Bool { !nickSuggestions.isEmpty && nickCompletionPrefix != nil && nickCompletionPrefix!.count >= 1 }
     private var canSend: Bool { !inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
 
     var body: some View {
         VStack(spacing: 0) {
             Divider()
 
-            // Slash-command autocomplete strip
-            if showAutocomplete {
+            // Autocomplete strip (slash commands or nick completion)
+            if showSlashAutocomplete {
                 commandSuggestions
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            } else if showNickCompletion {
+                nickSuggestionStrip
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
 
@@ -96,6 +121,52 @@ struct InputBarView: View {
             prefillText = ""
             isTextFieldFocused = true
         }
+    }
+
+    // MARK: - Nick completion strip
+
+    private var nickSuggestionStrip: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(nickSuggestions, id: \.self) { nick in
+                    Button {
+                        completeNick(nick)
+                    } label: {
+                        HStack(spacing: 4) {
+                            AvatarView(nick: nick, size: 18, showBorder: false)
+                            Text(nick)
+                                .font(.caption)
+                                .fontWeight(.semibold)
+                                .foregroundStyle(.primary)
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(
+                            RoundedRectangle(cornerRadius: 8)
+                                .fill(Color(.secondarySystemGroupedBackground))
+                        )
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+        }
+        .background(Color(.systemBackground))
+    }
+
+    private func completeNick(_ nick: String) {
+        // Replace the last word with the completed nick + ": " (IRC convention for first word)
+        // or just the nick + " " if it's mid-sentence
+        var words = inputText.split(separator: " ", omittingEmptySubsequences: false).map(String.init)
+        if words.isEmpty {
+            inputText = nick + ": "
+        } else {
+            let isFirstWord = words.count == 1
+            words[words.count - 1] = isFirstWord ? nick + ": " : nick + " "
+            inputText = words.joined(separator: " ")
+        }
+        HapticManager.selectionFeedback()
     }
 
     // MARK: - Autocomplete strip

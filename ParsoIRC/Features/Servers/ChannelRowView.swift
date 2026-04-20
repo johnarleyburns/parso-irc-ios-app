@@ -103,6 +103,7 @@ struct ChannelRowView: View {
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
                     .background(Color.accentColor, in: Capsule())
+                    .accessibilityLabel("\(unreadCount) unread messages")
             }
         }
         .padding(.vertical, 2)

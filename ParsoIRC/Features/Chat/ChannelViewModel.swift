@@ -44,6 +44,8 @@ final class ChannelViewModel: ObservableObject {
     private let ircManager: IRCClientManager
     private var rawMessages: [Message] = []   // source of truth, append-only
     private var seenMessageIds: Set<String> = []  // dedup
+    // Cached channel ID to avoid repeated DB queries on every message append
+    private let _cachedChannelId: String
 
     // MARK: - Init / deinit
 
@@ -52,6 +54,10 @@ final class ChannelViewModel: ObservableObject {
         self.channelName = channelName
         self.ircManager = ircManager
         self.currentNick = ircManager.currentNicknames[serverId] ?? ""
+        // Cache the channel ID once at init (DB lookup is expensive per-message)
+        self._cachedChannelId = (try? DatabaseManager.shared.fetchChannels(forServer: serverId)
+            .first { $0.name == channelName }?.id)
+            ?? "\(serverId):\(channelName)"
     }
 
     // MARK: - Lifecycle (called from ChatView .task)
@@ -110,12 +116,7 @@ final class ChannelViewModel: ObservableObject {
 
     // MARK: - Private helpers
 
-    private var channelId: String {
-        // Use the DB channel id if available; fall back to a stable composite key.
-        (try? DatabaseManager.shared.fetchChannels(forServer: serverId)
-            .first { $0.name == channelName }?.id)
-            ?? "\(serverId):\(channelName)"
-    }
+    private var channelId: String { _cachedChannelId }
 
     // MARK: Persisted history
 
