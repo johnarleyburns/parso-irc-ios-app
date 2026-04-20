@@ -343,52 +343,90 @@ struct AddServerSheet: View {
 // MARK: - Preset networks
 
 enum PresetNetwork: String, CaseIterable, Identifiable {
-    case libera, oftc, rizon, ircnet, efnet, quakenet, undernet, dalnet, hackint, snoonet, custom
+    case libera, oftc, rizon, ircnet, efnet, quakenet, undernet, dalnet, hackint, snoonet,
+         twoSixHundredNet, tildechat, freenode, geekshed, gamesurge, irchighway,
+         chatjunkies, allnetwork, p2pnet, sorcerynet,
+         ircam, digitalized, pirc, anonops, austnet,
+         custom
 
     var id: String { rawValue }
 
     var displayName: String {
         switch self {
-        case .libera:    return "Libera.Chat"
-        case .oftc:      return "OFTC"
-        case .rizon:     return "Rizon"
-        case .ircnet:    return "IRCnet"
-        case .efnet:     return "EFnet"
-        case .quakenet:  return "QuakeNet"
-        case .undernet:  return "Undernet"
-        case .dalnet:    return "DALnet"
-        case .hackint:   return "hackint"
-        case .snoonet:   return "Snoonet"
-        case .custom:    return "Custom…"
+        case .libera:         return "Libera.Chat"
+        case .oftc:           return "OFTC"
+        case .rizon:          return "Rizon"
+        case .ircnet:         return "IRCnet"
+        case .efnet:          return "EFnet"
+        case .quakenet:       return "QuakeNet"
+        case .undernet:       return "Undernet"
+        case .dalnet:         return "DALnet"
+        case .hackint:        return "hackint"
+        case .snoonet:        return "Snoonet"
+        case .twoSixHundredNet: return "2600net"
+        case .tildechat:      return "tilde.chat"
+        case .freenode:       return "Freenode"
+        case .geekshed:       return "GeekShed"
+        case .gamesurge:      return "GameSurge"
+        case .irchighway:     return "IRCHighway"
+        case .chatjunkies:    return "ChatJunkies"
+        case .allnetwork:     return "AllNetwork"
+        case .p2pnet:         return "P2P-NET"
+        case .sorcerynet:     return "SorceryNet"
+        case .ircam:          return "IRCAM"
+        case .digitalized:    return "Digitalized"
+        case .pirc:           return "PIRC"
+        case .anonops:        return "AnonOps"
+        case .austnet:        return "Austnet"
+        case .custom:         return "Custom…"
         }
     }
 
     var host: String {
         switch self {
-        case .libera:    return "irc.libera.chat"
-        case .oftc:      return "irc.oftc.net"
-        case .rizon:     return "irc.rizon.net"
-        case .ircnet:    return "open.ircnet.net"
-        case .efnet:     return "irc.efnet.org"
-        case .quakenet:  return "irc.quakenet.org"
-        case .undernet:  return "irc.undernet.org"
-        case .dalnet:    return "irc.dal.net"
-        case .hackint:   return "irc.hackint.org"
-        case .snoonet:   return "irc.snoonet.org"
-        case .custom:    return ""
+        case .libera:         return "irc.libera.chat"
+        case .oftc:           return "irc.oftc.net"
+        case .rizon:          return "irc.rizon.net"
+        case .ircnet:         return "open.ircnet.net"
+        case .efnet:          return "irc.efnet.org"
+        case .quakenet:       return "irc.quakenet.org"
+        case .undernet:       return "irc.undernet.org"
+        case .dalnet:         return "irc.dal.net"
+        case .hackint:        return "irc.hackint.org"
+        case .snoonet:        return "irc.snoonet.org"
+        case .twoSixHundredNet: return "irc.2600.net"
+        case .tildechat:      return "irc.tilde.chat"
+        case .freenode:       return "irc.freenode.net"
+        case .geekshed:       return "irc.geekshed.net"
+        case .gamesurge:      return "irc.gamesurge.net"
+        case .irchighway:     return "irc.irchighway.net"
+        case .chatjunkies:    return "irc.chatjunkies.org"
+        case .allnetwork:     return "irc.allnetwork.org"
+        case .p2pnet:         return "irc.p2p-irc.net"
+        case .sorcerynet:     return "irc.sorcery.net"
+        case .ircam:          return "irc.ircam.fr"
+        case .digitalized:    return "irc.digitalized.tv"
+        case .pirc:           return "pirc.at"
+        case .anonops:        return "irc.anonops.com"
+        case .austnet:        return "irc.austnet.org"
+        case .custom:         return ""
         }
     }
 
     var port: Int {
         switch self {
-        case .libera, .oftc, .rizon, .hackint, .snoonet: return 6697
-        default: return 6667
+        case .libera, .oftc, .rizon, .hackint, .snoonet,
+             .twoSixHundredNet, .tildechat, .freenode, .geekshed,
+             .irchighway, .chatjunkies, .allnetwork, .p2pnet, .sorcerynet,
+             .ircam, .digitalized, .pirc, .anonops:
+            return 6697
+        default:
+            return 6667
         }
     }
 
     var tls: Bool { port == 6697 }
 
-    /// Try to match a host string back to a known preset.
     init?(host: String) {
         if let match = PresetNetwork.allCases.first(where: { $0.host == host && $0 != .custom }) {
             self = match

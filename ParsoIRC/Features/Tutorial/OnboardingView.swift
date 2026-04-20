@@ -205,40 +205,44 @@ private struct AddFirstServerPage: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            Spacer().frame(height: 100)
+            // Header (fixed)
+            VStack(spacing: 8) {
+                Image(systemName: "server.rack")
+                    .font(.system(size: 52))
+                    .foregroundStyle(Color.accentColor)
+                    .padding(.top, 80)
+                    .padding(.bottom, 8)
 
-            Image(systemName: "server.rack")
-                .font(.system(size: 64))
-                .foregroundStyle(Color.accentColor)
-                .padding(.bottom, 32)
+                Text("Choose a Network")
+                    .font(.system(size: 26, weight: .bold, design: .rounded))
 
-            Text("Choose a Network")
-                .font(.system(size: 28, weight: .bold, design: .rounded))
-                .padding(.bottom, 8)
+                Text("Pick a server to get started. You can add more later.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 32)
+            }
+            .padding(.bottom, 16)
 
-            Text("Pick a server to get started. You can add more later.")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 32)
-                .padding(.bottom, 32)
-
-            // Quick-pick network grid — all 10 presets
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                ForEach(Array(Server.defaultNetworks.enumerated()), id: \.offset) { index, network in
-                    NetworkCard(
-                        network: network,
-                        isSelected: selectedPresetIndex == index
-                    ) {
-                        selectedPresetIndex = index
+            // Scrollable 2-column network grid
+            ScrollView {
+                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+                    ForEach(Array(Server.defaultNetworks.enumerated()), id: \.offset) { index, network in
+                        NetworkCard(
+                            network: network,
+                            isSelected: selectedPresetIndex == index
+                        ) {
+                            selectedPresetIndex = index
+                        }
                     }
                 }
+                .padding(.horizontal, 20)
+                .padding(.bottom, 8)
             }
-            .padding(.horizontal, 24)
 
-            Spacer()
-
-            VStack(spacing: 12) {
+            // Footer (fixed)
+            VStack(spacing: 10) {
+                Divider()
                 Button {
                     saveAndConnect()
                 } label: {
@@ -250,7 +254,7 @@ private struct AddFirstServerPage: View {
                         .foregroundStyle(.white)
                         .clipShape(RoundedRectangle(cornerRadius: 16))
                 }
-                .padding(.horizontal, 32)
+                .padding(.horizontal, 24)
 
                 Button {
                     showAddServer = true
@@ -259,7 +263,6 @@ private struct AddFirstServerPage: View {
                         .font(.subheadline)
                         .foregroundStyle(Color.accentColor)
                 }
-                .padding(.bottom, 8)
 
                 Button {
                     isPresented = false
@@ -268,7 +271,7 @@ private struct AddFirstServerPage: View {
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
-                .padding(.bottom, 48)
+                .padding(.bottom, 40)
             }
         }
         .sheet(isPresented: $showAddServer, onDismiss: {

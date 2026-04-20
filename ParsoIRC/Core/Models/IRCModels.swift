@@ -55,97 +55,34 @@ struct Server: Identifiable, Codable, Equatable, Hashable {
     }
 
     static let defaultNetworks: [Server] = [
-        Server(
-            name: "Libera.Chat",
-            host: "irc.libera.chat",
-            port: 6697,
-            ssl: true,
-            nickname: "",
-            realname: "",
-            saslEnabled: false,
-            channels: []
-        ),
-        Server(
-            name: "OFTC",
-            host: "irc.oftc.net",
-            port: 6697,
-            ssl: true,
-            nickname: "",
-            realname: "",
-            channels: []
-        ),
-        Server(
-            name: "Rizon",
-            host: "irc.rizon.net",
-            port: 6697,
-            ssl: true,
-            nickname: "",
-            realname: "",
-            channels: []
-        ),
-        Server(
-            name: "IRCnet",
-            host: "open.ircnet.net",
-            port: 6667,
-            ssl: false,
-            nickname: "",
-            realname: "",
-            channels: []
-        ),
-        Server(
-            name: "EFnet",
-            host: "irc.efnet.org",
-            port: 6667,
-            ssl: false,
-            nickname: "",
-            realname: "",
-            channels: []
-        ),
-        Server(
-            name: "QuakeNet",
-            host: "irc.quakenet.org",
-            port: 6667,
-            ssl: false,
-            nickname: "",
-            realname: "",
-            channels: []
-        ),
-        Server(
-            name: "Undernet",
-            host: "irc.undernet.org",
-            port: 6667,
-            ssl: false,
-            nickname: "",
-            realname: "",
-            channels: []
-        ),
-        Server(
-            name: "DALnet",
-            host: "irc.dal.net",
-            port: 6667,
-            ssl: false,
-            nickname: "",
-            realname: "",
-            channels: []
-        ),
-        Server(
-            name: "hackint",
-            host: "irc.hackint.org",
-            port: 6697,
-            ssl: true,
-            nickname: "",
-            realname: "",
-            channels: []
-        ),
-        Server(
-            name: "Snoonet",
-            host: "irc.snoonet.org",
-            port: 6697,
-            ssl: true,
-            nickname: "",
-            realname: "",
-            channels: []
-        ),
+        // ── Tier 1: Large, active, well-known ──────────────────────────────
+        Server(name: "Libera.Chat",   host: "irc.libera.chat",       port: 6697, ssl: true,  nickname: "", realname: "", saslEnabled: false, channels: []),
+        Server(name: "OFTC",          host: "irc.oftc.net",          port: 6697, ssl: true,  nickname: "", realname: "", channels: []),
+        Server(name: "Rizon",         host: "irc.rizon.net",         port: 6697, ssl: true,  nickname: "", realname: "", channels: []),
+        Server(name: "IRCnet",        host: "open.ircnet.net",       port: 6667, ssl: false, nickname: "", realname: "", channels: []),
+        Server(name: "EFnet",         host: "irc.efnet.org",         port: 6667, ssl: false, nickname: "", realname: "", channels: []),
+        Server(name: "QuakeNet",      host: "irc.quakenet.org",      port: 6667, ssl: false, nickname: "", realname: "", channels: []),
+        Server(name: "Undernet",      host: "irc.undernet.org",      port: 6667, ssl: false, nickname: "", realname: "", channels: []),
+        Server(name: "DALnet",        host: "irc.dal.net",           port: 6667, ssl: false, nickname: "", realname: "", channels: []),
+        Server(name: "hackint",       host: "irc.hackint.org",       port: 6697, ssl: true,  nickname: "", realname: "", channels: []),
+        Server(name: "Snoonet",       host: "irc.snoonet.org",       port: 6697, ssl: true,  nickname: "", realname: "", channels: []),
+        // ── Tier 2: Niche / community / retro ──────────────────────────────
+        Server(name: "2600net",       host: "irc.2600.net",          port: 6697, ssl: true,  nickname: "", realname: "", channels: []),
+        Server(name: "tilde.chat",    host: "irc.tilde.chat",        port: 6697, ssl: true,  nickname: "", realname: "", channels: []),
+        Server(name: "Freenode",      host: "irc.freenode.net",      port: 6697, ssl: true,  nickname: "", realname: "", channels: []),
+        Server(name: "GeekShed",      host: "irc.geekshed.net",      port: 6697, ssl: true,  nickname: "", realname: "", channels: []),
+        Server(name: "GameSurge",     host: "irc.gamesurge.net",     port: 6667, ssl: false, nickname: "", realname: "", channels: []),
+        Server(name: "IRCHighway",    host: "irc.irchighway.net",    port: 6697, ssl: true,  nickname: "", realname: "", channels: []),
+        Server(name: "ChatJunkies",   host: "irc.chatjunkies.org",   port: 6697, ssl: true,  nickname: "", realname: "", channels: []),
+        Server(name: "AllNetwork",    host: "irc.allnetwork.org",    port: 6697, ssl: true,  nickname: "", realname: "", channels: []),
+        Server(name: "P2P-NET",       host: "irc.p2p-irc.net",      port: 6697, ssl: true,  nickname: "", realname: "", channels: []),
+        Server(name: "SorceryNet",    host: "irc.sorcery.net",       port: 6697, ssl: true,  nickname: "", realname: "", channels: []),
+        // ── Tier 3: Dev / hacker / special interest ─────────────────────────
+        Server(name: "IRCAM",         host: "irc.ircam.fr",          port: 6697, ssl: true,  nickname: "", realname: "", channels: []),
+        Server(name: "Digitalized",   host: "irc.digitalized.tv",    port: 6697, ssl: true,  nickname: "", realname: "", channels: []),
+        Server(name: "PIRC",          host: "pirc.at",               port: 6697, ssl: true,  nickname: "", realname: "", channels: []),
+        Server(name: "AnonOps",       host: "irc.anonops.com",       port: 6697, ssl: true,  nickname: "", realname: "", channels: []),
+        Server(name: "Austnet",       host: "irc.austnet.org",       port: 6667, ssl: false, nickname: "", realname: "", channels: []),
     ]
 }
 
