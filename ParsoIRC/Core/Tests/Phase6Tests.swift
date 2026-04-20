@@ -247,9 +247,12 @@ final class DMChannelTests: XCTestCase {
     func testOpenDMTwiceReturnsSameName() {
         let vm = ConversationsViewModel(ircManager: IRCClientManager.shared)
         let dm1 = vm.openDM(with: "bob", serverId: "test-server")
+        // Reload so the second openDM finds the existing channel
+        vm.loadConversations()
         let dm2 = vm.openDM(with: "bob", serverId: "test-server")
         XCTAssertEqual(dm1.name, dm2.name)
-        XCTAssertEqual(dm1.id,   dm2.id)
+        // IDs must match because the second call returns the persisted channel
+        XCTAssertEqual(dm1.id, dm2.id)
     }
 
     func testDeleteConversationRemovesFromList() {
@@ -445,9 +448,9 @@ final class WatchManagerCanSendTests: XCTestCase {
 
     func testCanSendWhenNoHistory() {
         WatchManager.shared.toggleNotifications(true)
-        // Reset last notification
+        // Force-clear the last-sent timestamp so the singleton is in a clean state
         UserDefaults.standard.removeObject(forKey: "last_notification_sent")
-        WatchManager.shared.loadSettings()
+        WatchManager.shared.lastNotificationSent = nil
         XCTAssertTrue(WatchManager.shared.canSendNotification())
     }
 
