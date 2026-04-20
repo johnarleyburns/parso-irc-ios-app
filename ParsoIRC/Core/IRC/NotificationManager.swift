@@ -105,7 +105,46 @@ class NotificationManager: NSObject, ObservableObject {
             print("Failed to send notification: \(error)")
         }
     }
-    
+
+    /// Fires when the background refresh detects the user's nick was mentioned
+    /// in a watched channel while the app was not in the foreground.
+    func sendMentionNotification(channel: Channel, message: Message, count: Int) async {
+        guard isAuthorized else { return }
+        guard WatchManager.shared.canSendNotification() else { return }
+
+        let content = UNMutableNotificationContent()
+        content.title = count == 1
+            ? "Mentioned in \(channel.name)"
+            : "\(count) mentions in \(channel.name)"
+
+        if WatchManager.shared.settings.showPreviewInNotification {
+            content.body = "\(message.sender): \(IRCTextFormatter.stripped(message.content))"
+        } else {
+            content.body = "You were mentioned while away"
+        }
+
+        content.sound = .default
+        content.badge = NSNumber(value: count)
+        content.categoryIdentifier = categoryIdentifier
+        content.userInfo = [
+            "channelId":   channel.id,
+            "serverId":    channel.serverId,
+            "channelName": channel.name
+        ]
+
+        let request = UNNotificationRequest(
+            identifier: "mention-\(channel.id)-\(UUID().uuidString)",
+            content: content,
+            trigger: nil
+        )
+        do {
+            try await UNUserNotificationCenter.current().add(request)
+            WatchManager.shared.recordNotificationSent()
+        } catch {
+            print("Failed to send mention notification: \(error)")
+        }
+    }
+
     func sendTestNotification() async {
         let content = UNMutableNotificationContent()
         content.title = "Test Notification"

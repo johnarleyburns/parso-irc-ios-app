@@ -499,7 +499,42 @@ final class DatabaseManager {
         
         return result
     }
-    
+
+    // MARK: - Background refresh helpers
+
+    /// Returns messages in `channelId` that arrived after `date`, oldest first.
+    /// Used by the background refresh to find messages the user may have missed.
+    func fetchMessagesSince(_ date: Date, channelId: String) throws -> [Message] {
+        guard let db = db else { return [] }
+        let cutoff = dateFormatter.string(from: date)
+        let query = messages
+            .filter(messageChannelId == channelId && messageTimestamp > cutoff)
+            .order(messageTimestamp.asc)
+        var result: [Message] = []
+        for row in try db.prepare(query) {
+            result.append(Message(
+                id: row[messageId],
+                channelId: row[messageChannelId],
+                sender: row[messageSender] ?? "",
+                senderHost: row[messageSenderHost],
+                content: row[messageContent],
+                timestamp: dateFormatter.date(from: row[messageTimestamp]) ?? Date(),
+                type: Message.MessageType(rawValue: row[messageType]) ?? .message,
+                isRead: row[messageIsRead] == 1
+            ))
+        }
+        return result
+    }
+
+    /// Updates the `last_checked_at` watermark for a channel.
+    /// Called both from `ChannelViewModel.markRead()` (foreground) and from the
+    /// background refresh task so we never re-notify for already-seen messages.
+    func updateChannelLastChecked(channelId cid: String, date: Date) throws {
+        guard let db = db else { return }
+        let ch = channels.filter(channelId == cid)
+        try db.run(ch.update(channelLastCheckedAt <- dateFormatter.string(from: date)))
+    }
+
     // MARK: - Settings Operations
     
     func saveSetting(key: String, value: String?) throws {

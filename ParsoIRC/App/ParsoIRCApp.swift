@@ -21,7 +21,9 @@ struct ParsoIRCApp: App {
                 }
         }
         .backgroundTask(.appRefresh("com.parso.irc.refresh")) {
-            await IRCClientManager.shared.pingAllServers()
+            // Apple-recommended pattern: reconnect, ping to keep socket alive,
+            // fetch new messages for watched channels, notify on mentions.
+            await IRCClientManager.shared.performBackgroundRefresh()
             WatchManager.shared.scheduleNextBackgroundTask()
         }
         .onChange(of: scenePhase) { _, phase in

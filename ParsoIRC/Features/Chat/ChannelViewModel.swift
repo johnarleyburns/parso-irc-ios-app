@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import Combine
 
 /// The view model for a single channel (or DM thread).
 ///
@@ -42,10 +43,13 @@ final class ChannelViewModel: ObservableObject {
     // MARK: - Private
 
     private let ircManager: IRCClientManager
-    private var rawMessages: [Message] = []   // source of truth, append-only
-    private var seenMessageIds: Set<String> = []  // dedup
-    // Cached channel ID to avoid repeated DB queries on every message append
+    private var rawMessages: [Message] = []
+    private var seenMessageIds: Set<String> = []
     private let _cachedChannelId: String
+    /// Combine cancellables — holds the reconnect subscription lifetime.
+    private var cancellables = Set<AnyCancellable>()
+    /// Counts history messages arriving in a single batch (for ZNC separator).
+    private var pendingHistoryMessageCount: Int = 0
 
     // MARK: - Init / deinit
 
@@ -85,6 +89,8 @@ final class ChannelViewModel: ObservableObject {
         client.onMode = nil
         client.onUnhandledMessage = nil
         client.onHistoryMessage = nil
+        client.onZncBatchEnd = nil
+        cancellables.removeAll()
     }
 
     // MARK: - Sending
@@ -112,6 +118,8 @@ final class ChannelViewModel: ObservableObject {
     func markRead() {
         unreadCount = 0
         ircManager.clearUnread(channelId: channelId)
+        // Update lastCheckedAt so background refresh doesn't re-notify for messages the user already saw
+        try? DatabaseManager.shared.updateChannelLastChecked(channelId: channelId, date: Date())
     }
 
     // MARK: - Private helpers
@@ -334,8 +342,35 @@ final class ChannelViewModel: ObservableObject {
                 )
                 // append without persisting (history is already on server) and no unread bump
                 self.append(msg, persist: true)
+                self.pendingHistoryMessageCount += 1
             }
         }
+
+        // Wire ZNC playback batch-end notification — appends a visual separator
+        // so the user can see where live messages end and replayed messages begin.
+        client.onZncBatchEnd = { [weak self] in
+            Task { @MainActor [weak self] in
+                guard let self, self.pendingHistoryMessageCount > 0 else { return }
+                let count = self.pendingHistoryMessageCount
+                self.pendingHistoryMessageCount = 0
+                let sep = Message(
+                    channelId: self.channelId,
+                    sender: "system",
+                    content: "── ZNC replayed \(count) message\(count == 1 ? "" : "s") ──",
+                    type: .system,
+                    isFromCurrentUser: false
+                )
+                self.append(sep, persist: false)
+            }
+        }
+
+        // Subscribe to reconnect events so we re-register callbacks and re-fetch
+        // history if the connection drops and recovers while ChatView is still open.
+        ircManager.reconnectSubject
+            .filter { [weak self] sid in sid == self?.serverId }
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in Task { await self?.handleReconnect() } }
+            .store(in: &cancellables)
     }
 
     // MARK: NAMES request
@@ -343,6 +378,14 @@ final class ChannelViewModel: ObservableObject {
     private func requestNamesIfNeeded() async {
         guard let client = ircManager.getClient(for: serverId), members.isEmpty else { return }
         try? await client.names(channelName)
+    }
+
+    /// Called when the server reconnects while this ChatView is still open.
+    /// Re-registers callbacks (new IRCClient instance) and fetches missed history.
+    private func handleReconnect() async {
+        registerCallbacks()
+        await requestNamesIfNeeded()
+        await requestChatHistoryIfSupported()
     }
 
     private func requestChatHistoryIfSupported() async {

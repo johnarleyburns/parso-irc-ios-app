@@ -30,15 +30,20 @@ actor IRCClient {
     nonisolated(unsafe) var onTopicChange: ((String, String, String) -> Void)?
     nonisolated(unsafe) var onNamesList: ((String, [String]) -> Void)?
     nonisolated(unsafe) var onHistoryMessage: ((IRCMessage) -> Void)?
-    nonisolated(unsafe) var onKick: ((String, String, String, String?) -> Void)?   // channel, kicked, by, reason
-    nonisolated(unsafe) var onInvite: ((String, String) -> Void)?                  // nick, channel
-    nonisolated(unsafe) var onMode: ((String, String, [String]) -> Void)?          // target, modestring, params
-    // Catch-all for server messages not handled by a specific callback above
+    nonisolated(unsafe) var onKick: ((String, String, String, String?) -> Void)?
+    nonisolated(unsafe) var onInvite: ((String, String) -> Void)?
+    nonisolated(unsafe) var onMode: ((String, String, [String]) -> Void)?
     nonisolated(unsafe) var onUnhandledMessage: ((IRCMessage) -> Void)?
-    // Dedicated LIST result callbacks (avoids clobbering onUnhandledMessage)
-    nonisolated(unsafe) var onListEntry: ((String, Int, String) -> Void)?   // name, count, topic
+    nonisolated(unsafe) var onListEntry: ((String, Int, String) -> Void)?
     nonisolated(unsafe) var onListEnd:   (() -> Void)?
-    
+    /// Called when a ZNC znc.in/playback BATCH closes — signals ChannelViewModel to flush the separator.
+    nonisolated(unsafe) var onZncBatchEnd: (() -> Void)?
+
+    // ZNC bouncer support
+    var zncPlaybackEnabled: Bool = false
+    /// Tracks open BATCH envelopes: batchRef → batchType (e.g. "znc.in/playback").
+    var activeBatches: [String: String] = [:]
+
     private var readStream: InputStream?
     private var writeStream: OutputStream?
     private var useTLS = false
@@ -119,7 +124,7 @@ actor IRCClient {
                 do {
                     try await self.waitForCapNegotiation(timeout: 10)
                     
-                    var capsToRequest = ["batch", "server-time", "message-tags", "draft/chathistory"]
+                    var capsToRequest = ["batch", "server-time", "message-tags", "draft/chathistory", "chathistory", "znc.in/playback"]
                     if useSASL {
                         capsToRequest.append("sasl")
                     }
@@ -431,6 +436,25 @@ actor IRCClient {
             let param = message.parameters.first.map { ":\($0)" } ?? ":"
             try? await send_raw("PONG \(param)")
 
+        case "BATCH":
+            // Track open/close of BATCH envelopes for ZNC playback detection.
+            // "BATCH +ref type [params]" opens;  "BATCH -ref" closes.
+            if let first = message.parameters.first {
+                if first.hasPrefix("+") {
+                    let ref      = String(first.dropFirst())
+                    let type_    = message.parameters.count > 1 ? message.parameters[1] : ""
+                    activeBatches[ref] = type_
+                } else if first.hasPrefix("-") {
+                    let ref = String(first.dropFirst())
+                    let closedType = activeBatches.removeValue(forKey: ref) ?? ""
+                    // Notify ChannelViewModel when a ZNC playback batch closes
+                    if closedType.contains("znc.in/playback") {
+                        await MainActor.run { self.onZncBatchEnd?() }
+                    }
+                }
+            }
+            // BATCH lines are not surfaced to onUnhandledMessage
+
         case "CAP":
             await handleCapMessage(message)
             
@@ -666,6 +690,9 @@ actor IRCClient {
                         serverTimeEnabled = true
                     } else if capName == "chathistory" || capName == "draft/chathistory" {
                         chathistoryEnabled = true
+                    } else if capName == "znc.in/playback" {
+                        zncPlaybackEnabled = true
+                        chathistoryEnabled = true  // ZNC playback counts as history support
                     }
                 }
             }
@@ -703,7 +730,14 @@ actor IRCClient {
     }
     
     private func isHistoryBatch(_ message: IRCMessage) -> Bool {
-        return message.tags?["batch"]?.contains("chathistory") ?? false
+        guard let batchRef = message.tags?["batch"] else { return false }
+        // Standard IRCv3 CHATHISTORY batch
+        if batchRef.contains("chathistory") { return true }
+        // ZNC znc.in/playback batch — check if this ref belongs to an active playback batch
+        if let batchType = activeBatches[batchRef], batchType.contains("znc.in/playback") {
+            return true
+        }
+        return false
     }
     
     private func handleHistoryMessage(_ message: IRCMessage) async {
@@ -715,5 +749,17 @@ actor IRCClient {
     func requestHistory(target: String, limit: Int) async throws {
         let effectiveLimit = min(limit, chathistoryMaxLimit)
         try await send(command: "CHATHISTORY", parameters: ["LATEST", target, "*", String(effectiveLimit)])
+    }
+
+    /// Fetches messages more recent than `date` using the CHATHISTORY timestamp anchor.
+    /// Used by background refresh so we only retrieve genuinely new messages since the
+    /// last time we checked (not the full recent history).
+    func requestHistorySince(_ date: Date, target: String, limit: Int) async throws {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let ts = formatter.string(from: date)
+        let effectiveLimit = min(limit, chathistoryMaxLimit)
+        try await send(command: "CHATHISTORY",
+                       parameters: ["LATEST", target, "timestamp=\(ts)", String(effectiveLimit)])
     }
 }

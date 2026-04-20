@@ -3,6 +3,7 @@ import Combine
 #endif
 #if canImport(Foundation)
 import Foundation
+import Combine
 #endif
 
 #if canImport(Darwin)
@@ -96,6 +97,10 @@ final class IRCClientManager: ObservableObject {
     private var reconnectTimers: [String: Timer] = [:]
     private var reconnectAttempts: [String: Int] = [:]
     private var maxReconnectAttempts = 5
+
+    /// Fires the server ID every time a connection is (re)established.
+    /// ChannelViewModel subscribes so it can re-register callbacks and re-fetch history.
+    let reconnectSubject = PassthroughSubject<String, Never>()
     
     private init() {}
 
@@ -126,6 +131,12 @@ final class IRCClientManager: ObservableObject {
                 self?.currentNicknames[server.id] = nick
                 self?.connectionStates[server.id] = .connected
                 self?.reconnectAttempts[server.id] = 0  // reset on successful connect
+                // Notify subscribers (e.g. ChannelViewModel) that connection is live
+                self?.reconnectSubject.send(server.id)
+                // Request CHATHISTORY for all joined channels
+                if let self, let client = self.connections[server.id] {
+                    await self.requestHistoryAfterReconnect(serverId: server.id, client: client)
+                }
             }
         }
 
@@ -293,13 +304,24 @@ final class IRCClientManager: ObservableObject {
         connectionStates[serverId] = .reconnecting
         reconnectAttempts[serverId] = attempts + 1
 
-        let delay = pow(2.0, Double(attempts))  // 1s, 2s, 4s, 8s, 16s
+        // Attempt 0 is instant (0s), then 1s, 2s, 4s, 8s
+        let delay: Double = attempts == 0 ? 0 : pow(2.0, Double(attempts - 1))
         
         reconnectTimers[serverId]?.invalidate()
-        reconnectTimers[serverId] = Timer.scheduledTimer(withTimeInterval: delay, repeats: false) { [weak self] _ in
-            Task { @MainActor in
+
+        if delay == 0 {
+            // Reconnect immediately in a new Task — no Timer overhead
+            Task { @MainActor [weak self] in
                 if let server = try? DatabaseManager.shared.fetchServers().first(where: { $0.id == serverId }) {
                     try? await self?.connect(to: server)
+                }
+            }
+        } else {
+            reconnectTimers[serverId] = Timer.scheduledTimer(withTimeInterval: delay, repeats: false) { [weak self] _ in
+                Task { @MainActor in
+                    if let server = try? DatabaseManager.shared.fetchServers().first(where: { $0.id == serverId }) {
+                        try? await self?.connect(to: server)
+                    }
                 }
             }
         }
@@ -312,6 +334,80 @@ final class IRCClientManager: ObservableObject {
     func pingAllServers() async {
         for (_, client) in connections {
             try? await client.send_raw("PING :parso-keepalive")
+        }
+    }
+
+    // MARK: - Post-reconnect history fetch
+
+    /// Requests CHATHISTORY for every explicitly-joined channel on `serverId`
+    /// after a (re)connection. Called from onWelcome so it covers both fresh
+    /// connects and auto-reconnects seamlessly.
+    private func requestHistoryAfterReconnect(serverId: String, client: IRCClient) async {
+        guard await client.hasChathistorySupport() else { return }
+        let channels = (try? DatabaseManager.shared.fetchChannels(forServer: serverId)) ?? []
+        let limit = min(await client.getChathistoryLimit(), 100)
+        for channel in channels where channel.joinedAt != nil && !channel.isDM {
+            try? await client.requestHistory(target: channel.name, limit: limit)
+            // Small gap between requests to avoid flooding the server
+            try? await Task.sleep(nanoseconds: 100_000_000)  // 0.1 s
+        }
+    }
+
+    // MARK: - Background refresh (BGAppRefreshTask handler)
+
+    /// Apple-recommended background refresh:
+    /// 1. Reconnect any dropped servers
+    /// 2. PING to keep the socket alive
+    /// 3. Fetch new messages for watched channels via CHATHISTORY timestamp anchor
+    /// 4. Fire a local mention notification if the user's nick appeared while away
+    func performBackgroundRefresh() async {
+        let servers = (try? DatabaseManager.shared.fetchServers()) ?? []
+        let explicit = explicitlyDisconnectedServerIds
+
+        for server in servers where !explicit.contains(server.id) {
+            // Step 1: Reconnect if the socket died while backgrounded
+            let state = connectionStates[server.id]
+            if state == .disconnected {
+                try? await connect(to: server)
+                // Wait up to 10 s for the connection
+                for _ in 0..<100 {
+                    if connectionStates[server.id] == .connected { break }
+                    try? await Task.sleep(nanoseconds: 100_000_000)
+                }
+            }
+
+            guard connectionStates[server.id] == .connected,
+                  let client = connections[server.id] else { continue }
+
+            // Step 2: Keep the socket alive
+            try? await client.send_raw("PING :parso-background")
+
+            // Step 3 & 4: Fetch new messages, check for mentions
+            guard await client.hasChathistorySupport() else { continue }
+            let watchedChannels = (try? DatabaseManager.shared.getWatchedChannels())?
+                .filter { $0.serverId == server.id } ?? []
+            let limit = min(await client.getChathistoryLimit(), 50)
+            let myNick = currentNicknames[server.id] ?? server.nickname
+
+            for channel in watchedChannels {
+                let since = channel.lastCheckedAt ?? Date(timeIntervalSinceNow: -3600)
+                try? await client.requestHistorySince(since, target: channel.name, limit: limit)
+                // Give the server time to deliver the batch before we query the DB
+                try? await Task.sleep(nanoseconds: 500_000_000)  // 0.5 s
+
+                let recent = (try? DatabaseManager.shared.fetchMessagesSince(since, channelId: channel.id)) ?? []
+                let mentions = recent.filter {
+                    !myNick.isEmpty && $0.content.localizedCaseInsensitiveContains(myNick)
+                }
+                if !mentions.isEmpty, let first = mentions.first {
+                    await NotificationManager.shared.sendMentionNotification(
+                        channel: channel, message: first, count: mentions.count
+                    )
+                }
+
+                try? DatabaseManager.shared.updateChannelLastChecked(channelId: channel.id, date: Date())
+                try? await Task.sleep(nanoseconds: 200_000_000)  // 0.2 s gap between channels
+            }
         }
     }
 
