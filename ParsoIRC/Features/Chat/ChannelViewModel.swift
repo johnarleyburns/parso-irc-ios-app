@@ -18,14 +18,14 @@ final class ChannelViewModel: ObservableObject {
     // MARK: - Public state
 
     /// Fully processed messages ready for `MessageListView`.
-    @Published private(set) var displayMessages: [DisplayMessage] = []
+    @Published var displayMessages: [DisplayMessage] = []
 
     /// Current channel topic.
-    @Published private(set) var topic: String = ""
+    @Published var topic: String = ""
 
     /// The first URL found in the channel topic, if any (used for "Rules" button).
     /// Updated only when topic changes — not recomputed on every render.
-    @Published private(set) var rulesURL: URL? = nil
+    @Published var rulesURL: URL? = nil
 
     let serverId: String
     let channelName: String   // e.g. "#linux"
