@@ -35,6 +35,8 @@ struct MessageRowView: View {
     @AppStorage("messageFontSize") private var messageFontSize: Double = 15
     @AppStorage("messageDensity") private var messageDensity: String = "comfortable"
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     private var verticalBubblePad: CGFloat { messageDensity == "compact" ? 6 : 8 }
     private var rowTopPad: CGFloat { grouped ? 1 : (messageDensity == "compact" ? 3 : 6) }
 
@@ -145,6 +147,7 @@ struct MessageRowView: View {
                                 .labelStyle(.titleAndIcon)
                         }
                         .buttonStyle(.plain)
+                        .accessibilityLabel("Message not sent. Tap to retry.")
                     } else if !grouped {
                         Text(message.timestamp.formattedTime())
                             .font(.caption2)
@@ -156,7 +159,17 @@ struct MessageRowView: View {
         }
         .padding(.trailing, 12)
         .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(outgoingAccessibilityLabel)
+        .accessibilityHint("Double-tap and hold for message options")
+        .accessibilityAction(named: "Message options") { onLongPress?(message) }
         .onLongPressGesture { onLongPress?(message) }
+    }
+
+    private var outgoingAccessibilityLabel: String {
+        let time = message.timestamp.formattedTime()
+        if isFailed { return "Failed to send: \(message.content), at \(time)" }
+        return "You, \(time): \(message.content)"
     }
 
     // MARK: - Incoming bubble
@@ -171,6 +184,7 @@ struct MessageRowView: View {
                     AvatarView(nick: message.sender, size: 32, showBorder: false)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("View profile for \(message.sender)")
             }
 
             VStack(alignment: .leading, spacing: 2) {
@@ -184,6 +198,7 @@ struct MessageRowView: View {
                     }
                     .buttonStyle(.plain)
                     .padding(.leading, 4)
+                    .accessibilityLabel("View profile for \(message.sender)")
                 }
 
                 // Bubble
@@ -197,7 +212,6 @@ struct MessageRowView: View {
                                      : [.topLeft, .topRight, .bottomRight]
                 )
                 .overlay(
-                    // Mention accent stripe on left edge
                     isMention
                         ? RoundedRectangle(cornerRadius: 2)
                             .fill(Color(.systemYellow))
@@ -220,7 +234,17 @@ struct MessageRowView: View {
         }
         .padding(.leading, 12)
         .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(incomingAccessibilityLabel)
+        .accessibilityHint("Double-tap and hold for message options")
+        .accessibilityAction(named: "Message options") { onLongPress?(message) }
         .onLongPressGesture { onLongPress?(message) }
+    }
+
+    private var incomingAccessibilityLabel: String {
+        let time = grouped ? "" : ", \(message.timestamp.formattedTime())"
+        let mentionNote = isMention ? " (mentions you)" : ""
+        return "\(message.sender)\(time): \(message.content)\(mentionNote)"
     }
 
     // MARK: - Shared bubble builder

@@ -19,6 +19,8 @@ struct MessageListView: View {
     @State private var isNearBottom = true
     @State private var scrollProxy: ScrollViewProxy? = nil
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     // ID of the bottom anchor
     private let bottomAnchorId = "BOTTOM_ANCHOR"
     private let nearBottomSentinelId = "NEAR_BOTTOM_SENTINEL"
@@ -81,7 +83,7 @@ struct MessageListView: View {
             if !isNearBottom {
                 Button {
                     if let proxy = scrollProxy {
-                        scrollToBottom(proxy: proxy, animated: true)
+                        scrollToBottom(proxy: proxy, animated: !reduceMotion)
                     }
                 } label: {
                     ZStack {
@@ -96,8 +98,8 @@ struct MessageListView: View {
                 }
                 .padding(.trailing, 12)
                 .padding(.bottom, 8)
-                .transition(.scale.combined(with: .opacity))
-                .animation(.spring(duration: 0.25), value: isNearBottom)
+                .transition(reduceMotion ? .opacity : .scale.combined(with: .opacity))
+                .animation(reduceMotion ? .none : .spring(duration: 0.25), value: isNearBottom)
                 .accessibilityLabel("Scroll to latest message")
             }
         }
@@ -165,7 +167,8 @@ struct MessageListView: View {
     // MARK: - Scroll helpers
 
     private func scrollToBottom(proxy: ScrollViewProxy, animated: Bool) {
-        if animated {
+        let shouldAnimate = animated && !reduceMotion
+        if shouldAnimate {
             withAnimation(.easeOut(duration: 0.2)) {
                 proxy.scrollTo(bottomAnchorId, anchor: .bottom)
             }

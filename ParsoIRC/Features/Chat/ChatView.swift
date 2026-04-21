@@ -136,11 +136,15 @@ struct ChatView: View {
                 .labelStyle(.titleAndIcon)
                 .font(.subheadline)
             }
+            .accessibilityLabel(viewModel.members.isEmpty
+                ? "Show member list"
+                : "Show \(viewModel.members.count) members")
 
             Menu { channelMenuContent } label: {
                 Image(systemName: "ellipsis.circle")
             }
             .menuOrder(.fixed)
+            .accessibilityLabel("Channel options")
         }
     }
 

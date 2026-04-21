@@ -92,6 +92,7 @@ struct ChannelRowView: View {
                 Image(systemName: "bell.slash.fill")
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
+                    .accessibilityLabel("Muted")
             }
 
             // Unread badge

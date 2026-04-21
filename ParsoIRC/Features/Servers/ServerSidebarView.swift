@@ -49,6 +49,7 @@ struct ServerSidebarView: View {
                 Button { showSettings = true } label: {
                     Image(systemName: "gearshape")
                 }
+                .accessibilityLabel("Settings")
             }
             ToolbarItem(placement: .navigationBarLeading) {
                 EditButton()

@@ -55,6 +55,7 @@ struct ServerRowView: View {
                             )
                         }
                         .buttonStyle(.plain)
+                        .accessibilityLabel("Nickname: \(currentNick). Tap to change.")
                     }
                 }
 
@@ -70,6 +71,7 @@ struct ServerRowView: View {
                         .contentShape(Rectangle())
                 }
                 .menuOrder(.fixed)
+                .accessibilityLabel("Server options for \(server.name)")
             }
             .contentShape(Rectangle())
         }
@@ -156,6 +158,17 @@ struct ConnectionDot: View {
         }
     }
 
+    /// Spoken label for VoiceOver — communicates state without relying on colour.
+    private var accessibilityDescription: String {
+        switch state {
+        case .connected:    return "Connected"
+        case .connecting:   return "Connecting"
+        case .reconnecting: return "Reconnecting"
+        case .failed:       return "Connection failed"
+        case .disconnected: return "Disconnected"
+        }
+    }
+
     private var isSpinning: Bool {
         state == .connecting || state == .reconnecting
     }
@@ -163,19 +176,22 @@ struct ConnectionDot: View {
     var body: some View {
         Group {
             if isSpinning {
-                // Show a small circular spinner while connecting/reconnecting
+                // Spinner communicates "in progress" via shape+motion — not colour alone
                 ProgressView()
                     .progressViewStyle(.circular)
                     .scaleEffect(0.65)
                     .frame(width: 14, height: 14)
             } else {
-                // Static coloured dot for all other states
+                // Static dot — colour alone distinguishes states visually,
+                // so we add an accessibilityLabel for VoiceOver + colour-blind users.
                 Circle()
                     .fill(color)
                     .frame(width: 8, height: 8)
                     .frame(width: 14, height: 14)
             }
         }
+        .accessibilityLabel(accessibilityDescription)
+        .accessibilityElement(children: .ignore)
     }
 }
 

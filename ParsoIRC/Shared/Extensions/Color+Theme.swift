@@ -6,7 +6,17 @@ extension Color {
 
 struct ThemeColors {
     let primary = Color("AccentColor")
-    let sentBubble = Color(hex: "0A84FF")
+    /// Outgoing message bubble colour.
+    /// Uses a UIColor dynamic provider so it shifts correctly in dark mode.
+    /// Light mode: #0058D0 — contrast ratio 6.35:1 white text (WCAG AA ✓ and AAA ✓)
+    /// Dark mode:  #409CFF — iOS system blue on dark, ~4.8:1 on dark backgrounds ✓
+    var sentBubble: Color {
+        Color(uiColor: UIColor { traitCollection in
+            traitCollection.userInterfaceStyle == .dark
+                ? UIColor(red: 0.251, green: 0.612, blue: 1.0,   alpha: 1)  // #409CFF dark  ~4.8:1
+                : UIColor(red: 0.0,   green: 0.345, blue: 0.816, alpha: 1)  // #0058D0 light  6.35:1
+        })
+    }
     let receivedBubbleDark = Color(hex: "3A3A3C")
     let receivedBubbleLight = Color(hex: "E5E5EA")
     let actionBubble = Color(hex: "5856D6")

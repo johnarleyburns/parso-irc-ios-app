@@ -15,6 +15,8 @@ struct InputBarView: View {
     @State private var inputText: String = ""
     @FocusState private var isTextFieldFocused: Bool
 
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     // Slash-command autocomplete
     private let slashCommands: [(cmd: String, hint: String)] = [
         ("/me",     "Send an action"),
@@ -69,10 +71,10 @@ struct InputBarView: View {
             // Autocomplete strip (slash commands or nick completion)
             if showSlashAutocomplete {
                 commandSuggestions
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
             } else if showNickCompletion {
                 nickSuggestionStrip
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .transition(reduceMotion ? .opacity : .move(edge: .bottom).combined(with: .opacity))
             }
 
             // Input row
@@ -86,6 +88,7 @@ struct InputBarView: View {
                         .foregroundStyle(Color.accentColor)
                 }
                 .menuOrder(.fixed)
+                .accessibilityLabel("Attachments and commands")
 
                 // Text field
                 TextField("Message \(viewModel.channelName)", text: $inputText, axis: .vertical)
@@ -106,9 +109,10 @@ struct InputBarView: View {
                     Image(systemName: "arrow.up.circle.fill")
                         .font(.system(size: 30))
                         .foregroundStyle(canSend ? Color.accentColor : Color(.systemGray3))
-                        .animation(.easeInOut(duration: 0.15), value: canSend)
+                        .animation(reduceMotion ? nil : .easeInOut(duration: 0.15), value: canSend)
                 }
                 .disabled(!canSend)
+                .accessibilityLabel("Send message")
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)

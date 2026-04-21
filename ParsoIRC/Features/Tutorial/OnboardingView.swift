@@ -44,6 +44,10 @@ struct OnboardingView: View {
                     .animation(.spring(response: 0.3), value: currentPage)
             }
         }
+        // Announce current page and total to VoiceOver users
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Step \(currentPage + 1) of 3")
+        .accessibilityValue(["Welcome", "Set Your Identity", "Choose Networks"][currentPage])
     }
 }
 
@@ -51,12 +55,13 @@ struct OnboardingView: View {
 
 private struct WelcomePage: View {
     @Binding var currentPage: Int
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         VStack(spacing: 0) {
             Spacer()
 
-            // Hero illustration
+            // Hero illustration — purely decorative, hidden from VoiceOver
             ZStack {
                 Circle()
                     .fill(Color.accentColor.opacity(0.12))
@@ -65,6 +70,7 @@ private struct WelcomePage: View {
                     .font(.system(size: 80))
                     .foregroundStyle(Color.accentColor)
             }
+            .accessibilityHidden(true)
             .padding(.bottom, 40)
 
             Text("Welcome to Parso IRC")
@@ -81,7 +87,7 @@ private struct WelcomePage: View {
             Spacer()
 
             Button {
-                withAnimation { currentPage = 1 }
+                if reduceMotion { currentPage = 1 } else { withAnimation { currentPage = 1 } }
             } label: {
                 Text("Get Started")
                     .font(.headline)
@@ -106,8 +112,9 @@ private struct IdentityPage: View {
     @State private var nickname: String = ""
     @State private var username: String = ""
     @State private var password: String = ""
-    @State private var showPassword: Bool = true   // visible by default so user can copy
+    @State private var showPassword: Bool = true
     @FocusState private var focusedField: Field?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private enum Field { case nick, username, password }
 
@@ -235,28 +242,30 @@ private struct IdentityPage: View {
                             .focused($focusedField, equals: .password)
                             .onSubmit { focusedField = nil }
 
-                            // Show/hide toggle
-                            Button {
-                                showPassword.toggle()
-                            } label: {
-                                Image(systemName: showPassword ? "eye.slash" : "eye")
-                                    .font(.subheadline)
-                                    .foregroundStyle(.secondary)
-                                    .padding(.horizontal, 8)
-                            }
-                            .buttonStyle(.plain)
+                    // Show/hide toggle
+                    Button {
+                        showPassword.toggle()
+                    } label: {
+                        Image(systemName: showPassword ? "eye.slash" : "eye")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 8)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(showPassword ? "Hide password" : "Show password")
 
-                            // Copy button
-                            Button {
-                                UIPasteboard.general.string = password
-                                HapticManager.selectionFeedback()
-                            } label: {
-                                Image(systemName: "doc.on.doc")
-                                    .font(.subheadline)
-                                    .foregroundStyle(Color.accentColor)
-                                    .padding(.trailing, 14)
-                            }
-                            .buttonStyle(.plain)
+                    // Copy button
+                    Button {
+                        UIPasteboard.general.string = password
+                        HapticManager.selectionFeedback()
+                    } label: {
+                        Image(systemName: "doc.on.doc")
+                            .font(.subheadline)
+                            .foregroundStyle(Color.accentColor)
+                            .padding(.trailing, 14)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Copy password to clipboard")
                         }
                         .padding(.vertical, 14)
                         .padding(.leading, 14)
@@ -276,7 +285,7 @@ private struct IdentityPage: View {
 
                 Button {
                     saveIdentity()
-                    withAnimation { currentPage = 2 }
+                    if reduceMotion { currentPage = 2 } else { withAnimation { currentPage = 2 } }
                 } label: {
                     Text("Continue")
                         .font(.headline)
@@ -287,6 +296,8 @@ private struct IdentityPage: View {
                         .clipShape(RoundedRectangle(cornerRadius: 16))
                 }
                 .disabled(!isValid)
+                .accessibilityLabel("Continue")
+                .accessibilityHint(isValid ? "Proceeds to choose networks" : "Fill in all fields to continue")
                 .padding(.horizontal, 32)
                 .padding(.bottom, 48)
             }
@@ -473,7 +484,6 @@ private struct NetworkCard: View {
         Button(action: action) {
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
-                    // Use a neutral tint — this icon shows encryption, not connection state
                     Image(systemName: network.ssl ? "lock.fill" : "lock.open")
                         .font(.caption)
                         .foregroundStyle(network.ssl ? Color(.systemTeal).opacity(0.8) : Color(.systemGray))
@@ -504,6 +514,11 @@ private struct NetworkCard: View {
             )
         }
         .buttonStyle(.plain)
+        // VoiceOver: announce selection state so colour+checkmark aren't the only cues
+        .accessibilityLabel("\(network.name), \(network.ssl ? "encrypted" : "unencrypted")")
+        .accessibilityValue(isSelected ? "Selected" : "Not selected")
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
+        .accessibilityHint("Double-tap to \(isSelected ? "deselect" : "select")")
     }
 }
 
