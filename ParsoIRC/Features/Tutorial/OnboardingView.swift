@@ -3,7 +3,7 @@ import SwiftUI
 /// Three-page first-launch onboarding flow.
 ///
 /// Page 1 – Welcome: what Parso IRC is, with a friendly illustration.
-/// Page 2 – Identity: set a global default nickname and real name.
+/// Page 2 – Identity: set a global default nickname, username, and password.
 ///          These are stored in AppState (and UserDefaults) so every new
 ///          server inherits them unless overridden per-server.
 /// Page 3 – Add first server: simplified server picker that saves to DB
@@ -104,12 +104,54 @@ private struct IdentityPage: View {
     @EnvironmentObject private var appState: AppState
 
     @State private var nickname: String = ""
-    @State private var realName: String = ""
+    @State private var username: String = ""
+    @State private var password: String = ""
+    @State private var showPassword: Bool = true   // visible by default so user can copy
     @FocusState private var focusedField: Field?
 
-    private enum Field { case nick, realName }
+    private enum Field { case nick, username, password }
 
-    private var isValid: Bool { !nickname.trimmingCharacters(in: .whitespaces).isEmpty }
+    private var isValid: Bool {
+        !nickname.trimmingCharacters(in: .whitespaces).isEmpty &&
+        !username.trimmingCharacters(in: .whitespaces).isEmpty &&
+        !password.isEmpty
+    }
+
+    // MARK: Word lists for memorable nick generation
+
+    private static let adjectives = [
+        "swift", "bright", "bold", "calm", "cool",
+        "dark", "deep", "fast", "free", "grey",
+        "keen", "loud", "mild", "neat", "pure",
+        "quiet", "rough", "sharp", "slim", "wild"
+    ]
+    private static let nouns = [
+        "bear", "bird", "cat", "deer", "duck",
+        "fish", "fox", "frog", "hawk", "hare",
+        "kite", "lion", "lynx", "mink", "mole",
+        "newt", "puma", "rook", "seal", "wolf"
+    ]
+
+    /// Generates a memorable adjective+noun nick that fits within 9 IRC chars.
+    /// e.g. "swiftwolf", "brighthawk", "coolbear42"
+    static func generateNick() -> String {
+        let adj  = adjectives.randomElement() ?? "cool"
+        let noun = nouns.randomElement()      ?? "wolf"
+        let base = adj + noun
+        // If combined is ≤ 7 chars, append 2 digits for uniqueness; otherwise truncate to 9
+        if base.count <= 7 {
+            let suffix = Int.random(in: 10...99)
+            return String((base + "\(suffix)").prefix(9))
+        } else {
+            return String(base.prefix(9))
+        }
+    }
+
+    /// Generates a strong 14-character alphanumeric password.
+    static func generatePassword() -> String {
+        let chars = "abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+        return String((0..<14).compactMap { _ in chars.randomElement() })
+    }
 
     var body: some View {
         ScrollView {
@@ -125,7 +167,7 @@ private struct IdentityPage: View {
                     .font(.system(size: 28, weight: .bold, design: .rounded))
                     .padding(.bottom, 8)
 
-                Text("Your nickname is how others see you on IRC. You can change it any time.")
+                Text("Your nickname is how others see you on IRC. We've generated unique credentials — save your password somewhere safe.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -133,29 +175,100 @@ private struct IdentityPage: View {
                     .padding(.bottom, 40)
 
                 VStack(spacing: 12) {
+                    // Nickname
                     OnboardingTextField(
                         title: "Nickname",
-                        placeholder: "e.g. hacker42",
+                        placeholder: "e.g. swiftwolf42",
                         text: $nickname,
                         hint: "Max 9 characters, letters/numbers/-/_"
                     )
                     .focused($focusedField, equals: .nick)
-                    .onSubmit { focusedField = .realName }
+                    .onSubmit { focusedField = .username }
                     .onChange(of: nickname) { _, new in
-                        // Enforce nick character rules: alphanumeric + - _ [ ] { } \ | `
+                        // Enforce IRC nick rules, max 9 chars
                         let allowed = CharacterSet.alphanumerics.union(.init(charactersIn: "-_[]{}\\|`"))
                         let filtered = new.unicodeScalars.filter { allowed.contains($0) }
                         let truncated = String(String.UnicodeScalarView(filtered).prefix(9))
                         if truncated != new { nickname = truncated }
+                        // Keep username in sync unless user has manually diverged
+                        if username == previousNick || username.isEmpty {
+                            username = truncated
+                        }
+                        previousNick = truncated
                     }
 
+                    // Username (same as nick by default, kept in sync)
                     OnboardingTextField(
-                        title: "Real Name (optional)",
-                        placeholder: "e.g. Ada Lovelace",
-                        text: $realName,
-                        hint: "Shown in WHOIS queries"
+                        title: "Username",
+                        placeholder: "e.g. swiftwolf42",
+                        text: $username,
+                        hint: "Used as your IRC ident"
                     )
-                    .focused($focusedField, equals: .realName)
+                    .focused($focusedField, equals: .username)
+                    .onSubmit { focusedField = .password }
+                    .onChange(of: username) { _, new in
+                        // Allow user to diverge from the nick; no auto-sync back
+                        let allowed = CharacterSet.alphanumerics.union(.init(charactersIn: "-_"))
+                        let filtered = new.unicodeScalars.filter { allowed.contains($0) }
+                        let clean = String(String.UnicodeScalarView(filtered))
+                        if clean != new { username = clean }
+                    }
+
+                    // Password with show/hide + copy
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Password")
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                            .foregroundStyle(.secondary)
+                        HStack(spacing: 0) {
+                            Group {
+                                if showPassword {
+                                    TextField("auto-generated", text: $password)
+                                } else {
+                                    SecureField("auto-generated", text: $password)
+                                }
+                            }
+                            .textFieldStyle(.plain)
+                            .font(.system(.body, design: .monospaced))
+                            .autocorrectionDisabled()
+                            .textInputAutocapitalization(.never)
+                            .focused($focusedField, equals: .password)
+                            .onSubmit { focusedField = nil }
+
+                            // Show/hide toggle
+                            Button {
+                                showPassword.toggle()
+                            } label: {
+                                Image(systemName: showPassword ? "eye.slash" : "eye")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                                    .padding(.horizontal, 8)
+                            }
+                            .buttonStyle(.plain)
+
+                            // Copy button
+                            Button {
+                                UIPasteboard.general.string = password
+                                HapticManager.selectionFeedback()
+                            } label: {
+                                Image(systemName: "doc.on.doc")
+                                    .font(.subheadline)
+                                    .foregroundStyle(Color.accentColor)
+                                    .padding(.trailing, 14)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        .padding(.vertical, 14)
+                        .padding(.leading, 14)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(Color(.secondarySystemGroupedBackground))
+                        )
+                        Text("Save this password — you'll need it if you register your nick with NickServ.")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
+                            .padding(.leading, 4)
+                    }
                 }
                 .padding(.horizontal, 24)
 
@@ -179,18 +292,35 @@ private struct IdentityPage: View {
             }
         }
         .onAppear {
-            // Pre-fill from previously saved identity if any
-            nickname = appState.globalNickname
-            realName = appState.globalRealName
+            // Pre-fill from saved identity if re-visiting; otherwise auto-generate
+            if appState.globalNickname.isEmpty {
+                let generated = IdentityPage.generateNick()
+                nickname = generated
+                username = generated
+                previousNick = generated
+            } else {
+                nickname = appState.globalNickname
+                username = appState.globalRealName.isEmpty ? appState.globalNickname : appState.globalRealName
+                previousNick = appState.globalNickname
+            }
+            if appState.globalPassword.isEmpty {
+                password = IdentityPage.generatePassword()
+            } else {
+                password = appState.globalPassword
+            }
             focusedField = .nick
         }
     }
 
+    /// Tracks the last auto-synced nick value so we know when username was manually edited.
+    @State private var previousNick: String = ""
+
     private func saveIdentity() {
         let nick = nickname.trimmingCharacters(in: .whitespaces)
-        let real = realName.trimmingCharacters(in: .whitespaces)
+        let user = username.trimmingCharacters(in: .whitespaces)
         appState.globalNickname = nick
-        appState.globalRealName = real.isEmpty ? nick : real
+        appState.globalRealName = user.isEmpty ? nick : user
+        appState.globalPassword = password
     }
 }
 
@@ -201,7 +331,7 @@ private struct AddFirstServerPage: View {
     @EnvironmentObject private var appState: AppState
 
     /// Multi-select: set of indices into Server.defaultNetworks
-    @State private var selectedIndices: Set<Int> = [0]
+    @State private var selectedIndices: Set<Int> = [0]   // Libera.Chat pre-selected
     @State private var showAddServer = false
 
     private var buttonLabel: String {
@@ -253,7 +383,7 @@ private struct AddFirstServerPage: View {
                 .padding(.bottom, 8)
             }
 
-            // Footer (fixed)
+            // Footer (fixed) — no "Skip for now" button
             VStack(spacing: 10) {
                 Divider()
                 Button {
@@ -277,16 +407,15 @@ private struct AddFirstServerPage: View {
                         .font(.subheadline)
                         .foregroundStyle(Color.accentColor)
                 }
-
-                Button {
-                    isPresented = false
-                } label: {
-                    Text("Skip for now")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
                 .padding(.bottom, 40)
             }
+        }
+        // Dismiss keyboard inherited from the previous identity page
+        .onAppear {
+            UIApplication.shared.sendAction(
+                #selector(UIResponder.resignFirstResponder),
+                to: nil, from: nil, for: nil
+            )
         }
         .sheet(isPresented: $showAddServer, onDismiss: {
             if (try? DatabaseManager.shared.fetchServers())?.isEmpty == false {
@@ -303,9 +432,10 @@ private struct AddFirstServerPage: View {
     private func saveAndConnect() {
         guard !selectedIndices.isEmpty else { return }
         let nick = appState.globalNickname.isEmpty
-            ? "parso\(Int.random(in: 1000...9999))"
+            ? IdentityPage.generateNick()
             : appState.globalNickname
-        let real = appState.globalRealName.isEmpty ? "Parso IRC" : appState.globalRealName
+        let real = appState.globalRealName.isEmpty ? nick : appState.globalRealName
+        let pass = appState.globalPassword.isEmpty ? nil : appState.globalPassword
 
         for index in selectedIndices.sorted() {
             let template = Server.defaultNetworks[index]
@@ -317,8 +447,9 @@ private struct AddFirstServerPage: View {
                 ssl: template.ssl,
                 nickname: nick,
                 realname: real,
-                password: nil,
-                saslEnabled: false,
+                password: pass,
+                saslEnabled: pass != nil,   // enable SASL when we have a password
+                saslMechanism: "PLAIN",
                 autoConnect: true,
                 channels: [],
                 lastActiveChannel: nil
@@ -340,9 +471,10 @@ private struct NetworkCard: View {
         Button(action: action) {
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
+                    // Use a neutral tint — this icon shows encryption, not connection state
                     Image(systemName: network.ssl ? "lock.fill" : "lock.open")
                         .font(.caption)
-                        .foregroundStyle(network.ssl ? Color.green : Color.orange)
+                        .foregroundStyle(network.ssl ? Color(.systemTeal).opacity(0.8) : Color(.systemGray))
                     Spacer()
                     if isSelected {
                         Image(systemName: "checkmark.circle.fill")

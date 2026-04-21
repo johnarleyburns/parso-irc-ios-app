@@ -440,12 +440,21 @@ struct AddServerSheet: View {
 
     private func prefill() {
         guard let s = existingServer else {
-            // New server: auto-generate nick and password
+            // New server: use global identity + password if already set, otherwise generate
             let globalNick = appState.globalNickname
             nickname = globalNick.isEmpty ? Self.generateNick() : globalNick
             realName = appState.globalRealName
-            generatedPassword = Self.generatePassword()
-            serverPassword = generatedPassword
+            // Prefer the global password from onboarding; generate one if not yet set
+            let globalPw = appState.globalPassword
+            if globalPw.isEmpty {
+                generatedPassword = Self.generatePassword()
+                serverPassword = generatedPassword
+            } else {
+                generatedPassword = globalPw
+                serverPassword = globalPw
+            }
+            // Enable SASL by default so auth actually works on supported servers
+            saslEnabled = true
             return
         }
         selectedPreset = PresetNetwork(host: s.host) ?? .custom

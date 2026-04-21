@@ -447,7 +447,17 @@ final class ChannelViewModel: ObservableObject {
 
     private func requestChatHistoryIfSupported() async {
         guard let client = ircManager.getClient(for: serverId) else { return }
-        let supported = await client.hasChathistorySupport()
+
+        // The CAP ACK may not have arrived yet when start() first runs.
+        // Wait up to 3 seconds for chathistory support to be confirmed.
+        var supported = await client.hasChathistorySupport()
+        if !supported {
+            for _ in 0..<30 {
+                try? await Task.sleep(nanoseconds: 100_000_000)   // 100 ms × 30 = 3 s max
+                supported = await client.hasChathistorySupport()
+                if supported { break }
+            }
+        }
         guard supported else { return }
 
         // Determine if we need to fetch history.
@@ -463,12 +473,9 @@ final class ChannelViewModel: ObservableObject {
         if rawMessages.isEmpty {
             needsFetch = true
         } else if let lastFetch = lastFetchDate {
-            // Fetch if the app has been foregrounded since our last fetch, or if
-            // lastForegroundedAt is nil (cold launch — always fetch to get missed messages)
             let lastForeground = AppState.shared.lastForegroundedAt
             needsFetch = lastForeground == nil || lastForeground! > lastFetch
         } else {
-            // No previous fetch recorded — always fetch
             needsFetch = true
         }
 
@@ -484,7 +491,6 @@ final class ChannelViewModel: ObservableObject {
             try? await client.requestHistory(target: channelName, limit: limit)
         }
 
-        // Record when we last fetched history for this channel
         UserDefaults.standard.set(Date(), forKey: lastFetchKey)
     }
 

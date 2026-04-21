@@ -63,6 +63,11 @@ class AppState: ObservableObject {
     @Published var globalRealName: String {
         didSet { UserDefaults.standard.set(globalRealName, forKey: "globalRealName") }
     }
+    /// Global default password — auto-generated on first onboarding, applied to
+    /// every new server by default so users don't have to think about credentials.
+    @Published var globalPassword: String {
+        didSet { UserDefaults.standard.set(globalPassword, forKey: "globalPassword") }
+    }
 
     // Currently selected server / channel — driven by RootView's NavigationStack.
     @Published var selectedServerId: String? = nil
@@ -75,5 +80,6 @@ class AppState: ObservableObject {
     init() {
         self.globalNickname = UserDefaults.standard.string(forKey: "globalNickname") ?? ""
         self.globalRealName = UserDefaults.standard.string(forKey: "globalRealName") ?? ""
+        self.globalPassword = UserDefaults.standard.string(forKey: "globalPassword") ?? ""
     }
 }

@@ -156,31 +156,25 @@ struct ConnectionDot: View {
         }
     }
 
-    private var isAnimating: Bool {
+    private var isSpinning: Bool {
         state == .connecting || state == .reconnecting
     }
 
-    @State private var pulse = false
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-
     var body: some View {
-        ZStack {
-            if isAnimating && !reduceMotion {
-                Circle()
-                    .fill(color.opacity(0.3))
+        Group {
+            if isSpinning {
+                // Show a small circular spinner while connecting/reconnecting
+                ProgressView()
+                    .progressViewStyle(.circular)
+                    .scaleEffect(0.65)
                     .frame(width: 14, height: 14)
-                    .scaleEffect(pulse ? 1.6 : 1.0)
-                    .opacity(pulse ? 0 : 0.6)
-                    .animation(.easeOut(duration: 1).repeatForever(autoreverses: false), value: pulse)
+            } else {
+                // Static coloured dot for all other states
+                Circle()
+                    .fill(color)
+                    .frame(width: 8, height: 8)
+                    .frame(width: 14, height: 14)
             }
-            Circle()
-                .fill(color)
-                .frame(width: 8, height: 8)
-        }
-        .frame(width: 14, height: 14)
-        .onAppear { pulse = isAnimating && !reduceMotion }
-        .onChange(of: state) { _, new in
-            pulse = (new == .connecting || new == .reconnecting) && !reduceMotion
         }
     }
 }

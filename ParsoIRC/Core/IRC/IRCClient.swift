@@ -53,10 +53,21 @@ actor IRCClient {
     private var pendingCapabilities: Set<String> = []
     private var acknowledgedCapabilities: Set<String> = []
     private var isCapNegotiationComplete = false
-    /// Set to true when the server sends CAP ACK or CAP NAK after our CAP REQ.
-    /// Used to replace the old blind 500ms sleep with proper acknowledgment-driven flow.
     private var isCapAckReceived = false
     private var saslRequested = false
+
+    // MARK: - Continuation-based CAP synchronisation
+    //
+    // These replace the old polling loops (while !flag { sleep }) which caused
+    // an actor-isolation deadlock: the polling Task held the actor, blocking
+    // handleMessage() from running to set the completion flags.  Using
+    // continuations lets the actor suspend *without* holding the execution
+    // context, so incoming-message Tasks can interleave freely.
+
+    /// Resumed by handleCapMessage when the server sends its first CAP LS reply.
+    private var capNegotiationContinuation: CheckedContinuation<Void, Never>?
+    /// Resumed by handleCapMessage when the server sends CAP ACK or CAP NAK.
+    private var capAckContinuation: CheckedContinuation<Void, Never>?
     // MARK: - Connection
 
     func connect(
@@ -75,6 +86,19 @@ actor IRCClient {
         debugLog.log("connect() called for \(host):\(port), tls: \(tls)", type: .info)
         serverInfo = (host, UInt16(port))
         useTLS = tls
+
+        // Reset all state from any previous connection attempt
+        isCapNegotiationComplete = false
+        isCapAckReceived = false
+        saslRequested = false
+        chathistoryEnabled = false
+        serverTimeEnabled = false
+        zncPlaybackEnabled = false
+        pendingCapabilities.removeAll()
+        acknowledgedCapabilities.removeAll()
+        activeBatches.removeAll()
+        capNegotiationContinuation = nil
+        capAckContinuation = nil
 
         let hostNW = NWEndpoint.Host(host)
         let portNW = NWEndpoint.Port(integerLiteral: UInt16(port))
@@ -127,39 +151,36 @@ actor IRCClient {
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             Task {
                 do {
-                    // Wait for server's CAP LS response before requesting capabilities
-                    try await self.waitForCapNegotiation(timeout: 10)
-                    
+                    // Wait for server's CAP LS response before requesting capabilities.
+                    // Uses a continuation (not a polling loop) so the actor is free to
+                    // process incoming messages while we wait.
+                    await self.waitForCapNegotiationAsync(timeout: 10)
+
                     var capsToRequest = ["batch", "server-time", "message-tags", "draft/chathistory", "chathistory", "znc.in/playback"]
                     if useSASL {
                         capsToRequest.append("sasl")
                     }
                     try await self.send_raw("CAP REQ :\(capsToRequest.joined(separator: " "))")
-                    
-                    // Wait for CAP ACK/NAK — up to 5 seconds with 100ms polling.
-                    // isCapAckReceived is set to true inside handleCapMessage when ACK or NAK arrives.
-                    let ackStart = Date()
-                    while !self.isCapAckReceived {
-                        try await Task.sleep(nanoseconds: 100_000_000)
-                        if Date().timeIntervalSince(ackStart) > 5 { break }
-                    }
-                    
+
+                    // Wait for CAP ACK/NAK via continuation — actor stays free to receive.
+                    await self.waitForCapAckAsync(timeout: 5)
+
                     if useSASL && self.acknowledgedCapabilities.contains("sasl") {
                         try await self.send_raw("AUTHENTICATE PLAIN")
                         self.saslRequested = true
                     }
-                    
+
                     // RFC 2812 §3.1: registration order is PASS (if any), then NICK, then USER.
                     if let password = serverPassword, !password.isEmpty {
                         try await self.send_raw("PASS \(password)")
                     }
                     // NICK takes a single middle parameter — do NOT use send() which appends ":"
                     try await self.send_raw("NICK \(nickname)")
-                    // USER: second param must be "0" per modern IRC spec; "8" sets invisible+wallops
+                    // USER: second param must be "0" per modern IRC spec
                     try await self.send_raw("USER \(username) 0 * :\(realname)")
-                    
+
                     try await self.send_raw("CAP END")
-                    
+
                     continuation.resume()
                 } catch {
                     continuation.resume(throwing: error)
@@ -168,15 +189,51 @@ actor IRCClient {
         }
     }
     
-    private func waitForCapNegotiation(timeout: Int) async throws {
-        let startTime = Date()
-        while !isCapNegotiationComplete {
-            try await Task.sleep(nanoseconds: 100_000_000)
-            if Date().timeIntervalSince(startTime) > Double(timeout) {
-                isCapNegotiationComplete = true
-                return
+    /// Suspends until the server's first CAP LS reply sets `isCapNegotiationComplete`,
+    /// or until `timeout` seconds elapse.  Uses a CheckedContinuation so the actor
+    /// stays free to process incoming messages while suspended.
+    private func waitForCapNegotiationAsync(timeout: Double) async {
+        guard !isCapNegotiationComplete else { return }
+        await withCheckedContinuation { (cont: CheckedContinuation<Void, Never>) in
+            self.capNegotiationContinuation = cont
+            // Timeout fallback — runs as a separate Task so it doesn't hold the actor.
+            Task { [weak self] in
+                try? await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
+                guard let self else { return }
+                if let stored = await self.capNegotiationContinuation {
+                    await self.clearCapNegotiationContinuation()
+                    self.isCapNegotiationComplete = true
+                    stored.resume()
+                }
             }
         }
+    }
+
+    /// Clears the stored negotiation continuation (actor-isolated helper for the timeout Task).
+    private func clearCapNegotiationContinuation() {
+        capNegotiationContinuation = nil
+    }
+
+    /// Suspends until the server sends CAP ACK or CAP NAK, or until `timeout` seconds elapse.
+    private func waitForCapAckAsync(timeout: Double) async {
+        guard !isCapAckReceived else { return }
+        await withCheckedContinuation { (cont: CheckedContinuation<Void, Never>) in
+            self.capAckContinuation = cont
+            Task { [weak self] in
+                try? await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
+                guard let self else { return }
+                if let stored = await self.capAckContinuation {
+                    await self.clearCapAckContinuation()
+                    self.isCapAckReceived = true
+                    stored.resume()
+                }
+            }
+        }
+    }
+
+    /// Clears the stored ACK continuation (actor-isolated helper for the timeout Task).
+    private func clearCapAckContinuation() {
+        capAckContinuation = nil
     }
 
     func disconnect() {
@@ -686,9 +743,15 @@ actor IRCClient {
                     }
                 }
             }
-            // If this is not a multi-line LS (no asterisk before last param), negotiation is done
-            if message.parameters.count < 4 || message.parameters[2] != "*" {
+            // If this is not a multi-line LS (no asterisk in position [2]), negotiation is done.
+            // Resume the continuation so connect() can proceed immediately.
+            let isMultiLine = message.parameters.count >= 4 && message.parameters[2] == "*"
+            if !isMultiLine {
                 isCapNegotiationComplete = true
+                if let cont = capNegotiationContinuation {
+                    capNegotiationContinuation = nil
+                    cont.resume()
+                }
             }
             
         case "ACK":
@@ -697,7 +760,7 @@ actor IRCClient {
                 for cap in acknowledged {
                     let capName = cap.trimmingCharacters(in: .init(charactersIn: "-~="))
                     acknowledgedCapabilities.insert(capName)
-                    
+
                     // NOTE: "batch" alone does NOT imply chathistory support.
                     // Only set chathistoryEnabled when chathistory or znc.in/playback is explicitly ACKed.
                     if capName == "server-time" {
@@ -710,15 +773,27 @@ actor IRCClient {
                     }
                 }
             }
-            // Signal that the server has responded to our CAP REQ
+            // Signal connect() that ACK arrived — resume the waiting continuation immediately.
             isCapAckReceived = true
-            
+            if let cont = capAckContinuation {
+                capAckContinuation = nil
+                cont.resume()
+            }
+
         case "NAK":
-            // Server rejected our CAP REQ; nothing to do, but signal that we got a response
+            // Server rejected our CAP REQ; signal connect() so it can proceed without hanging.
             isCapAckReceived = true
+            if let cont = capAckContinuation {
+                capAckContinuation = nil
+                cont.resume()
+            }
             
         case "END":
             isCapNegotiationComplete = true
+            if let cont = capNegotiationContinuation {
+                capNegotiationContinuation = nil
+                cont.resume()
+            }
             
         case "NEW":
             // IRCv3 cap-notify: server advertising a new capability
