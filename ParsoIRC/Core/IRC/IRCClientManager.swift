@@ -80,6 +80,9 @@ final class IRCClientManager: ObservableObject {
     /// and reload the channel list without requiring a full reconnect event.
     @Published private(set) var channelMembershipVersion: Int = 0
 
+    /// Published so ServerSidebarView can observe when new DM channels are created.
+    @Published private(set) var dmChannelIds: Set<String> = []
+
     /// Leaves a channel: sends PART, clears `joinedAt` in the DB, clears unread,
     /// and bumps `channelMembershipVersion` so the sidebar reloads.
     func leaveChannel(_ channelName: String, serverId: String) {
