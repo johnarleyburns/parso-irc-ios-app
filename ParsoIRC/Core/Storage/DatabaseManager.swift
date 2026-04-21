@@ -28,6 +28,8 @@ final class DatabaseManager {
     private let serverCreatedAt = Expression<String>("created_at")
     private let serverLastConnected = Expression<String?>("last_connected")
     private let serverLastActiveChannel = Expression<String?>("last_active_channel")
+    /// Persisted `useConnectionPassword` flag — whether to send PASS during registration.
+    private let serverUseConnectionPassword = Expression<Int>("use_connection_password")
     
     // Channel columns
     private let channelId = Expression<String>("id")
@@ -135,11 +137,28 @@ final class DatabaseManager {
                     break
                 }
             }
-            if !hasUnreadCount {
-                try db.run(channels.addColumn(channelUnreadCount, defaultValue: 0))
+             if !hasUnreadCount {
+                 try db.run(channels.addColumn(channelUnreadCount, defaultValue: 0))
+             }
+         } catch {
+             print("Migration failed (channels unread_count): \(error)")
+         }
+
+        // Phase 6: add use_connection_password column to servers
+        do {
+            let serverInfo = try db.prepare("PRAGMA table_info(servers)")
+            var hasUseConnectionPassword = false
+            for row in serverInfo {
+                if let name = row[1] as? String, name == "use_connection_password" {
+                    hasUseConnectionPassword = true
+                    break
+                }
+            }
+            if !hasUseConnectionPassword {
+                try db.run(servers.addColumn(serverUseConnectionPassword, defaultValue: 0))
             }
         } catch {
-            print("Migration failed (channels unread_count): \(error)")
+            print("Migration failed (servers use_connection_password): \(error)")
         }
     }
     
@@ -162,6 +181,7 @@ final class DatabaseManager {
                 t.column(serverCreatedAt)
                 t.column(serverLastConnected)
                 t.column(serverLastActiveChannel)
+                t.column(serverUseConnectionPassword, defaultValue: 0)
             })
             
             try db.run(channels.create(ifNotExists: true) { t in
@@ -237,7 +257,8 @@ final class DatabaseManager {
             serverAutoConnect <- server.autoConnect ? 1 : 0,
             serverCreatedAt <- dateFormatter.string(from: server.createdAt),
             serverLastConnected <- server.lastConnected.map { dateFormatter.string(from: $0) },
-            serverLastActiveChannel <- server.lastActiveChannel
+            serverLastActiveChannel <- server.lastActiveChannel,
+            serverUseConnectionPassword <- server.useConnectionPassword ? 1 : 0
         )
         
         try db.run(insert)
@@ -271,7 +292,8 @@ final class DatabaseManager {
                 lastConnected: row[serverLastConnected].flatMap { dateFormatter.date(from: $0) },
                 isConnected: false,
                 channels: serverChannels,
-                lastActiveChannel: row[serverLastActiveChannel]
+                lastActiveChannel: row[serverLastActiveChannel],
+                useConnectionPassword: (try? row.get(serverUseConnectionPassword) == 1) ?? false
             )
             result.append(server)
         }

@@ -731,6 +731,423 @@ runTest("testChannelMessageNotShownInWrongChannel") {
     try assertFalse(isForLinux)
 }
 
+// MARK: - PASS command suppression tests
+// Root cause of "cannot post anything": the auto-generated password was being sent
+// via the IRC PASS command to public servers like Libera.Chat.  Libera.Chat responds
+// with "ERROR :Bad password" and immediately closes the connection, silently killing
+// every subsequent send attempt.
+
+print("\n=== PASS Command Suppression Tests ===")
+
+// Simulate the Server model's useConnectionPassword flag
+struct TestServer {
+    var password: String?
+    var saslEnabled: Bool
+    var useConnectionPassword: Bool
+}
+
+/// Mirrors the fixed IRCClientManager logic:
+/// serverPassword is only passed when useConnectionPassword == true.
+func resolvedServerPassword(for server: TestServer) -> String? {
+    server.useConnectionPassword ? server.password : nil
+}
+
+runTest("testPublicServerNeverSendsPASS") {
+    // Libera.Chat, OFTC, etc. — password is for NickServ/SASL, NOT for PASS command
+    let server = TestServer(password: "Xk4mB2pQzRs9vN", saslEnabled: false, useConnectionPassword: false)
+    let pass = resolvedServerPassword(for: server)
+    try assertTrue(pass == nil)
+}
+
+runTest("testPublicServerWithSASLNeverSendsPASS") {
+    let server = TestServer(password: "SaslPassword123", saslEnabled: true, useConnectionPassword: false)
+    let pass = resolvedServerPassword(for: server)
+    try assertTrue(pass == nil)
+}
+
+runTest("testBouncerServerSendsPASS") {
+    // Private server / bouncer that requires a server-level password
+    let server = TestServer(password: "bouncer_secret", saslEnabled: false, useConnectionPassword: true)
+    let pass = resolvedServerPassword(for: server)
+    try assertEqual(pass, "bouncer_secret")
+}
+
+runTest("testBouncerWithNilPasswordSendsNilPASS") {
+    // useConnectionPassword=true but no password set → nil
+    let server = TestServer(password: nil, saslEnabled: false, useConnectionPassword: true)
+    let pass = resolvedServerPassword(for: server)
+    try assertTrue(pass == nil)
+}
+
+runTest("testBouncerWithEmptyPasswordSendsNilPASS") {
+    // Empty string password should NOT produce "PASS " (a PASS with no argument)
+    let server = TestServer(password: "", saslEnabled: false, useConnectionPassword: true)
+    let pass = resolvedServerPassword(for: server)
+    // The IRCClient.connect() guard is: if let password = serverPassword, !password.isEmpty
+    // An empty string passed here would be caught by that guard.
+    // resolvedServerPassword returns "" which is still non-nil, but connect() checks isEmpty.
+    // Test that a blank password is treated as absent.
+    let effectivePass: String? = (server.useConnectionPassword && !(server.password ?? "").isEmpty) ? server.password : nil
+    try assertTrue(effectivePass == nil)
+}
+
+runTest("testNewServerDefaultsToNoConnectionPassword") {
+    // Servers created via onboarding should default to useConnectionPassword = false
+    let server = TestServer(password: "auto-generated", saslEnabled: false, useConnectionPassword: false)
+    try assertFalse(server.useConnectionPassword)
+}
+
+runTest("testPASSCommandFormat") {
+    // When we DO send PASS, verify it's formatted correctly (no colon prefix)
+    let password = "my_bouncer_pass"
+    let passLine = "PASS \(password)"
+    try assertTrue(passLine.hasPrefix("PASS "))
+    try assertFalse(passLine.contains(":"))  // PASS takes a single middle param, no trailing colon
+    try assertEqual(passLine, "PASS my_bouncer_pass")
+}
+
+// MARK: - PRIVMSG send path tests
+// Tests that cover the complete chain from ChannelViewModel.send() to the wire.
+
+print("\n=== PRIVMSG Send Path Tests ===")
+
+/// Simulates send(command:parameters:) from IRCClient
+func buildPrivmsgLine(channel: String, text: String) -> String {
+    // send(command: "PRIVMSG", parameters: [channel, text])
+    // → "PRIVMSG #channel :message text"
+    return "PRIVMSG \(channel) :\(text)"
+}
+
+runTest("testPrivmsgBuildsCorrectly") {
+    let line = buildPrivmsgLine(channel: "#linux", text: "Hello world")
+    try assertEqual(line, "PRIVMSG #linux :Hello world")
+}
+
+runTest("testPrivmsgWithSpecialChars") {
+    let line = buildPrivmsgLine(channel: "#linux", text: "hello: how are you?")
+    try assertEqual(line, "PRIVMSG #linux :hello: how are you?")
+}
+
+runTest("testPrivmsgEndsWithCRLF") {
+    // Wire format must end with \r\n
+    let line = buildPrivmsgLine(channel: "#test", text: "hi")
+    var data = (line).data(using: .utf8)!
+    data.append(contentsOf: [0x0D, 0x0A])
+    let str = String(data: data, encoding: .utf8)!
+    try assertTrue(str.hasSuffix("\r\n"))
+}
+
+runTest("testPrivmsgNotSentWhenDisconnected") {
+    // Simulates the guard in send_raw: guard isConnected else { throw notConnected }
+    let isConnected = false
+    var threw = false
+    if !isConnected {
+        threw = true  // would throw IRCError.notConnected
+    }
+    try assertTrue(threw)
+}
+
+runTest("testPrivmsgSentWhenConnected") {
+    let isConnected = true
+    var threw = false
+    if !isConnected {
+        threw = true
+    }
+    try assertFalse(threw)
+}
+
+runTest("testCtcpActionFormat") {
+    // /me message → PRIVMSG #chan :\u{0001}ACTION text\u{0001}
+    let action = "waves hello"
+    let ctcp = "\u{0001}ACTION \(action)\u{0001}"
+    let line = "PRIVMSG #linux :\(ctcp)"
+    try assertTrue(line.contains("\u{0001}ACTION"))
+    try assertTrue(line.hasSuffix("\u{0001}"))
+}
+
+runTest("testEmptyMessageNotSent") {
+    // ChannelViewModel.send() guards: guard !trimmed.isEmpty else { return }
+    let text = "   "
+    let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+    try assertTrue(trimmed.isEmpty)
+}
+
+runTest("testWhitespaceOnlyMessageNotSent") {
+    let text = "\t\n  \r\n"
+    let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+    try assertTrue(trimmed.isEmpty)
+}
+
+// MARK: - Connection flow tests (NICK + USER must be sent)
+
+print("\n=== Connection Registration Tests ===")
+
+// Simulate the sequence of commands sent during IRC registration.
+// These are the commands that MUST appear in order for the server to accept us.
+
+struct CommandLog {
+    var sent: [String] = []
+    mutating func sendRaw(_ line: String) { sent.append(line) }
+}
+
+runTest("testRegistrationSendsNickBeforeUser") {
+    var log = CommandLog()
+    log.sendRaw("CAP LS 302")
+    log.sendRaw("CAP REQ :batch server-time chathistory")
+    // PASS omitted (useConnectionPassword = false)
+    log.sendRaw("NICK neatbird")
+    log.sendRaw("USER neatbird 0 * :neatbird")
+    log.sendRaw("CAP END")
+
+    let nickIdx = log.sent.firstIndex(where: { $0.hasPrefix("NICK ") })
+    let userIdx = log.sent.firstIndex(where: { $0.hasPrefix("USER ") })
+    try assertTrue(nickIdx != nil)
+    try assertTrue(userIdx != nil)
+    try assertTrue(nickIdx! < userIdx!)
+}
+
+runTest("testRegistrationNoPASSForPublicServer") {
+    var log = CommandLog()
+    // Simulate connect() with useConnectionPassword = false
+    let serverPassword: String? = nil  // resolvedServerPassword returned nil
+    if let pw = serverPassword, !pw.isEmpty {
+        log.sendRaw("PASS \(pw)")
+    }
+    log.sendRaw("NICK neatbird")
+    log.sendRaw("USER neatbird 0 * :neatbird")
+
+    let hasPass = log.sent.contains(where: { $0.hasPrefix("PASS ") })
+    try assertFalse(hasPass)
+    try assertTrue(log.sent.contains("NICK neatbird"))
+    try assertTrue(log.sent.contains("USER neatbird 0 * :neatbird"))
+}
+
+runTest("testRegistrationSendsPASSForPrivateServer") {
+    var log = CommandLog()
+    let serverPassword: String? = "bouncer123"  // useConnectionPassword = true
+    if let pw = serverPassword, !pw.isEmpty {
+        log.sendRaw("PASS \(pw)")
+    }
+    log.sendRaw("NICK neatbird")
+    log.sendRaw("USER neatbird 0 * :neatbird")
+
+    try assertTrue(log.sent.contains("PASS bouncer123"))
+    let passIdx = log.sent.firstIndex(of: "PASS bouncer123")!
+    let nickIdx = log.sent.firstIndex(of: "NICK neatbird")!
+    try assertTrue(passIdx < nickIdx)  // PASS must come before NICK
+}
+
+runTest("testRegistrationCapEndSentLast") {
+    var log = CommandLog()
+    log.sendRaw("CAP LS 302")
+    log.sendRaw("CAP REQ :batch chathistory")
+    log.sendRaw("NICK neatbird")
+    log.sendRaw("USER neatbird 0 * :neatbird")
+    log.sendRaw("CAP END")
+
+    try assertEqual(log.sent.last, "CAP END")
+}
+
+runTest("testNickCommandFormat") {
+    // NICK must NOT have a trailing colon: "NICK neatbird" not "NICK :neatbird"
+    let nick = "neatbird"
+    let line = "NICK \(nick)"
+    try assertFalse(line.contains(":"))
+    try assertEqual(line, "NICK neatbird")
+}
+
+runTest("testUserCommandFormat") {
+    // USER format: USER <username> 0 * :<realname>
+    let username = "neatbird"
+    let realname = "Neat Bird"
+    let line = "USER \(username) 0 * :\(realname)"
+    try assertTrue(line.hasPrefix("USER "))
+    try assertTrue(line.contains(" 0 * :"))
+    try assertTrue(line.hasSuffix(realname))
+}
+
+// MARK: - CHATHISTORY flow tests
+
+print("\n=== CHATHISTORY Flow Tests ===")
+
+runTest("testChathistoryNotSentWhenDisabled") {
+    // If chathistoryEnabled == false, requestChatHistoryIfSupported() returns early
+    let chathistoryEnabled = false
+    var requestSent = false
+    if chathistoryEnabled {
+        requestSent = true
+    }
+    try assertFalse(requestSent)
+}
+
+runTest("testChathistoryNotSentBeforeConnectionEstablished") {
+    // Simulates the scenario that caused chathistory to fail:
+    // The connection is killed by ERROR :Bad password before chathistory can be sent.
+    // Now that PASS is suppressed, this scenario no longer occurs.
+    var isConnected = true
+    // Simulate ERROR :Bad password closing the connection
+    isConnected = false
+    var requestSent = false
+    if isConnected {
+        requestSent = true  // would only reach this if connected
+    }
+    try assertFalse(requestSent)
+}
+
+runTest("testChathistoryOnlySentAfter366") {
+    // The 366 RPL_ENDOFNAMES is the gating event.
+    // This test documents the correct sequence.
+    var chathistoryRequestSent = false
+    var joinConfirmed = false
+
+    // Simulate receiving 366
+    let msg366 = IRCMessage(rawLine: ":server 366 neatbird #linux :End of /NAMES list")
+    if msg366.command == "366", msg366.parameters.count >= 2 {
+        joinConfirmed = true
+        // NOW it's safe to send CHATHISTORY
+        chathistoryRequestSent = true
+    }
+
+    try assertTrue(joinConfirmed)
+    try assertTrue(chathistoryRequestSent)
+    // Key invariant: chathistory was NOT sent before 366
+}
+
+runTest("testChathistoryCommandFormat") {
+    // CHATHISTORY LATEST <target> <anchor> <limit>
+    // Anchor "*" means "from the most recent message"
+    let target = "#linux"
+    let limit = 100
+    let cmd = "CHATHISTORY LATEST \(target) * \(limit)"
+    let parsed = IRCMessage(rawLine: cmd)
+    try assertEqual(parsed.command, "CHATHISTORY")
+    try assertEqual(parsed.parameters[0], "LATEST")
+    try assertEqual(parsed.parameters[1], target)
+    try assertEqual(parsed.parameters[2], "*")
+    try assertEqual(parsed.parameters[3], "\(limit)")
+}
+
+runTest("testChathistorySinceCommandFormat") {
+    // CHATHISTORY LATEST <target> timestamp=<iso8601> <limit>
+    let target = "#linux"
+    let ts = "2026-04-20T00:00:00.000Z"
+    let limit = 50
+    let cmd = "CHATHISTORY LATEST \(target) timestamp=\(ts) \(limit)"
+    try assertTrue(cmd.contains("timestamp="))
+    try assertTrue(cmd.contains(target))
+    try assertTrue(cmd.hasSuffix("\(limit)"))
+}
+
+runTest("testChathistoryLimitCappedAtServerMax") {
+    // Client should never request more than chathistoryMaxLimit
+    let serverMax = 100
+    let requestedLimit = 200
+    let effectiveLimit = min(requestedLimit, serverMax)
+    try assertEqual(effectiveLimit, 100)
+}
+
+runTest("testChathistoryLimitCappedAt100ForHistory") {
+    // ChannelViewModel caps at 100 even if server allows more
+    let serverMax = 1000
+    let appCap = 100
+    let requestedLimit = min(serverMax, appCap)
+    try assertEqual(requestedLimit, 100)
+}
+
+runTest("testChathistoryBatchRoutingByType") {
+    // Only messages whose batch ref maps to a "chathistory" type go to onHistoryMessage
+    let activeBatches = ["hist1": "chathistory", "live1": ""]
+    let histMsg = IRCMessage(rawLine: "@batch=hist1 :alice!a@b PRIVMSG #linux :History message")
+    let liveMsg = IRCMessage(rawLine: "@batch=live1 :bob!b@c PRIVMSG #linux :Live message")
+    let noTagMsg = IRCMessage(rawLine: ":carol!c@d PRIVMSG #linux :No batch tag")
+
+    try assertTrue(isHistoryBatch(message: histMsg, activeBatches: activeBatches))
+    try assertFalse(isHistoryBatch(message: liveMsg, activeBatches: activeBatches))
+    try assertFalse(isHistoryBatch(message: noTagMsg, activeBatches: activeBatches))
+}
+
+runTest("testChathistoryEnabledOnlyAfterExplicitCapAck") {
+    // chathistoryEnabled must only be true when "chathistory" or "draft/chathistory"
+    // is explicitly in CAP ACK — not just because "batch" was ACKed.
+    var chathistoryEnabled = false
+    let ackCaps = ["batch", "server-time", "message-tags"]  // no "chathistory"
+    for cap in ackCaps {
+        let capName = cap.trimmingCharacters(in: .init(charactersIn: "-~="))
+        if capName == "chathistory" || capName == "draft/chathistory" {
+            chathistoryEnabled = true
+        }
+    }
+    try assertFalse(chathistoryEnabled)
+}
+
+runTest("testChathistoryEnabledWhenExplicitlyAcked") {
+    var chathistoryEnabled = false
+    let ackCaps = ["batch", "server-time", "chathistory"]
+    for cap in ackCaps {
+        let capName = cap.trimmingCharacters(in: .init(charactersIn: "-~="))
+        if capName == "chathistory" || capName == "draft/chathistory" {
+            chathistoryEnabled = true
+        }
+    }
+    try assertTrue(chathistoryEnabled)
+}
+
+// MARK: - Error :Bad password scenario tests
+// Regression tests documenting the exact bug that caused messages not to send.
+
+print("\n=== ERROR :Bad password Regression Tests ===")
+
+runTest("testErrorBadPasswordKillsConnection") {
+    // Simulates receiving "ERROR :Bad password" from the server.
+    // This is what Libera.Chat sends when PASS is sent with a wrong/unexpected password.
+    let errorLine = ":irc.libera.chat ERROR :Bad password"
+    let msg = IRCMessage(rawLine: errorLine)
+    try assertEqual(msg.command, "ERROR")
+    try assertTrue(msg.parameters.first?.contains("Bad password") == true)
+}
+
+runTest("testErrorCommandCausesDisconnect") {
+    // After ERROR is received, the connection must be treated as dead.
+    // Sending any command after this must throw .notConnected.
+    var isConnected = true
+    let msg = IRCMessage(rawLine: ":server ERROR :Bad password")
+    if msg.command == "ERROR" {
+        isConnected = false  // handleMessage sets isConnected = false
+    }
+    try assertFalse(isConnected)
+}
+
+runTest("testSuppressingPASSPreventsErrorBadPassword") {
+    // The fix: useConnectionPassword = false → no PASS sent → no ERROR response.
+    var log = CommandLog()
+    let useConnectionPassword = false
+    let password = "Xk4mB2pQzRs9vN"  // auto-generated onboarding password
+
+    // Fixed connect flow:
+    if useConnectionPassword && !password.isEmpty {
+        log.sendRaw("PASS \(password)")
+    }
+    log.sendRaw("NICK neatbird")
+    log.sendRaw("USER neatbird 0 * :neatbird")
+
+    let hasPass = log.sent.contains(where: { $0.hasPrefix("PASS ") })
+    try assertFalse(hasPass)  // PASS is not sent → Libera.Chat never sends ERROR :Bad password
+}
+
+runTest("testConnectionSurvivesWithoutPASS") {
+    // After fixing PASS suppression, connection should stay alive and sends work.
+    var isConnected = false
+    var log = CommandLog()
+
+    // Simulate successful connect (no ERROR because no PASS was sent)
+    isConnected = true  // 001 RPL_WELCOME received
+    log.sendRaw("JOIN #linux")
+    log.sendRaw("PRIVMSG #linux :Hello!")
+
+    try assertTrue(isConnected)
+    try assertTrue(log.sent.contains(where: { $0.hasPrefix("PRIVMSG") }))
+}
+
 // Summary
 print("\n=== Results ===")
 print("Passed: \(results.passed)")

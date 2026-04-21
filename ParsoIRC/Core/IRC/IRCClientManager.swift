@@ -193,7 +193,9 @@ final class IRCClientManager: ObservableObject {
                 nickname: nickname,
                 username: server.realname.isEmpty ? "parso" : server.realname,
                 realname: server.realname.isEmpty ? "Parso IRC" : server.realname,
-                serverPassword: server.password,
+                // Only send PASS for servers that explicitly require a connection password.
+                // Sending PASS to public networks (Libera.Chat etc.) causes ERROR :Bad password.
+                serverPassword: server.useConnectionPassword ? server.password : nil,
                 useSASL: server.saslEnabled,
                 saslPassword: server.password
             )
@@ -246,7 +248,7 @@ final class IRCClientManager: ObservableObject {
                 nickname: nickname,
                 username: server.realname.isEmpty ? "parso" : server.realname,
                 realname: server.realname.isEmpty ? "Parso IRC" : server.realname,
-                serverPassword: server.password,
+                serverPassword: server.useConnectionPassword ? server.password : nil,
                 useSASL: server.saslEnabled,
                 saslPassword: server.password
             )

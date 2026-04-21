@@ -8,6 +8,8 @@ struct Server: Identifiable, Codable, Equatable, Hashable {
     var ssl: Bool
     var nickname: String
     var realname: String
+    /// The user's credential — used for SASL PLAIN or NickServ registration.
+    /// Never sent as an IRC-level PASS command unless `useConnectionPassword` is true.
     var password: String?
     var saslEnabled: Bool
     var saslMechanism: String
@@ -17,6 +19,11 @@ struct Server: Identifiable, Codable, Equatable, Hashable {
     var isConnected: Bool
     var channels: [Channel]
     var lastActiveChannel: String?
+    /// When true, the `password` field is sent as an IRC PASS command during registration.
+    /// Use only for private servers / bouncers that require a server-level password.
+    /// Leave false for public networks (Libera.Chat, OFTC, etc.) — sending PASS to those
+    /// causes `ERROR :Bad password` and an immediate connection termination.
+    var useConnectionPassword: Bool
 
     init(
         id: String = UUID().uuidString,
@@ -34,7 +41,8 @@ struct Server: Identifiable, Codable, Equatable, Hashable {
         lastConnected: Date? = nil,
         isConnected: Bool = false,
         channels: [Channel] = [],
-        lastActiveChannel: String? = nil
+        lastActiveChannel: String? = nil,
+        useConnectionPassword: Bool = false
     ) {
         self.id = id
         self.name = name
@@ -52,6 +60,7 @@ struct Server: Identifiable, Codable, Equatable, Hashable {
         self.isConnected = isConnected
         self.channels = channels
         self.lastActiveChannel = lastActiveChannel
+        self.useConnectionPassword = useConnectionPassword
     }
 
     static let defaultNetworks: [Server] = [

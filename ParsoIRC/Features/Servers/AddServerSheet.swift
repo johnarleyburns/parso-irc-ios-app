@@ -39,6 +39,7 @@ struct AddServerSheet: View {
     @State private var saslEnabled: Bool = false
     @State private var saslUsername: String = ""
     @State private var saslPassword: String = ""
+    @State private var useConnectionPassword: Bool = false
     @State private var showAuthSection: Bool = false
     @State private var autoJoinChannels: [String] = []
     @State private var newChannelName: String = ""
@@ -312,6 +313,9 @@ struct AddServerSheet: View {
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
 
+                    Toggle("Send password as PASS command", isOn: $useConnectionPassword)
+                        .tint(.accentColor)
+
                     Toggle("SASL Authentication", isOn: $saslEnabled)
                         .tint(.accentColor)
 
@@ -470,9 +474,10 @@ struct AddServerSheet: View {
         saslEnabled = s.saslEnabled
         saslUsername = s.nickname
         saslPassword = s.password ?? ""
+        useConnectionPassword = s.useConnectionPassword
         autoJoinChannels = s.channels.map(\.name)
         autoConnect = s.autoConnect
-        showAuthSection = s.saslEnabled || !(s.password ?? "").isEmpty
+        showAuthSection = s.saslEnabled || s.useConnectionPassword || !(s.password ?? "").isEmpty
     }
 
     /// Generates a random IRC-safe nickname like "parso1234".
@@ -546,7 +551,8 @@ struct AddServerSheet: View {
             autoConnect: autoConnect,
             createdAt: existingServer?.createdAt ?? Date(),
             channels: channels,
-            lastActiveChannel: channels.first?.name
+            lastActiveChannel: channels.first?.name,
+            useConnectionPassword: useConnectionPassword
         )
 
         do {
