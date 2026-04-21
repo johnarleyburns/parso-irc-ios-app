@@ -190,10 +190,24 @@ final class ChannelViewModel: ObservableObject {
         client.onMessage = { [weak self] ircMsg in
             Task { @MainActor [weak self] in
                 guard let self else { return }
-                // Only handle messages addressed to our channel (or DMs to us)
                 let target = ircMsg.parameters.first ?? ""
-                guard target.lowercased() == self.channelName.lowercased()
-                    || target.lowercased() == self.currentNick.lowercased() else { return }
+                let isChannel = target.hasPrefix("#") || target.hasPrefix("&")
+                    || target.hasPrefix("!") || target.hasPrefix("+")
+
+                // For channel messages: only handle if this is our channel.
+                // For user-targeted messages (DMs, server NOTICEs from NickServ etc.):
+                // show them in the active channel view so they're never silently lost.
+                // We match on currentNick, but also fall through for NOTICEs with empty
+                // or mismatched nick (e.g. notices that arrive before 001 sets our nick).
+                let resolvedNick = self.currentNick.isEmpty
+                    ? (self.ircManager.currentNicknames[self.serverId] ?? "")
+                    : self.currentNick
+                let isForChannel = isChannel
+                    && target.lowercased() == self.channelName.lowercased()
+                let isForUs = !isChannel
+                    && (resolvedNick.isEmpty
+                        || target.lowercased() == resolvedNick.lowercased())
+                guard isForChannel || isForUs else { return }
 
                 let nick = ircMsg.source?.nick ?? "server"
                 let body = ircMsg.parameters.count > 1 ? ircMsg.parameters[1] : ""
@@ -210,12 +224,11 @@ final class ChannelViewModel: ObservableObject {
                     senderHost: ircMsg.source?.host,
                     content: content,
                     type: isAction ? .action : (ircMsg.command == "NOTICE" ? .notice : .message),
-                    isFromCurrentUser: nick == self.currentNick
+                    isFromCurrentUser: nick == resolvedNick
                 )
                 self.append(msg, persist: true)
-                if nick != self.currentNick {
+                if nick != resolvedNick {
                     self.unreadCount += 1
-                    // Only bump manager-level unread if this channel isn't currently viewed
                     if AppState.shared.selectedChannelId != self.channelId {
                         self.ircManager.incrementUnread(channelId: self.channelId)
                     }

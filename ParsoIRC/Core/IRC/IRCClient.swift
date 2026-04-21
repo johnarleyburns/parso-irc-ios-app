@@ -59,6 +59,9 @@ actor IRCClient {
     private var isCapNegotiationComplete = false
     private var isCapAckReceived = false
     private var saslRequested = false
+    /// Stored credentials for completing SASL PLAIN after "AUTHENTICATE +" arrives.
+    private var pendingSaslUsername: String = ""
+    private var pendingSaslPassword: String = ""
 
     // MARK: - Continuation-based CAP synchronisation
     //
@@ -95,6 +98,8 @@ actor IRCClient {
         isCapNegotiationComplete = false
         isCapAckReceived = false
         saslRequested = false
+        pendingSaslUsername = ""
+        pendingSaslPassword = ""
         chathistoryEnabled = false
         serverTimeEnabled = false
         zncPlaybackEnabled = false
@@ -170,6 +175,9 @@ actor IRCClient {
                     await self.waitForCapAckAsync(timeout: 5)
 
                     if useSASL && self.acknowledgedCapabilities.contains("sasl") {
+                        // Store credentials so the AUTHENTICATE + handler can send them
+                        self.pendingSaslUsername = nickname
+                        self.pendingSaslPassword = saslPassword ?? serverPassword ?? ""
                         try await self.send_raw("AUTHENTICATE PLAIN")
                         self.saslRequested = true
                     }
@@ -540,6 +548,17 @@ actor IRCClient {
 
         case "CAP":
             await handleCapMessage(message)
+
+        case "AUTHENTICATE":
+            // Server responded to our "AUTHENTICATE PLAIN" with "AUTHENTICATE +"
+            // meaning it's ready to receive the base64-encoded credential.
+            // Format: \0<username>\0<password>, base64-encoded.
+            if message.parameters.first == "+" && saslRequested {
+                let saslData = "\0\(pendingSaslUsername)\0\(pendingSaslPassword)"
+                let encoded = saslData.data(using: .utf8)?.base64EncodedString() ?? "+"
+                debugLog.log("SASL: sending PLAIN credential for \(pendingSaslUsername)", type: .info)
+                try? await send_raw("AUTHENTICATE \(encoded)")
+            }
             
         case "005":
             // RPL_ISUPPORT — parse tokens, then pass to UI
@@ -549,21 +568,21 @@ actor IRCClient {
             }
             
         case "903":
-            // RPL_SASLSUCCESS
-            if saslRequested {
-                try? await send_raw("CAP END")
-                saslRequested = false
-            }
+            // RPL_SASLSUCCESS — authentication succeeded
+            debugLog.log("SASL authentication succeeded", type: .info)
+            saslRequested = false
+            pendingSaslUsername = ""
+            pendingSaslPassword = ""
             await MainActor.run {
                 self.onUnhandledMessage?(message)
             }
-            
+
         case "904":
-            // ERR_SASLFAIL
-            if saslRequested {
-                try? await send_raw("CAP END")
-                saslRequested = false
-            }
+            // ERR_SASLFAIL — authentication failed (wrong password, or nick not registered)
+            debugLog.log("SASL authentication failed (904)", type: .error)
+            saslRequested = false
+            pendingSaslUsername = ""
+            pendingSaslPassword = ""
             await MainActor.run {
                 self.onUnhandledMessage?(message)
             }

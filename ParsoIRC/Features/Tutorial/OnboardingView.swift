@@ -264,7 +264,7 @@ private struct IdentityPage: View {
                             RoundedRectangle(cornerRadius: 12)
                                 .fill(Color(.secondarySystemGroupedBackground))
                         )
-                        Text("Save this password — you'll need it if you register your nick with NickServ.")
+                        Text("Save this password — use it to register your nick with NickServ once you've joined a server: /msg NickServ REGISTER <password> <email>")
                             .font(.caption2)
                             .foregroundStyle(.tertiary)
                             .padding(.leading, 4)
@@ -448,7 +448,9 @@ private struct AddFirstServerPage: View {
                 nickname: nick,
                 realname: real,
                 password: pass,
-                saslEnabled: pass != nil,   // enable SASL when we have a password
+                // SASL requires the nick to be pre-registered with NickServ.
+                // New users connect without SASL; they can enable it after registering.
+                saslEnabled: false,
                 saslMechanism: "PLAIN",
                 autoConnect: true,
                 channels: [],

@@ -454,7 +454,9 @@ struct AddServerSheet: View {
                 serverPassword = globalPw
             }
             // Enable SASL by default so auth actually works on supported servers
-            saslEnabled = true
+            // NOTE: only enable SASL if the user intentionally sets a password here;
+            // SASL requires the nick to be pre-registered with NickServ first.
+            saslEnabled = false
             return
         }
         selectedPreset = PresetNetwork(host: s.host) ?? .custom
