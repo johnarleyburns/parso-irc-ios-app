@@ -8,7 +8,7 @@
 
 ## Executive Summary
 
-This whitepaper documents what Parso Consulting learned from using agentic coding tools — specifically OpenCode running Claude Sonnet via Amazon Bedrock — to build Parso IRC, a full-featured iOS IRC client, from initial commit to App Store submission in twelve days. We wrote zero lines of application code ourselves. The agent wrote all of it.
+This whitepaper documents what Parso Consulting learned from using agentic coding tools — specifically OpenCode running Claude Sonnet — to build Parso IRC, a full-featured iOS IRC client, from initial commit to App Store submission in twelve days. We wrote zero lines of application code ourselves. The agent wrote all of it.
 
 The headline finding is not that agentic coding works — it does — but that the conditions under which it works are specific, demanding, and frequently misunderstood.
 
