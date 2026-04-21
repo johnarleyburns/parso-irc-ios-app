@@ -27,6 +27,23 @@ final class ChannelViewModel: ObservableObject {
     /// Updated only when topic changes — not recomputed on every render.
     @Published var rulesURL: URL? = nil
 
+    /// Live member list (populated from NAMES reply and updated on JOIN/PART/QUIT/NICK).
+    @Published var members: [ChannelMember] = []
+
+    /// True while the initial history load is in progress.
+    @Published var isLoadingHistory: Bool = false
+
+    /// The nickname this client is currently using on the server.
+    @Published var currentNick: String = ""
+
+    /// Unread count since the last time this channel was selected.
+    @Published var unreadCount: Int = 0
+
+    // MARK: - Send error tracking
+
+    /// IDs of messages that failed to send (for UI retry indicator).
+    @Published var failedMessageIds: Set<String> = []
+
     let serverId: String
     let channelName: String   // e.g. "#linux"
 
