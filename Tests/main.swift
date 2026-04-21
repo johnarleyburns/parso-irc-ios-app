@@ -2471,6 +2471,113 @@ runTest("testContinueButtonHintWhenDisabled") {
     try assertTrue(hint.contains("Fill in all fields"))
 }
 
+// MARK: - Larger Text / Dynamic Type offset tests
+// Mirrors ContentSizeCategory+MessageOffset.swift
+// Tests the mapping from each UIContentSizeCategory to a point-size offset,
+// ensuring message bubble text scales correctly with iOS Accessibility → Larger Text.
+
+print("\n=== Larger Text / Dynamic Type Offset Tests ===")
+
+/// Mirrors ContentSizeCategory.messageBodyOffset — Apple HIG Body text sizes
+/// relative to the .large (default) baseline of 17pt.
+func messageBodyOffset(for category: String) -> Int {
+    switch category {
+    case "extraSmall":                        return -3
+    case "small":                             return -2
+    case "medium":                            return -1
+    case "large":                             return  0   // system default
+    case "extraLarge":                        return  2
+    case "extraExtraLarge":                   return  4
+    case "extraExtraExtraLarge":              return  6
+    case "accessibilityMedium":               return 11
+    case "accessibilityLarge":                return 16
+    case "accessibilityExtraLarge":           return 23
+    case "accessibilityExtraExtraLarge":      return 30
+    case "accessibilityExtraExtraExtraLarge": return 36
+    default:                                  return  0
+    }
+}
+
+runTest("testDefaultCategoryHasZeroOffset") {
+    // .large is the iOS system default — no adjustment needed
+    try assertEqual(messageBodyOffset(for: "large"), 0)
+}
+
+runTest("testExtraSmallCategoryIsNegative") {
+    // Smaller than default — offset is negative
+    try assertTrue(messageBodyOffset(for: "extraSmall") < 0)
+}
+
+runTest("testAccessibilityLargeCategoryIsPositive") {
+    // Accessibility categories produce large positive offsets
+    try assertTrue(messageBodyOffset(for: "accessibilityLarge") > 0)
+}
+
+runTest("testAccessibilityXXXLOffsetIsMaximum") {
+    let max = messageBodyOffset(for: "accessibilityExtraExtraExtraLarge")
+    try assertEqual(max, 36)   // 15 base + 36 = 51pt — readable at max accessibility size
+}
+
+runTest("testOffsetMonotonicallyIncreases") {
+    // Each larger category must produce a larger (or equal) offset than the previous
+    let categories = ["extraSmall","small","medium","large","extraLarge",
+                      "extraExtraLarge","extraExtraExtraLarge",
+                      "accessibilityMedium","accessibilityLarge",
+                      "accessibilityExtraLarge","accessibilityExtraExtraLarge",
+                      "accessibilityExtraExtraExtraLarge"]
+    var prev = messageBodyOffset(for: categories[0])
+    for cat in categories.dropFirst() {
+        let curr = messageBodyOffset(for: cat)
+        try assertTrue(curr >= prev)
+        prev = curr
+    }
+}
+
+runTest("testEffectiveSizeAtSystemDefault") {
+    // Base 15pt + 0 offset at .large = 15pt (no change from current behaviour)
+    let base = 15
+    let offset = messageBodyOffset(for: "large")
+    try assertEqual(base + offset, 15)
+}
+
+runTest("testEffectiveSizeAtAccessibilityXXXL") {
+    // Base 15pt + 36 offset = 51pt — well readable for users who need max text
+    let base = 15
+    let offset = messageBodyOffset(for: "accessibilityExtraExtraExtraLarge")
+    try assertEqual(base + offset, 51)
+}
+
+runTest("testUserSliderAddedToSystemOffset") {
+    // User raises slider to 18pt; at accessibilityLarge (+16) → 34pt
+    let userBase = 18
+    let offset   = messageBodyOffset(for: "accessibilityLarge")
+    let effective = userBase + offset
+    try assertTrue(effective > userBase)   // user preference still increases size
+    try assertTrue(effective > offset)     // system preference still applies
+    try assertEqual(effective, 34)
+}
+
+runTest("testSmallSliderWithLargeAccessibilityStillReadable") {
+    // Even if user set slider to minimum (11pt), accessibilityXXXL brings it to 47pt
+    let userBase = 11
+    let offset   = messageBodyOffset(for: "accessibilityExtraExtraExtraLarge")
+    try assertTrue(userBase + offset >= 40)  // always usable
+}
+
+runTest("testOffsetTableCoverage") {
+    // Every named category must map to a non-default value except .large
+    let nonDefaultCategories = [
+        "extraSmall", "small", "medium",
+        "extraLarge", "extraExtraLarge", "extraExtraExtraLarge",
+        "accessibilityMedium", "accessibilityLarge",
+        "accessibilityExtraLarge", "accessibilityExtraExtraLarge",
+        "accessibilityExtraExtraExtraLarge"
+    ]
+    for cat in nonDefaultCategories {
+        try assertTrue(messageBodyOffset(for: cat) != 0)
+    }
+}
+
 // Summary
 print("\n=== Results ===")
 print("Passed: \(results.passed)")

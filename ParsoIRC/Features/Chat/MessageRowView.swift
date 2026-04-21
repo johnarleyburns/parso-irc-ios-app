@@ -36,9 +36,24 @@ struct MessageRowView: View {
     @AppStorage("messageDensity") private var messageDensity: String = "comfortable"
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// System Dynamic Type category — used to scale `messageFontSize` so the
+    /// message bubble body text responds to iOS Accessibility → Larger Text.
+    @Environment(\.sizeCategory) private var sizeCategory
 
     private var verticalBubblePad: CGFloat { messageDensity == "compact" ? 6 : 8 }
     private var rowTopPad: CGFloat { grouped ? 1 : (messageDensity == "compact" ? 3 : 6) }
+
+    /// Effective font size = user's slider base + Dynamic Type offset.
+    ///
+    /// The offset is the difference between the current `ContentSizeCategory`
+    /// and `.large` (the system default), expressed in the same point-size
+    /// increments Apple uses for the Body text style.  This means:
+    ///   - Users at the system default see exactly the size they set in the slider.
+    ///   - Users who enabled Larger Text get a proportional increase on top.
+    ///   - Users who manually raised the slider AND enabled Larger Text get both.
+    private var effectiveMessageFontSize: CGFloat {
+        CGFloat(messageFontSize) + CGFloat(sizeCategory.messageBodyOffset)
+    }
 
     private var isOutgoing: Bool { message.isFromCurrentUser }
     private var isSystem: Bool {
@@ -256,7 +271,7 @@ struct MessageRowView: View {
         corners: UIRectCorner
     ) -> some View {
         Text(IRCTextFormatter.attributedString(from: content, foreground: foreground))
-            .font(.system(size: messageFontSize))
+            .font(.system(size: effectiveMessageFontSize))
             .foregroundStyle(foreground)
             .padding(.horizontal, 12)
             .padding(.vertical, verticalBubblePad)

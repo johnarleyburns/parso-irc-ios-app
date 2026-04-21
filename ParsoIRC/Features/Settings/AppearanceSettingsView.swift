@@ -9,6 +9,13 @@ struct AppearanceSettingsView: View {
     @AppStorage("messageFontSize") private var messageFontSize: Double = 15
     @AppStorage("messageDensity") private var messageDensity: String = "comfortable"
 
+    @Environment(\.sizeCategory) private var sizeCategory
+
+    /// Effective size shown in the preview — same formula as MessageRowView
+    private var effectivePreviewSize: CGFloat {
+        CGFloat(messageFontSize) + CGFloat(sizeCategory.messageBodyOffset)
+    }
+
     private let densityOptions: [(label: String, value: String, icon: String)] = [
         ("Comfortable", "comfortable", "text.alignleft"),
         ("Compact",     "compact",     "text.justify"),
@@ -22,9 +29,14 @@ struct AppearanceSettingsView: View {
                     HStack {
                         Text("Font Size")
                         Spacer()
-                        Text("\(Int(messageFontSize))pt")
+                        Text("\(Int(messageFontSize))pt base")
                             .foregroundStyle(.secondary)
                             .monospacedDigit()
+                        if sizeCategory.messageBodyOffset != 0 {
+                            Text("→ \(Int(effectivePreviewSize))pt")
+                                .foregroundStyle(Color.accentColor)
+                                .monospacedDigit()
+                        }
                     }
                     HStack(spacing: 8) {
                         Image(systemName: "textformat.size.smaller")
@@ -34,15 +46,20 @@ struct AppearanceSettingsView: View {
                         Image(systemName: "textformat.size.larger")
                             .foregroundStyle(.secondary)
                     }
-                    // Live preview
+                    // Live preview at effective size
                     Text("The quick brown fox jumps over the lazy dog")
-                        .font(.system(size: messageFontSize))
+                        .font(.system(size: effectivePreviewSize))
                         .foregroundStyle(.secondary)
                         .padding(.top, 4)
                 }
                 .padding(.vertical, 4)
             } header: {
                 Text("Font Size")
+            } footer: {
+                if sizeCategory.messageBodyOffset != 0 {
+                    Text("Your iOS Larger Text setting adds \(sizeCategory.messageBodyOffset)pt. Adjust the slider to set your base preference.")
+                        .font(.caption)
+                }
             }
 
             // Density

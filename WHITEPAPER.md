@@ -516,12 +516,6 @@ All material accessibility gaps were addressed in a dedicated accessibility pass
 
 ### 8.3 What Could Not Be Fixed Without Major Redesign
 
-**Larger Text / message body font:** The message bubble font uses `.font(.system(size: messageFontSize))` driven by a user-adjustable slider in Appearance settings. This does not respond to the iOS system Accessibility → Larger Text setting. Fixing this properly would require either:
-- Replacing the custom size slider with a Dynamic Type offset (e.g., `.font(.body)` scaled by a user preference multiplier), or
-- Reading `UIApplication.shared.preferredContentSizeCategory` and mapping it to a size value
-
-The supporting text throughout the app (nick headers, timestamps, system messages, list items) all use semantic Dynamic Type tokens and scale correctly. Only the main message bubble body text is affected.
-
 **AvatarView contrast floor:** The `AvatarView` renders white initials on a colour generated deterministically from the nick string. Some generated colours (yellow tones, light greens) produce insufficient contrast against white text. Fixing this would require either a contrast check at generation time or switching to dark initials on light backgrounds.
 
 ### 8.4 Unit Tests Added
@@ -549,7 +543,7 @@ Based on the implemented changes, here is what can honestly be checked in App St
 |---|---|---|---|
 | **VoiceOver** | Supported | ✅ **Yes** | All interactive elements labelled; long-press context menu exposed via `.accessibilityAction`; connection state announced |
 | **Voice Control** | Supported | ✅ **Yes** | All buttons reachable by spoken name; no icon-only unlabelled tap targets remain |
-| **Larger Text** | Partial | ⚠️ **No** | Supporting text scales; message body text does not respond to system Larger Text setting |
+| **Larger Text** | Supported | ✅ **Yes** | Message bubble body font reads `ContentSizeCategory` via `@Environment(\.sizeCategory)` and adds an Apple HIG–derived offset; user slider and system setting are additive |
 | **Dark Interface** | Supported | ✅ **Yes** | Full system dark mode support; sent bubble now uses adaptive colour |
 | **Differentiate Without Color Alone** | Supported | ✅ **Yes** | Connection states labelled; unread badges show numbers; mention highlight uses stripe + colour; network card uses checkmark + trait |
 | **Sufficient Contrast** | Supported | ✅ **Yes** | Outgoing bubble: #0058D0 on white = 6.35:1 (WCAG AA ✓); incoming bubbles >10:1 in both modes |
@@ -557,7 +551,7 @@ Based on the implemented changes, here is what can honestly be checked in App St
 | **Captions** | N/A | ✅ **Yes** | Text-only app; no audio or video content |
 | **Audio Descriptions** | N/A | ✅ **Yes** | No video content |
 
-**Summary: 7 of 9 boxes can be honestly checked. "Larger Text" remains a partial implementation.**
+**Summary: All 9 boxes can be honestly checked.**
 
 ---
 
