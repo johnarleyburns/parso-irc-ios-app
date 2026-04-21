@@ -21,14 +21,10 @@ final class ChannelViewModel: ObservableObject {
     @Published private(set) var displayMessages: [DisplayMessage] = []
 
     /// Current channel topic.
-    @Published private(set) var topic: String = "" {
-        didSet { updateRulesURL() }
-    }
+    @Published private(set) var topic: String = ""
 
     /// The first URL found in the channel topic, if any (used for "Rules" button).
-    /// Recomputed only when `topic` changes — NOT on every render.
-    /// Previously a computed property that created NSDataDetector on every call,
-    /// causing unnecessary allocations on every message-list layout pass.
+    /// Updated only when topic changes — not recomputed on every render.
     @Published private(set) var rulesURL: URL? = nil
 
     let serverId: String
@@ -337,6 +333,7 @@ final class ChannelViewModel: ObservableObject {
         case .topicChange(let channel, let newTopic, let byNick):
             guard channel.lowercased() == channelName.lowercased() else { return }
             topic = newTopic
+            updateRulesURL()
             let content = newTopic.isEmpty
                 ? "\(byNick) cleared the topic"
                 : "\(byNick) set the topic: \(newTopic)"
@@ -347,6 +344,7 @@ final class ChannelViewModel: ObservableObject {
         case .initialTopic(let channel, let newTopic):
             guard channel.lowercased() == channelName.lowercased() else { return }
             topic = newTopic
+            updateRulesURL()
 
         // ── Mode ─────────────────────────────────────────────────────────────
         case .mode(let target, let modeString, let params):
