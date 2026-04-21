@@ -196,22 +196,22 @@ actor IRCClient {
         guard !isCapNegotiationComplete else { return }
         await withCheckedContinuation { (cont: CheckedContinuation<Void, Never>) in
             self.capNegotiationContinuation = cont
-            // Timeout fallback — runs as a separate Task so it doesn't hold the actor.
+            // Timeout fallback — runs as a separate actor-isolated Task.
             Task { [weak self] in
                 try? await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
-                guard let self else { return }
-                if let stored = await self.capNegotiationContinuation {
-                    await self.clearCapNegotiationContinuation()
-                    self.isCapNegotiationComplete = true
-                    stored.resume()
-                }
+                // timeoutCapNegotiation is actor-isolated, so property mutations are safe.
+                await self?.timeoutCapNegotiation()
             }
         }
     }
 
-    /// Clears the stored negotiation continuation (actor-isolated helper for the timeout Task).
-    private func clearCapNegotiationContinuation() {
+    /// Called by the timeout Task when `waitForCapNegotiationAsync` doesn't get a reply.
+    /// Actor-isolated so it's safe to mutate actor properties.
+    private func timeoutCapNegotiation() {
+        guard let cont = capNegotiationContinuation else { return }
         capNegotiationContinuation = nil
+        isCapNegotiationComplete = true
+        cont.resume()
     }
 
     /// Suspends until the server sends CAP ACK or CAP NAK, or until `timeout` seconds elapse.
@@ -221,17 +221,25 @@ actor IRCClient {
             self.capAckContinuation = cont
             Task { [weak self] in
                 try? await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
-                guard let self else { return }
-                if let stored = await self.capAckContinuation {
-                    await self.clearCapAckContinuation()
-                    self.isCapAckReceived = true
-                    stored.resume()
-                }
+                await self?.timeoutCapAck()
             }
         }
     }
 
-    /// Clears the stored ACK continuation (actor-isolated helper for the timeout Task).
+    /// Called by the timeout Task when `waitForCapAckAsync` doesn't get a reply.
+    private func timeoutCapAck() {
+        guard let cont = capAckContinuation else { return }
+        capAckContinuation = nil
+        isCapAckReceived = true
+        cont.resume()
+    }
+
+    /// Clears the stored negotiation continuation (retained for explicit use in handleCapMessage).
+    private func clearCapNegotiationContinuation() {
+        capNegotiationContinuation = nil
+    }
+
+    /// Clears the stored ACK continuation.
     private func clearCapAckContinuation() {
         capAckContinuation = nil
     }
