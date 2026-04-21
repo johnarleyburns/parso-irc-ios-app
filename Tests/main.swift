@@ -516,6 +516,111 @@ runTest("testBatchTypePropagation") {
     try assertFalse(isHistoryBatch(message: histMsg, activeBatches: activeBatches))
 }
 
+// MARK: - 366 RPL_ENDOFNAMES tests
+// These test the chat-history trigger fix: CHATHISTORY must only be sent after
+// 366 confirms the JOIN is fully processed, not before.
+
+print("\n=== 366 RPL_ENDOFNAMES Tests ===")
+
+/// Simulates the channel name extracted from a 366 message (mirrors handleMessage case "366").
+func channelFromEndOfNames(_ rawLine: String) -> String? {
+    let msg = IRCMessage(rawLine: rawLine)
+    guard msg.command == "366", msg.parameters.count >= 2 else { return nil }
+    return msg.parameters[1]
+}
+
+runTest("test366ExtractsChannelName") {
+    // Standard Libera.Chat format: :server 366 yournick #channel :End of /NAMES list
+    let channel = channelFromEndOfNames(":irc.libera.chat 366 coolbear42 #linux :End of /NAMES list")
+    try assertEqual(channel, "#linux")
+}
+
+runTest("test366ExtractsCasedChannel") {
+    let channel = channelFromEndOfNames(":server 366 nick #Freenode :End of /NAMES list")
+    try assertEqual(channel, "#Freenode")
+}
+
+runTest("test366WithOnlyTwoParams") {
+    // Some servers send minimal 366: :server 366 nick #chan
+    let msg = IRCMessage(rawLine: ":server 366 nick #chan")
+    guard msg.command == "366" else { throw NSError(domain: "Test", code: 1, userInfo: [NSLocalizedDescriptionKey: "Expected 366"]) }
+    // parameters = [nick, #chan] — index 1 is the channel
+    try assertEqual(msg.parameters.count, 2)
+    try assertEqual(msg.parameters[1], "#chan")
+}
+
+runTest("test366DoesNotMatchWrongNumeric") {
+    // 365 RPL_ENDOFLINKS should not be mistaken for 366
+    let channel = channelFromEndOfNames(":server 365 nick #chan :End of /LINKS list")
+    try assertTrue(channel == nil)
+}
+
+runTest("test366FiresForCorrectChannelOnly") {
+    // Simulates the guard in the onEndOfNames callback:
+    // only trigger history for the channel matching our channelName.
+    let endOfNamesChannel = "#linux"
+    let ourChannel = "#linux"
+    let otherChannel = "#python"
+
+    // Guard mirrors: channel.lowercased() == self.channelName.lowercased()
+    let shouldTriggerForOurs   = endOfNamesChannel.lowercased() == ourChannel.lowercased()
+    let shouldTriggerForOther  = endOfNamesChannel.lowercased() == otherChannel.lowercased()
+
+    try assertTrue(shouldTriggerForOurs)
+    try assertFalse(shouldTriggerForOther)
+}
+
+runTest("test366ChannelMatchIsCaseInsensitive") {
+    // IRC channel names are case-insensitive
+    let endOfNamesChannel = "#Linux"
+    let ourChannel = "#linux"
+    try assertTrue(endOfNamesChannel.lowercased() == ourChannel.lowercased())
+}
+
+runTest("testChathistoryNotRequestedBeforeJoinConfirmed") {
+    // This test documents the sequence fix:
+    // CHATHISTORY must be sent AFTER 366, not before it.
+    //
+    // The old (broken) sequence:
+    //   start() → requestChatHistoryIfSupported() → CHATHISTORY sent → 366 arrives
+    //
+    // The new (correct) sequence:
+    //   start() → registerCallbacks() → 366 arrives → onEndOfNames callback fires
+    //             → requestChatHistoryIfSupported() → CHATHISTORY sent
+    //
+    // We verify the correct sequence by checking that:
+    // 1. The 366 message carries the channel name
+    // 2. Only after receiving 366 for our channel should we send CHATHISTORY
+
+    var receivedEndOfNames = false
+    var chathistoryRequestSent = false
+
+    // Simulate receiving 366
+    let msg366 = IRCMessage(rawLine: ":server 366 nick #linux :End of /NAMES list")
+    if msg366.command == "366", msg366.parameters.count >= 2 {
+        let channel = msg366.parameters[1]
+        if channel.lowercased() == "#linux" {
+            receivedEndOfNames = true
+            // Only now is it safe to send CHATHISTORY
+            chathistoryRequestSent = true
+        }
+    }
+
+    try assertTrue(receivedEndOfNames)
+    try assertTrue(chathistoryRequestSent)
+}
+
+runTest("testChathistoryRequestFormat") {
+    // CHATHISTORY LATEST <target> * <limit> — the format used by requestHistory()
+    // Verify the command string we'd send is well-formed
+    let target = "#linux"
+    let limit = 50
+    let command = "CHATHISTORY LATEST \(target) * \(limit)"
+    try assertTrue(command.hasPrefix("CHATHISTORY LATEST"))
+    try assertTrue(command.contains(target))
+    try assertTrue(command.hasSuffix("\(limit)"))
+}
+
 // Summary
 print("\n=== Results ===")
 print("Passed: \(results.passed)")

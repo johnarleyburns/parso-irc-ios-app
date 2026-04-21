@@ -148,12 +148,10 @@ final class IRCClientManager: ObservableObject {
                 self?.currentNicknames[server.id] = nick
                 self?.connectionStates[server.id] = .connected
                 self?.reconnectAttempts[server.id] = 0  // reset on successful connect
-                // Notify subscribers (e.g. ChannelViewModel) that connection is live
+                // Notify subscribers (e.g. ChannelViewModel) that connection is live.
+                // ChannelViewModel will re-register its callbacks (including onEndOfNames)
+                // and CHATHISTORY will be fetched when 366 arrives after each re-join.
                 self?.reconnectSubject.send(server.id)
-                // Request CHATHISTORY for all joined channels
-                if let self, let client = self.connections[server.id] {
-                    await self.requestHistoryAfterReconnect(serverId: server.id, client: client)
-                }
             }
         }
 

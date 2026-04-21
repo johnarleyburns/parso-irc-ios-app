@@ -36,6 +36,10 @@ actor IRCClient {
     nonisolated(unsafe) var onUnhandledMessage: ((IRCMessage) -> Void)?
     nonisolated(unsafe) var onListEntry: ((String, Int, String) -> Void)?
     nonisolated(unsafe) var onListEnd:   (() -> Void)?
+    /// Called when the server sends 366 RPL_ENDOFNAMES for a channel.
+    /// This is the definitive signal that a JOIN has been fully processed
+    /// server-side and CHATHISTORY requests are now safe to send.
+    nonisolated(unsafe) var onEndOfNames: ((String) -> Void)?
     /// Called when a ZNC znc.in/playback BATCH closes — signals ChannelViewModel to flush the separator.
     nonisolated(unsafe) var onZncBatchEnd: (() -> Void)?
     /// Called when a standard IRCv3 CHATHISTORY BATCH closes — signals end of history replay.
@@ -678,6 +682,21 @@ actor IRCClient {
                 await MainActor.run {
                     self.onNamesList?(channel, nicks)
                 }
+            }
+
+        case "366":
+            // RPL_ENDOFNAMES — :server 366 <yournick> <channel> :End of /NAMES list
+            // This is the definitive confirmation that a channel JOIN completed on the
+            // server side. ChannelViewModel uses this to safely send CHATHISTORY.
+            if message.parameters.count >= 2 {
+                let channel = message.parameters[1]
+                await MainActor.run {
+                    self.onEndOfNames?(channel)
+                }
+            }
+            // Also pass through to onUnhandledMessage so the terminal view sees it
+            await MainActor.run {
+                self.onUnhandledMessage?(message)
             }
 
         case "PRIVMSG", "NOTICE":

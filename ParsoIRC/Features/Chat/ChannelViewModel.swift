@@ -84,12 +84,13 @@ final class ChannelViewModel: ObservableObject {
         await loadPersistedMessages()
         registerCallbacks()
         await requestNamesIfNeeded()
-        await requestChatHistoryIfSupported()
+        // NOTE: requestChatHistoryIfSupported() is NOT called here.
+        // It is triggered by the onEndOfNames callback (366 RPL_ENDOFNAMES) which
+        // fires once the server has fully processed the JOIN — the only safe time
+        // to send CHATHISTORY. Calling it here would race with the JOIN.
     }
 
     func stop() {
-        // Unregister by replacing with nil-equivalent closures.
-        // The client actor holds weak refs so this is safe across task cancellation.
         guard let client = ircManager.getClient(for: serverId) else { return }
         client.onMessage = nil
         client.onJoin = nil
@@ -98,6 +99,7 @@ final class ChannelViewModel: ObservableObject {
         client.onNickChange = nil
         client.onTopicChange = nil
         client.onNamesList = nil
+        client.onEndOfNames = nil
         client.onKick = nil
         client.onMode = nil
         client.onUnhandledMessage = nil
@@ -319,6 +321,18 @@ final class ChannelViewModel: ObservableObject {
             }
         }
 
+        // 366 RPL_ENDOFNAMES — server confirms the JOIN is fully processed.
+        // This is the correct and only safe moment to send CHATHISTORY, because
+        // servers (including Libera.Chat) silently ignore CHATHISTORY for channels
+        // the requesting client hasn't fully joined yet.
+        client.onEndOfNames = { [weak self] channel in
+            Task { @MainActor [weak self] in
+                guard let self,
+                      channel.lowercased() == self.channelName.lowercased() else { return }
+                await self.requestChatHistoryIfSupported()
+            }
+        }
+
         // KICK
         client.onKick = { [weak self] channel, kicked, by, reason in
             Task { @MainActor [weak self] in
@@ -438,33 +452,28 @@ final class ChannelViewModel: ObservableObject {
     }
 
     /// Called when the server reconnects while this ChatView is still open.
-    /// Re-registers callbacks (new IRCClient instance) and fetches missed history.
+    /// Re-registers callbacks (new IRCClient instance). History will be re-fetched
+    /// automatically when the server sends 366 RPL_ENDOFNAMES after the re-join.
     private func handleReconnect() async {
         registerCallbacks()
         await requestNamesIfNeeded()
-        await requestChatHistoryIfSupported()
+        // No explicit requestChatHistoryIfSupported() here — the onEndOfNames callback
+        // registered above fires when the re-join's 366 arrives, keeping the trigger
+        // in one place and avoiding races.
     }
 
     private func requestChatHistoryIfSupported() async {
         guard let client = ircManager.getClient(for: serverId) else { return }
 
-        // The CAP ACK may not have arrived yet when start() first runs.
-        // Wait up to 3 seconds for chathistory support to be confirmed.
-        var supported = await client.hasChathistorySupport()
-        if !supported {
-            for _ in 0..<30 {
-                try? await Task.sleep(nanoseconds: 100_000_000)   // 100 ms × 30 = 3 s max
-                supported = await client.hasChathistorySupport()
-                if supported { break }
-            }
-        }
+        // By the time 366 fires, CAP negotiation is long complete, so
+        // chathistoryEnabled is already set correctly — no retry loop needed.
+        let supported = await client.hasChathistorySupport()
         guard supported else { return }
 
         // Determine if we need to fetch history.
         // We fetch if:
         //   (a) we have no persisted messages, OR
-        //   (b) the app was foregrounded since we last fetched history for this channel
-        //       (i.e. we might have missed messages while backgrounded), OR
+        //   (b) the app was foregrounded since we last fetched history for this channel, OR
         //   (c) no previous fetch has ever been recorded for this channel
         let lastFetchKey = "chathistory_lastfetch_\(channelId)"
         let lastFetchDate = UserDefaults.standard.object(forKey: lastFetchKey) as? Date
@@ -483,8 +492,6 @@ final class ChannelViewModel: ObservableObject {
 
         let limit = min(await client.getChathistoryLimit(), 100)
 
-        // If we have a known last-fetch date, only retrieve messages since then
-        // to avoid fetching messages we already have stored locally.
         if let since = lastFetchDate, !rawMessages.isEmpty {
             try? await client.requestHistorySince(since, target: channelName, limit: limit)
         } else {
