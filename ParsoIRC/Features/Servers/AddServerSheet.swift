@@ -99,7 +99,7 @@ struct AddServerSheet: View {
                                 // TLS lock icon
                                 Image(systemName: network.ssl ? "lock.fill" : "lock.open")
                                     .font(.caption)
-                                    .foregroundStyle(network.ssl ? .green : .orange)
+                                    .foregroundStyle(network.ssl ? Color(.systemTeal).opacity(0.8) : Color(.systemGray))
                                     .frame(width: 16)
 
                                 VStack(alignment: .leading, spacing: 2) {

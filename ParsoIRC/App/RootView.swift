@@ -7,19 +7,12 @@ enum NavDestination: Hashable {
 }
 
 /// Root view of the app.
-///
-/// Uses a NavigationStack (not NavigationSplitView) for reliable push-navigation
-/// on iPhone. The sidebar is the root of the stack; tapping a channel pushes
-/// ChatView onto the stack.
 struct RootView: View {
     @EnvironmentObject private var ircManager: IRCClientManager
     @EnvironmentObject private var appState: AppState
     @EnvironmentObject private var networkMonitor: NetworkMonitor
 
-    // Single source of truth for navigation
     @State private var navPath: [NavDestination] = []
-
-    // Sheet / overlay state
     @State private var showSplash: Bool = true
     @State private var showOnboarding: Bool = false
 
@@ -30,11 +23,11 @@ struct RootView: View {
                     navPath: $navPath,
                     onSelectChannel: { serverId, channelId, channelName, isDM, nick in
                         let dest: NavDestination = isDM
-                            ? .dm(serverId: serverId, channelId: channelId, nick: nick ?? channelName)
-                            : .channel(serverId: serverId, channelId: channelId, channelName: channelName)
-                        // Replace path so back always goes to sidebar
+                            ? .dm(serverId: serverId, channelId: channelId,
+                                  nick: nick ?? channelName)
+                            : .channel(serverId: serverId, channelId: channelId,
+                                       channelName: channelName)
                         navPath = [dest]
-                        // Keep AppState in sync for unread tracking
                         appState.selectedServerId  = serverId
                         appState.selectedChannelId = channelId
                     }
@@ -47,6 +40,15 @@ struct RootView: View {
                         DirectMessageView(serverId: sid, nick: nick, ircManager: ircManager)
                     }
                 }
+            }
+            // Inject the navigateToDM action so any view inside the stack
+            // (ChatView, MemberListView, UserProfileSheet) can navigate to a
+            // DM without holding a direct navPath binding.
+            .environment(\.navigateToDM) { [self] nick, serverId in
+                let dm = ircManager.openOrCreateDM(with: nick, serverId: serverId)
+                navPath = [.dm(serverId: serverId, channelId: dm.id, nick: nick)]
+                appState.selectedServerId  = serverId
+                appState.selectedChannelId = dm.id
             }
             .opacity(showSplash ? 0 : 1)
             .onChange(of: networkMonitor.isConnected) { _, isNow in

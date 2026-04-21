@@ -4,11 +4,11 @@ import Combine
 
 /// The view model for a single channel (or DM thread).
 ///
-/// Owned by `ChatView` as a `@StateObject`.  Registers IRC event callbacks
-/// on the shared `IRCClientManager` / `IRCClient` for exactly the channel it
-/// represents, loads persisted history from `DatabaseManager` on init, and
-/// exposes a ready-to-render `displayMessages` array that already has
-/// grouping, date-separator markers, and mention highlighting applied.
+/// Subscribes to `IRCClientManager.messagePublisher` and `.eventPublisher` via
+/// Combine instead of writing directly to `IRCClient.onXxx` slots.  This means
+/// messages for every joined channel are processed by the manager at all times,
+/// and multiple `ChannelViewModel` instances can coexist without overwriting
+/// each other's callbacks.
 ///
 /// All mutation happens on the `@MainActor` — SwiftUI can safely bind to
 /// every `@Published` property without extra hops.
@@ -43,10 +43,12 @@ final class ChannelViewModel: ObservableObject {
     /// The first URL found in the channel topic, if any (used for "Rules" button).
     var rulesURL: URL? {
         guard !topic.isEmpty else { return nil }
-        guard let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue) else { return nil }
+        guard let detector = try? NSDataDetector(
+            types: NSTextCheckingResult.CheckingType.link.rawValue) else { return nil }
         let range = NSRange(topic.startIndex..., in: topic)
         let match = detector.firstMatch(in: topic, options: [], range: range)
-        guard let urlRange = match?.range, let swiftRange = Range(urlRange, in: topic) else { return nil }
+        guard let urlRange = match?.range,
+              let swiftRange = Range(urlRange, in: topic) else { return nil }
         return URL(string: String(topic[swiftRange]))
     }
 
@@ -59,19 +61,18 @@ final class ChannelViewModel: ObservableObject {
     private var rawMessages: [Message] = []
     private var seenMessageIds: Set<String> = []
     private let _cachedChannelId: String
-    /// Combine cancellables — holds the reconnect subscription lifetime.
+    /// Combine cancellables — holds message/event subscriptions.
     private var cancellables = Set<AnyCancellable>()
-    /// Counts history messages arriving in a single batch (for ZNC separator).
+    /// Counts history messages arriving in a single batch (for the separator line).
     private var pendingHistoryMessageCount: Int = 0
 
-    // MARK: - Init / deinit
+    // MARK: - Init
 
     init(serverId: String, channelName: String, ircManager: IRCClientManager) {
         self.serverId = serverId
         self.channelName = channelName
         self.ircManager = ircManager
         self.currentNick = ircManager.currentNicknames[serverId] ?? ""
-        // Cache the channel ID once at init (DB lookup is expensive per-message)
         self._cachedChannelId = (try? DatabaseManager.shared.fetchChannels(forServer: serverId)
             .first { $0.name == channelName }?.id)
             ?? "\(serverId):\(channelName)"
@@ -82,30 +83,15 @@ final class ChannelViewModel: ObservableObject {
     func start() async {
         currentNick = ircManager.currentNicknames[serverId] ?? ""
         await loadPersistedMessages()
-        registerCallbacks()
+        registerSubscriptions()
         await requestNamesIfNeeded()
-        // NOTE: requestChatHistoryIfSupported() is NOT called here.
-        // It is triggered by the onEndOfNames callback (366 RPL_ENDOFNAMES) which
-        // fires once the server has fully processed the JOIN — the only safe time
-        // to send CHATHISTORY. Calling it here would race with the JOIN.
+        // CHATHISTORY is triggered by the .endOfNames event when 366 arrives —
+        // that is the only safe time to send CHATHISTORY after a JOIN.
     }
 
+    /// Tear down Combine subscriptions.  The manager's permanent IRCClient
+    /// callbacks are NOT touched — they continue running for all channels.
     func stop() {
-        guard let client = ircManager.getClient(for: serverId) else { return }
-        client.onMessage = nil
-        client.onJoin = nil
-        client.onPart = nil
-        client.onQuit = nil
-        client.onNickChange = nil
-        client.onTopicChange = nil
-        client.onNamesList = nil
-        client.onEndOfNames = nil
-        client.onKick = nil
-        client.onMode = nil
-        client.onUnhandledMessage = nil
-        client.onHistoryMessage = nil
-        client.onZncBatchEnd = nil
-        client.onChathistoryBatchEnd = nil
         cancellables.removeAll()
     }
 
@@ -114,8 +100,6 @@ final class ChannelViewModel: ObservableObject {
     func send(_ text: String) {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-        // Optimistically append an outgoing message so the user sees it immediately.
-        // currentNick must be set before this point; we read it from the live manager state.
         let resolvedNick = ircManager.currentNicknames[serverId] ?? currentNick
         let outgoing = Message(
             channelId: channelId,
@@ -124,24 +108,22 @@ final class ChannelViewModel: ObservableObject {
             type: trimmed.hasPrefix("/me ") ? .action : .message,
             isFromCurrentUser: true
         )
-        append(outgoing, persist: false)  // don't persist until confirmed sent
+        // Optimistic append — not persisted until send succeeds
+        append(outgoing, persist: false)
         HapticManager.lightImpact()
         Task {
             do {
                 try await ircManager.sendMessage(trimmed, to: channelName, on: serverId)
-                // Persist only on success
                 if !failedMessageIds.contains(outgoing.id) {
                     try? DatabaseManager.shared.saveMessage(outgoing)
                 }
             } catch {
-                // Mark as failed so the UI can show a warning indicator
                 failedMessageIds.insert(outgoing.id)
                 rebuildDisplay()
             }
         }
     }
 
-    /// Retry a previously failed message send.
     func retrySend(message: Message) {
         failedMessageIds.remove(message.id)
         Task {
@@ -160,8 +142,8 @@ final class ChannelViewModel: ObservableObject {
     func markRead() {
         unreadCount = 0
         ircManager.clearUnread(channelId: channelId)
-        // Update lastCheckedAt so background refresh doesn't re-notify for messages the user already saw
-        try? DatabaseManager.shared.updateChannelLastChecked(channelId: channelId, date: Date())
+        try? DatabaseManager.shared.updateChannelLastChecked(
+            channelId: channelId, date: Date())
     }
 
     // MARK: - Private helpers
@@ -173,321 +155,230 @@ final class ChannelViewModel: ObservableObject {
     private func loadPersistedMessages() async {
         isLoadingHistory = true
         let cid = channelId
-        let persisted = (try? DatabaseManager.shared.fetchMessages(forChannel: cid, limit: 200)) ?? []
-        for msg in persisted {
-            appendRaw(msg)
-        }
+        let persisted = (try? DatabaseManager.shared.fetchMessages(
+            forChannel: cid, limit: 200)) ?? []
+        for msg in persisted { appendRaw(msg) }
         rebuildDisplay()
         isLoadingHistory = false
     }
 
-    // MARK: IRC callbacks
+    // MARK: - Combine subscriptions
+    //
+    // Subscribe to the per-server Combine subjects published by IRCClientManager.
+    // These subjects are permanent (created in connect()) so subscriptions survive
+    // channel switches — messages for THIS channel keep arriving even when the
+    // user is viewing a different channel.
 
-    private func registerCallbacks() {
-        guard let client = ircManager.getClient(for: serverId) else { return }
+    private func registerSubscriptions() {
+        cancellables.removeAll()
 
-        // PRIVMSG / NOTICE
-        client.onMessage = { [weak self] ircMsg in
-            Task { @MainActor [weak self] in
-                guard let self else { return }
-                let target = ircMsg.parameters.first ?? ""
-                let isChannel = target.hasPrefix("#") || target.hasPrefix("&")
-                    || target.hasPrefix("!") || target.hasPrefix("+")
+        // ── Incoming messages (PRIVMSG / NOTICE / history) ──────────────────
+        ircManager.messagePublisher(for: serverId)
+            .receive(on: RunLoop.main)
+            .sink { [weak self] msg in self?.handleSubscribedMessage(msg) }
+            .store(in: &cancellables)
 
-                // For channel messages: only handle if this is our channel.
-                // For user-targeted messages (DMs, server NOTICEs from NickServ etc.):
-                // show them in the active channel view so they're never silently lost.
-                // We match on currentNick, but also fall through for NOTICEs with empty
-                // or mismatched nick (e.g. notices that arrive before 001 sets our nick).
-                let resolvedNick = self.currentNick.isEmpty
-                    ? (self.ircManager.currentNicknames[self.serverId] ?? "")
-                    : self.currentNick
-                let isForChannel = isChannel
-                    && target.lowercased() == self.channelName.lowercased()
-                let isForUs = !isChannel
-                    && (resolvedNick.isEmpty
-                        || target.lowercased() == resolvedNick.lowercased())
-                guard isForChannel || isForUs else { return }
+        // ── IRC events (join/part/quit/names/topic/etc.) ─────────────────────
+        ircManager.eventPublisher(for: serverId)
+            .receive(on: RunLoop.main)
+            .sink { [weak self] event in self?.handleEvent(event) }
+            .store(in: &cancellables)
 
-                let nick = ircMsg.source?.nick ?? "server"
-                let body = ircMsg.parameters.count > 1 ? ircMsg.parameters[1] : ""
-
-                // CTCP ACTION
-                let isAction = body.hasPrefix("\u{0001}ACTION ") && body.hasSuffix("\u{0001}")
-                let content = isAction
-                    ? String(body.dropFirst(8).dropLast())
-                    : body
-
-                let msg = Message(
-                    channelId: self.channelId,
-                    sender: nick,
-                    senderHost: ircMsg.source?.host,
-                    content: content,
-                    type: isAction ? .action : (ircMsg.command == "NOTICE" ? .notice : .message),
-                    isFromCurrentUser: nick == resolvedNick
-                )
-                self.append(msg, persist: true)
-                if nick != resolvedNick {
-                    self.unreadCount += 1
-                    if AppState.shared.selectedChannelId != self.channelId {
-                        self.ircManager.incrementUnread(channelId: self.channelId)
-                    }
-                }
-            }
-        }
-
-        // JOIN
-        client.onJoin = { [weak self] channel, nick in
-            Task { @MainActor [weak self] in
-                guard let self, channel.lowercased() == self.channelName.lowercased() else { return }
-                // Add to member list if not already present
-                if !self.members.contains(where: { $0.nick == nick }) {
-                    self.members.append(ChannelMember(nick: nick))
-                }
-                let msg = Message(channelId: self.channelId, sender: nick,
-                                  content: "\(nick) joined \(channel)", type: .join)
-                self.append(msg, persist: false)
-            }
-        }
-
-        // PART
-        client.onPart = { [weak self] channel, nick, reason in
-            Task { @MainActor [weak self] in
-                guard let self, channel.lowercased() == self.channelName.lowercased() else { return }
-                self.members.removeAll { $0.nick == nick }
-                let detail = reason.map { " (\($0))" } ?? ""
-                let msg = Message(channelId: self.channelId, sender: nick,
-                                  content: "\(nick) left\(detail)", type: .part)
-                self.append(msg, persist: false)
-            }
-        }
-
-        // QUIT
-        client.onQuit = { [weak self] nick, reason in
-            Task { @MainActor [weak self] in
-                guard let self else { return }
-                self.members.removeAll { $0.nick == nick }
-                let detail = reason.map { " (\($0))" } ?? ""
-                let msg = Message(channelId: self.channelId, sender: nick,
-                                  content: "\(nick) quit\(detail)", type: .quit)
-                self.append(msg, persist: false)
-            }
-        }
-
-        // NICK
-        client.onNickChange = { [weak self] oldNick, newNick in
-            Task { @MainActor [weak self] in
-                guard let self else { return }
-                if oldNick == self.currentNick { self.currentNick = newNick }
-                if let idx = self.members.firstIndex(where: { $0.nick == oldNick }) {
-                    self.members[idx].nick = newNick
-                }
-                let msg = Message(channelId: self.channelId, sender: oldNick,
-                                  content: "\(oldNick) is now known as \(newNick)", type: .nick)
-                self.append(msg, persist: false)
-            }
-        }
-
-        // TOPIC
-        client.onTopicChange = { [weak self] channel, newTopic, byNick in
-            Task { @MainActor [weak self] in
-                guard let self, channel.lowercased() == self.channelName.lowercased() else { return }
-                self.topic = newTopic
-                let content = newTopic.isEmpty
-                    ? "\(byNick) cleared the topic"
-                    : "\(byNick) set the topic: \(newTopic)"
-                let msg = Message(channelId: self.channelId, sender: byNick,
-                                  content: content, type: .topic)
-                self.append(msg, persist: false)
-            }
-        }
-
-        // NAMES reply (353)
-        client.onNamesList = { [weak self] channel, nicks in
-            Task { @MainActor [weak self] in
-                guard let self, channel.lowercased() == self.channelName.lowercased() else { return }
-                let parsed = nicks.map { rawNick -> ChannelMember in
-                    let mode: ChannelMember.MemberMode
-                    let nick: String
-                    switch rawNick.first {
-                    case "@": mode = .operator_; nick = String(rawNick.dropFirst())
-                    case "+": mode = .voice;     nick = String(rawNick.dropFirst())
-                    case "%": mode = .halfop;    nick = String(rawNick.dropFirst())
-                    case "&": mode = .admin;     nick = String(rawNick.dropFirst())
-                    case "~": mode = .founder;   nick = String(rawNick.dropFirst())
-                    default:  mode = .none;      nick = rawNick
-                    }
-                    return ChannelMember(nick: nick, mode: mode)
-                }
-                // Merge: add new, don't duplicate
-                for member in parsed {
-                    if !self.members.contains(where: { $0.nick == member.nick }) {
-                        self.members.append(member)
-                    }
-                }
-                self.members.sort { lhs, rhs in
-                    let order: [ChannelMember.MemberMode] = [.founder, .admin, .operator_, .halfop, .voice, .none]
-                    let li = order.firstIndex(of: lhs.mode) ?? 5
-                    let ri = order.firstIndex(of: rhs.mode) ?? 5
-                    return li == ri ? lhs.nick.lowercased() < rhs.nick.lowercased() : li < ri
-                }
-            }
-        }
-
-        // 366 RPL_ENDOFNAMES — server confirms the JOIN is fully processed.
-        // This is the correct and only safe moment to send CHATHISTORY, because
-        // servers (including Libera.Chat) silently ignore CHATHISTORY for channels
-        // the requesting client hasn't fully joined yet.
-        client.onEndOfNames = { [weak self] channel in
-            Task { @MainActor [weak self] in
-                guard let self,
-                      channel.lowercased() == self.channelName.lowercased() else { return }
-                await self.requestChatHistoryIfSupported()
-            }
-        }
-
-        // KICK
-        client.onKick = { [weak self] channel, kicked, by, reason in
-            Task { @MainActor [weak self] in
-                guard let self, channel.lowercased() == self.channelName.lowercased() else { return }
-                self.members.removeAll { $0.nick == kicked }
-                let detail = reason.map { " (\($0))" } ?? ""
-                let msg = Message(channelId: self.channelId, sender: by,
-                                  content: "\(kicked) was kicked by \(by)\(detail)", type: .kick)
-                self.append(msg, persist: false)
-            }
-        }
-
-        // MODE
-        client.onMode = { [weak self] target, modeString, params in
-            Task { @MainActor [weak self] in
-                guard let self, target.lowercased() == self.channelName.lowercased() else { return }
-                let paramStr = params.isEmpty ? "" : " \(params.joined(separator: " "))"
-                let msg = Message(channelId: self.channelId, sender: target,
-                                  content: "Mode \(modeString)\(paramStr)", type: .mode)
-                self.append(msg, persist: false)
-            }
-        }
-
-        // Server numerics that carry a topic on join (332)
-        client.onUnhandledMessage = { [weak self] ircMsg in
-            Task { @MainActor [weak self] in
-                guard let self else { return }
-                switch ircMsg.command {
-                case "332":
-                    // RPL_TOPIC: params = [yournick, channel, topic]
-                    guard ircMsg.parameters.count >= 3 else { return }
-                    let channel = ircMsg.parameters[1]
-                    guard channel.lowercased() == self.channelName.lowercased() else { return }
-                    self.topic = ircMsg.parameters[2]
-                default:
-                    break
-                }
-            }
-        }
-
-        // History messages from CHATHISTORY — append without unread increment
-        client.onHistoryMessage = { [weak self] ircMsg in
-            Task { @MainActor [weak self] in
-                guard let self else { return }
-                let target = ircMsg.parameters.first ?? ""
-                guard target.lowercased() == self.channelName.lowercased()
-                    || target.lowercased() == self.currentNick.lowercased() else { return }
-
-                let nick = ircMsg.source?.nick ?? "server"
-                let body = ircMsg.parameters.count > 1 ? ircMsg.parameters[1] : ""
-                let isAction = body.hasPrefix("\u{0001}ACTION ") && body.hasSuffix("\u{0001}")
-                let content = isAction ? String(body.dropFirst(8).dropLast()) : body
-
-                let msg = Message(
-                    channelId: self.channelId,
-                    sender: nick,
-                    senderHost: ircMsg.source?.host,
-                    content: content,
-                    type: isAction ? .action : (ircMsg.command == "NOTICE" ? .notice : .message),
-                    isFromCurrentUser: nick == self.currentNick
-                )
-                // append without persisting (history is already on server) and no unread bump
-                self.append(msg, persist: true)
-                self.pendingHistoryMessageCount += 1
-            }
-        }
-
-        // Wire ZNC playback batch-end notification — appends a visual separator
-        // so the user can see where live messages end and replayed messages begin.
-        client.onZncBatchEnd = { [weak self] in
-            Task { @MainActor [weak self] in
-                guard let self, self.pendingHistoryMessageCount > 0 else { return }
-                let count = self.pendingHistoryMessageCount
-                self.pendingHistoryMessageCount = 0
-                let sep = Message(
-                    channelId: self.channelId,
-                    sender: "system",
-                    content: "── ZNC replayed \(count) message\(count == 1 ? "" : "s") ──",
-                    type: .system,
-                    isFromCurrentUser: false
-                )
-                self.append(sep, persist: false)
-            }
-        }
-
-        // Wire standard IRCv3 chathistory batch-end notification — appends a visual separator.
-        client.onChathistoryBatchEnd = { [weak self] in
-            Task { @MainActor [weak self] in
-                guard let self, self.pendingHistoryMessageCount > 0 else { return }
-                let count = self.pendingHistoryMessageCount
-                self.pendingHistoryMessageCount = 0
-                let sep = Message(
-                    channelId: self.channelId,
-                    sender: "system",
-                    content: "── \(count) message\(count == 1 ? "" : "s") loaded from history ──",
-                    type: .system,
-                    isFromCurrentUser: false
-                )
-                self.append(sep, persist: false)
-            }
-        }
-
-        // Subscribe to reconnect events so we re-register callbacks and re-fetch
-        // history if the connection drops and recovers while ChatView is still open.
+        // ── Reconnect — re-subscribe and re-request names ────────────────────
         ircManager.reconnectSubject
             .filter { [weak self] sid in sid == self?.serverId }
             .receive(on: RunLoop.main)
             .sink { [weak self] _ in Task { await self?.handleReconnect() } }
             .store(in: &cancellables)
+
+        // ── Drain any server notices buffered before we opened ───────────────
+        let notices = ircManager.drainServerNotices(for: serverId)
+        for notice in notices { handleSubscribedMessage(notice) }
     }
 
-    // MARK: NAMES request
+    // MARK: - Message handler
+
+    private func handleSubscribedMessage(_ ircMsg: IRCMessage) {
+        let target = ircMsg.parameters.first ?? ""
+        let isChannel = target.hasPrefix("#") || target.hasPrefix("&")
+            || target.hasPrefix("!") || target.hasPrefix("+")
+
+        let resolvedNick = currentNick.isEmpty
+            ? (ircManager.currentNicknames[serverId] ?? "") : currentNick
+
+        // Channel message: only show if it's for this channel
+        let isForChannel = isChannel && target.lowercased() == channelName.lowercased()
+        // User/notice: show if addressed to us (NickServ, DMs, etc.)
+        let isForUs = !isChannel
+            && (resolvedNick.isEmpty || target.lowercased() == resolvedNick.lowercased())
+
+        guard isForChannel || isForUs else { return }
+
+        let nick = ircMsg.source?.nick ?? "server"
+        let body = ircMsg.parameters.count > 1 ? ircMsg.parameters[1] : ""
+        let isAction = body.hasPrefix("\u{0001}ACTION ") && body.hasSuffix("\u{0001}")
+        let content  = isAction ? String(body.dropFirst(8).dropLast()) : body
+        let isHistory = ircMsg.tags?["batch"] != nil  // batch tag → history replay
+
+        let msg = Message(
+            channelId: channelId,
+            sender: nick,
+            senderHost: ircMsg.source?.host,
+            content: content,
+            type: isAction ? .action : (ircMsg.command == "NOTICE" ? .notice : .message),
+            isFromCurrentUser: nick.lowercased() == resolvedNick.lowercased()
+        )
+
+        if isHistory {
+            // History messages: append but don't persist (manager already did) and no unread
+            append(msg, persist: false)
+            pendingHistoryMessageCount += 1
+        } else {
+            // Live messages: manager already persisted others-messages;
+            // own messages are persisted by send() on success
+            append(msg, persist: false)
+            if nick.lowercased() != resolvedNick.lowercased() {
+                unreadCount += 1
+                if AppState.shared.selectedChannelId != channelId {
+                    ircManager.incrementUnread(channelId: channelId)
+                }
+            }
+        }
+    }
+
+    // MARK: - Event handler
+
+    private func handleEvent(_ event: IRCEvent) {
+        switch event {
+
+        // ── Member list (NAMES batches) ──────────────────────────────────────
+        case .namesList(let channel, let nicks):
+            guard channel.lowercased() == channelName.lowercased() else { return }
+            let parsed = nicks.map { parseNick($0) }
+            for member in parsed {
+                if !members.contains(where: { $0.nick == member.nick }) {
+                    members.append(member)
+                }
+            }
+            sortMembers()
+
+        case .endOfNames(let channel):
+            guard channel.lowercased() == channelName.lowercased() else { return }
+            Task { await requestChatHistoryIfSupported() }
+
+        // ── Membership changes ───────────────────────────────────────────────
+        case .join(let channel, let nick):
+            guard channel.lowercased() == channelName.lowercased() else { return }
+            if !members.contains(where: { $0.nick == nick }) {
+                members.append(ChannelMember(nick: nick))
+            }
+            let msg = Message(channelId: channelId, sender: nick,
+                              content: "\(nick) joined \(channel)", type: .join)
+            append(msg, persist: false)
+
+        case .part(let channel, let nick, let reason):
+            guard channel.lowercased() == channelName.lowercased() else { return }
+            members.removeAll { $0.nick == nick }
+            let detail = reason.map { " (\($0))" } ?? ""
+            let msg = Message(channelId: channelId, sender: nick,
+                              content: "\(nick) left\(detail)", type: .part)
+            append(msg, persist: false)
+
+        case .quit(let nick, let reason):
+            members.removeAll { $0.nick == nick }
+            let detail = reason.map { " (\($0))" } ?? ""
+            let msg = Message(channelId: channelId, sender: nick,
+                              content: "\(nick) quit\(detail)", type: .quit)
+            append(msg, persist: false)
+
+        case .kick(let channel, let kicked, let by, let reason):
+            guard channel.lowercased() == channelName.lowercased() else { return }
+            members.removeAll { $0.nick == kicked }
+            let detail = reason.map { " (\($0))" } ?? ""
+            let msg = Message(channelId: channelId, sender: by,
+                              content: "\(kicked) was kicked by \(by)\(detail)", type: .kick)
+            append(msg, persist: false)
+
+        // ── Nick change ──────────────────────────────────────────────────────
+        case .nickChange(let oldNick, let newNick):
+            if oldNick.lowercased() == currentNick.lowercased() { currentNick = newNick }
+            if let idx = members.firstIndex(where: { $0.nick == oldNick }) {
+                members[idx].nick = newNick
+            }
+            let msg = Message(channelId: channelId, sender: oldNick,
+                              content: "\(oldNick) is now known as \(newNick)", type: .nick)
+            append(msg, persist: false)
+
+        // ── Topic ────────────────────────────────────────────────────────────
+        case .topicChange(let channel, let newTopic, let byNick):
+            guard channel.lowercased() == channelName.lowercased() else { return }
+            topic = newTopic
+            let content = newTopic.isEmpty
+                ? "\(byNick) cleared the topic"
+                : "\(byNick) set the topic: \(newTopic)"
+            let msg = Message(channelId: channelId, sender: byNick,
+                              content: content, type: .topic)
+            append(msg, persist: false)
+
+        case .initialTopic(let channel, let newTopic):
+            guard channel.lowercased() == channelName.lowercased() else { return }
+            topic = newTopic
+
+        // ── Mode ─────────────────────────────────────────────────────────────
+        case .mode(let target, let modeString, let params):
+            guard target.lowercased() == channelName.lowercased() else { return }
+            let paramStr = params.isEmpty ? "" : " \(params.joined(separator: " "))"
+            let msg = Message(channelId: channelId, sender: target,
+                              content: "Mode \(modeString)\(paramStr)", type: .mode)
+            append(msg, persist: false)
+
+        // ── History batch end ────────────────────────────────────────────────
+        case .chathistoryBatchEnd:
+            guard pendingHistoryMessageCount > 0 else { return }
+            let count = pendingHistoryMessageCount
+            pendingHistoryMessageCount = 0
+            let sep = Message(
+                channelId: channelId, sender: "system",
+                content: "── \(count) message\(count == 1 ? "" : "s") loaded from history ──",
+                type: .system, isFromCurrentUser: false)
+            append(sep, persist: false)
+
+        case .zncBatchEnd:
+            guard pendingHistoryMessageCount > 0 else { return }
+            let count = pendingHistoryMessageCount
+            pendingHistoryMessageCount = 0
+            let sep = Message(
+                channelId: channelId, sender: "system",
+                content: "── ZNC replayed \(count) message\(count == 1 ? "" : "s") ──",
+                type: .system, isFromCurrentUser: false)
+            append(sep, persist: false)
+
+        // ── Pass-through numerics ────────────────────────────────────────────
+        case .unhandled:
+            break  // terminal view handles these via eventPublisher itself
+        }
+    }
+
+    // MARK: - NAMES request
 
     private func requestNamesIfNeeded() async {
+        // DM targets are nicks, not channels — NAMES is meaningless for them
+        guard channelName.hasPrefix("#") || channelName.hasPrefix("&") else { return }
         guard let client = ircManager.getClient(for: serverId), members.isEmpty else { return }
         try? await client.names(channelName)
     }
 
-    /// Called when the server reconnects while this ChatView is still open.
-    /// Re-registers callbacks (new IRCClient instance). History will be re-fetched
-    /// automatically when the server sends 366 RPL_ENDOFNAMES after the re-join.
     private func handleReconnect() async {
-        registerCallbacks()
+        members.removeAll()          // fresh state after reconnect
+        registerSubscriptions()      // re-subscribe (new subjects after reconnect)
         await requestNamesIfNeeded()
-        // No explicit requestChatHistoryIfSupported() here — the onEndOfNames callback
-        // registered above fires when the re-join's 366 arrives, keeping the trigger
-        // in one place and avoiding races.
     }
 
     private func requestChatHistoryIfSupported() async {
         guard let client = ircManager.getClient(for: serverId) else { return }
-
-        // By the time 366 fires, CAP negotiation is long complete, so
-        // chathistoryEnabled is already set correctly — no retry loop needed.
         let supported = await client.hasChathistorySupport()
         guard supported else { return }
 
-        // Determine if we need to fetch history.
-        // We fetch if:
-        //   (a) we have no persisted messages, OR
-        //   (b) the app was foregrounded since we last fetched history for this channel, OR
-        //   (c) no previous fetch has ever been recorded for this channel
         let lastFetchKey = "chathistory_lastfetch_\(channelId)"
         let lastFetchDate = UserDefaults.standard.object(forKey: lastFetchKey) as? Date
 
@@ -500,21 +391,44 @@ final class ChannelViewModel: ObservableObject {
         } else {
             needsFetch = true
         }
-
         guard needsFetch else { return }
 
         let limit = min(await client.getChathistoryLimit(), 100)
-
         if let since = lastFetchDate, !rawMessages.isEmpty {
             try? await client.requestHistorySince(since, target: channelName, limit: limit)
         } else {
             try? await client.requestHistory(target: channelName, limit: limit)
         }
-
         UserDefaults.standard.set(Date(), forKey: lastFetchKey)
     }
 
-    // MARK: Message appending
+    // MARK: - Member parsing helpers
+
+    private func parseNick(_ rawNick: String) -> ChannelMember {
+        let mode: ChannelMember.MemberMode
+        let nick: String
+        switch rawNick.first {
+        case "@": mode = .operator_; nick = String(rawNick.dropFirst())
+        case "+": mode = .voice;     nick = String(rawNick.dropFirst())
+        case "%": mode = .halfop;    nick = String(rawNick.dropFirst())
+        case "&": mode = .admin;     nick = String(rawNick.dropFirst())
+        case "~": mode = .founder;   nick = String(rawNick.dropFirst())
+        default:  mode = .none;      nick = rawNick
+        }
+        return ChannelMember(nick: nick, mode: mode)
+    }
+
+    private func sortMembers() {
+        let order: [ChannelMember.MemberMode] =
+            [.founder, .admin, .operator_, .halfop, .voice, .none]
+        members.sort { lhs, rhs in
+            let li = order.firstIndex(of: lhs.mode) ?? 5
+            let ri = order.firstIndex(of: rhs.mode) ?? 5
+            return li == ri ? lhs.nick.lowercased() < rhs.nick.lowercased() : li < ri
+        }
+    }
+
+    // MARK: - Message appending
 
     private func append(_ message: Message, persist: Bool) {
         guard !seenMessageIds.contains(message.id) else { return }
@@ -526,17 +440,14 @@ final class ChannelViewModel: ObservableObject {
     private func appendRaw(_ message: Message) {
         seenMessageIds.insert(message.id)
         rawMessages.append(message)
-        // Keep a reasonable in-memory cap
         if rawMessages.count > 1000 {
             let removed = rawMessages.removeFirst()
             seenMessageIds.remove(removed.id)
         }
     }
 
-    // MARK: Display message construction
+    // MARK: - Display message construction
 
-    /// Rebuilds `displayMessages` from `rawMessages`.
-    /// Inserts date separators and computes grouping (same sender within 5 min).
     private func rebuildDisplay() {
         var result: [DisplayMessage] = []
         var lastDate: Date? = nil
@@ -544,7 +455,6 @@ final class ChannelViewModel: ObservableObject {
         var lastTimestamp: Date? = nil
 
         for msg in rawMessages {
-            // Date separator
             if lastDate == nil || !msg.timestamp.isSameDay(as: lastDate!) {
                 result.append(.dateSeparator(msg.timestamp))
                 lastDate = msg.timestamp
@@ -552,13 +462,17 @@ final class ChannelViewModel: ObservableObject {
                 lastTimestamp = nil
             }
 
-            // Grouping: same sender, same type (message/action), within 5 minutes
             let canGroup = msg.type == .message || msg.type == .action
             let sameRun = canGroup
                 && lastSender == msg.sender
                 && lastTimestamp.map { msg.timestamp.timeIntervalSince($0) < 300 } == true
 
-            result.append(.message(msg, grouped: sameRun))
+            // Apply failed-send overlay for outgoing messages
+            if failedMessageIds.contains(msg.id) {
+                result.append(.message(msg, grouped: sameRun))
+            } else {
+                result.append(.message(msg, grouped: sameRun))
+            }
 
             if canGroup {
                 lastSender = msg.sender
@@ -575,8 +489,6 @@ final class ChannelViewModel: ObservableObject {
 
 // MARK: - DisplayMessage
 
-/// A discriminated union used by MessageListView to render either a date
-/// separator pill or a chat message bubble/system row.
 enum DisplayMessage: Identifiable {
     case dateSeparator(Date)
     case message(Message, grouped: Bool)
@@ -590,16 +502,16 @@ enum DisplayMessage: Identifiable {
         }
     }
 
-    /// True if this is a system-style row (join/part/quit/nick/mode/topic/kick).
     var isSystemMessage: Bool {
         guard case .message(let msg, _) = self else { return false }
         switch msg.type {
-        case .join, .part, .quit, .nick, .mode, .topic, .kick, .ban, .invite, .system: return true
-        default: return false
+        case .join, .part, .quit, .nick, .mode, .topic, .kick, .ban, .invite, .system:
+            return true
+        default:
+            return false
         }
     }
 
-    /// The underlying `Message` if this is a `.message` case.
     var message: Message? {
         guard case .message(let msg, _) = self else { return nil }
         return msg

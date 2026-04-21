@@ -1,30 +1,22 @@
 import SwiftUI
 
 /// Left-column sidebar (root of the NavigationStack) that shows saved servers
-/// and their joined channels. Tapping a channel calls `onSelectChannel` which
-/// pushes ChatView onto the stack from RootView.
+/// and their joined channels.
 ///
-/// Structure:
+/// Layout per server (when expanded):
 /// ```
 /// ┌──────────────────────────┐
-/// │  Parso IRC          ⚙   │
-/// ├──────────────────────────┤
 /// │ ● Libera.Chat       ⋯   │
-/// │   johnarleyburns         │  ← tappable nick line
-/// │   #linux            3   │
+/// │   #linux            3   │  ← channel row with unread badge
 /// │   #rust                 │
+/// │   ── Messages ──         │  ← separator (only if DMs exist)
+/// │   👤 alice          1   │  ← DM row with unread badge
 /// │   + Join a channel      │
-/// ├──────────────────────────┤
-/// │ Direct Messages         │
-/// │   alice                 │
-/// ├──────────────────────────┤
-/// │  + Add Server           │
+/// │   + New Message         │
 /// └──────────────────────────┘
 /// ```
 struct ServerSidebarView: View {
-    // Navigation path binding — allows the sidebar to push destinations
     @Binding var navPath: [NavDestination]
-    /// Called to navigate to a channel or DM.
     var onSelectChannel: (String, String, String, Bool, String?) -> Void
 
     @EnvironmentObject private var ircManager: IRCClientManager
@@ -32,29 +24,21 @@ struct ServerSidebarView: View {
 
     @State private var servers: [Server] = []
     @State private var expandedServers: Set<String> = []
-    @StateObject private var conversationsVM = ConversationsViewModel(ircManager: IRCClientManager.shared)
+    @StateObject private var conversationsVM = ConversationsViewModel(
+        ircManager: IRCClientManager.shared)
 
     // Sheet state
     @State private var showAddServer = false
     @State private var showSettings = false
     @State private var channelBrowserServerId: String? = nil
+    /// (serverId) when a "New Message" sheet is open for that server
+    @State private var newMessageServerId: String? = nil
+    @State private var newMessageNick: String = ""
 
     var body: some View {
         List {
             ForEach(servers) { server in
                 serverSection(for: server)
-            }
-
-            // Direct Messages section
-            if !conversationsVM.conversations.isEmpty {
-                Section("Direct Messages") {
-                    ForEach(conversationsVM.conversations) { dm in
-                        dmRow(dm)
-                    }
-                    .onDelete { indices in
-                        indices.forEach { conversationsVM.deleteConversation(conversationsVM.conversations[$0]) }
-                    }
-                }
             }
         }
         .listStyle(.insetGrouped)
@@ -62,9 +46,7 @@ struct ServerSidebarView: View {
         .navigationBarTitleDisplayMode(.large)
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
-                Button {
-                    showSettings = true
-                } label: {
+                Button { showSettings = true } label: {
                     Image(systemName: "gearshape")
                 }
             }
@@ -72,9 +54,7 @@ struct ServerSidebarView: View {
                 EditButton()
             }
         }
-        .safeAreaInset(edge: .bottom) {
-            addServerFooter
-        }
+        .safeAreaInset(edge: .bottom) { addServerFooter }
         .sheet(isPresented: $showAddServer, onDismiss: reloadServers) {
             AddServerSheet(existingServer: nil) { newServer in
                 Task { try? await ircManager.connect(to: newServer) }
@@ -87,11 +67,33 @@ struct ServerSidebarView: View {
                 .environmentObject(ircManager)
         }
         .onAppear(perform: reloadAndConnect)
-        .onChange(of: ircManager.connectionStates) { _, _ in
-            reloadServers()
-        }
-        .onChange(of: ircManager.currentNicknames) { _, _ in
-            reloadServers()
+        .onChange(of: ircManager.connectionStates) { _, _ in reloadServers() }
+        .onChange(of: ircManager.currentNicknames) { _, _ in reloadServers() }
+        // Reload when a new DM is created from any other screen (e.g. ChatView member list)
+        .onChange(of: ircManager.dmChannelIds) { _, _ in reloadServers() }
+        // New Message sheet (per-server)
+        .alert("New Direct Message", isPresented: Binding(
+            get: { newMessageServerId != nil },
+            set: { if !$0 { newMessageServerId = nil; newMessageNick = "" } }
+        )) {
+            TextField("Nickname", text: $newMessageNick)
+                .autocorrectionDisabled()
+                .textInputAutocapitalization(.never)
+            Button("Open") {
+                guard let sid = newMessageServerId,
+                      !newMessageNick.trimmingCharacters(in: .whitespaces).isEmpty else { return }
+                let nick = newMessageNick.trimmingCharacters(in: .whitespaces)
+                let dm = ircManager.openOrCreateDM(with: nick, serverId: sid)
+                newMessageServerId = nil
+                newMessageNick = ""
+                onSelectChannel(sid, dm.id, nick, true, nick)
+            }
+            Button("Cancel", role: .cancel) {
+                newMessageServerId = nil
+                newMessageNick = ""
+            }
+        } message: {
+            Text("Enter the nickname you want to message.")
         }
     }
 
@@ -114,6 +116,7 @@ struct ServerSidebarView: View {
             .environmentObject(ircManager)
 
             if expandedServers.contains(server.id) {
+                // ── Channels ──────────────────────────────────────────────────
                 ForEach(server.channels) { channel in
                     ChannelRowView(
                         channel: channel,
@@ -130,9 +133,81 @@ struct ServerSidebarView: View {
                     reorderChannels(for: server, from: indices, to: dest)
                 }
 
+                // ── Direct Messages (inline, under channels) ─────────────────
+                let dms = conversationsVM.conversations.filter {
+                    $0.serverId == server.id
+                }
+                if !dms.isEmpty {
+                    dmSeparatorRow
+                    ForEach(dms) { dm in
+                        dmRow(dm)
+                    }
+                    .onDelete { indices in
+                        indices.forEach {
+                            conversationsVM.deleteConversation(dms[$0])
+                        }
+                        reloadServers()
+                    }
+                }
+
+                // ── Action rows ───────────────────────────────────────────────
                 joinChannelRow(server: server)
+                newMessageRow(server: server)
             }
         }
+    }
+
+    // MARK: - DM section separator
+
+    private var dmSeparatorRow: some View {
+        HStack {
+            VStack { Divider() }
+            Text("Messages")
+                .font(.caption2)
+                .fontWeight(.semibold)
+                .foregroundStyle(.secondary)
+                .fixedSize()
+            VStack { Divider() }
+        }
+        .listRowBackground(Color.clear)
+        .padding(.vertical, 2)
+    }
+
+    // MARK: - DM row
+
+    private func dmRow(_ dm: Channel) -> some View {
+        let isActive = appState.selectedChannelId == dm.id
+        let unread = ircManager.unreadCounts[dm.id] ?? 0
+        return Button {
+            onSelectChannel(dm.serverId, dm.id, dm.name, true, dm.name)
+        } label: {
+            HStack(spacing: 10) {
+                AvatarView(nick: dm.name, size: 26)
+
+                Text(dm.name)
+                    .font(.subheadline)
+                    .fontWeight(unread > 0 ? .semibold : .regular)
+                    .foregroundStyle(unread > 0 ? .primary : .secondary)
+                    .lineLimit(1)
+
+                Spacer()
+
+                if unread > 0 {
+                    Text(unread < 100 ? "\(unread)" : "99+")
+                        .font(.caption2)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Color.accentColor, in: Capsule())
+                        .accessibilityLabel("\(unread) unread messages")
+                }
+            }
+            .padding(.vertical, 2)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .listRowBackground(isActive ? Color.accentColor.opacity(0.15) : Color.clear)
     }
 
     // MARK: - "Join a channel" row
@@ -155,7 +230,6 @@ struct ServerSidebarView: View {
         ) {
             ChannelBrowserSheet(server: server, onJoined: { name in
                 reloadServers()
-                // Navigate directly to the joined channel
                 if let ch = (try? DatabaseManager.shared.fetchChannels(forServer: server.id))?
                     .first(where: { $0.name == name }) {
                     onSelectChannel(server.id, ch.id, name, false, nil)
@@ -165,12 +239,24 @@ struct ServerSidebarView: View {
         }
     }
 
+    // MARK: - "New Message" row (start a DM with any nick)
+
+    private func newMessageRow(server: Server) -> some View {
+        Button {
+            newMessageNick = ""
+            newMessageServerId = server.id
+        } label: {
+            Label("New Message", systemImage: "plus.message")
+                .font(.subheadline)
+                .foregroundStyle(Color.accentColor)
+        }
+        .listRowBackground(Color.clear)
+    }
+
     // MARK: - Footer
 
     private var addServerFooter: some View {
-        Button {
-            showAddServer = true
-        } label: {
+        Button { showAddServer = true } label: {
             Label("Add Server", systemImage: "plus.circle.fill")
                 .font(.headline)
                 .frame(maxWidth: .infinity)
@@ -182,36 +268,6 @@ struct ServerSidebarView: View {
         }
         .buttonStyle(.plain)
         .background(.regularMaterial)
-    }
-
-    // MARK: - DM row
-
-    private func dmRow(_ dm: Channel) -> some View {
-        let isActive = appState.selectedChannelId == dm.id
-        return Button {
-            onSelectChannel(dm.serverId, dm.id, dm.name, true, dm.name)
-        } label: {
-            HStack(spacing: 10) {
-                AvatarView(nick: dm.name, size: 28)
-                Text(dm.name)
-                    .font(.subheadline)
-                    .foregroundStyle(isActive ? .primary : .secondary)
-                Spacer()
-                let unread = ircManager.unreadCounts[dm.id] ?? 0
-                if unread > 0 {
-                    Text(unread < 100 ? "\(unread)" : "99+")
-                        .font(.caption2).fontWeight(.semibold)
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 6).padding(.vertical, 2)
-                        .background(Color.accentColor, in: Capsule())
-                        .accessibilityLabel("\(unread) unread messages")
-                }
-            }
-            .padding(.vertical, 2)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .listRowBackground(isActive ? Color.accentColor.opacity(0.15) : Color.clear)
     }
 
     // MARK: - Data helpers

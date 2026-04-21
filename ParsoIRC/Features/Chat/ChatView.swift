@@ -1,25 +1,23 @@
 import SwiftUI
 import SafariServices
 
+// MARK: - Navigation environment key
+//
+// Injected by RootView so any view inside the NavigationStack can trigger
+// navigation to a DM without needing a direct navPath binding.
+
+struct NavigateToDMKey: EnvironmentKey {
+    static let defaultValue: ((String, String) -> Void)? = nil
+}
+
+extension EnvironmentValues {
+    var navigateToDM: ((String, String) -> Void)? {
+        get { self[NavigateToDMKey.self] }
+        set { self[NavigateToDMKey.self] = newValue }
+    }
+}
+
 /// The main chat screen for a single channel or DM.
-///
-/// Layout:
-/// ```
-/// ┌─────────────────────────────────┐
-/// │  ← #linux   "Topic text…"  👥 ⋯ │  ← NavigationBar
-/// ├─────────────────────────────────┤
-/// │                                 │
-/// │        MessageListView          │
-/// │                                 │
-/// ├─────────────────────────────────┤
-/// │  +  [Message #linux…]   [↑]    │  ← InputBarView
-/// └─────────────────────────────────┘
-/// ```
-///
-/// `ChatView` creates and owns a `ChannelViewModel` keyed on `serverId` +
-/// `channelName`.  When either changes (e.g. the user switches channels from
-/// the sidebar) SwiftUI recreates the view and therefore the view model,
-/// which re-registers callbacks and re-loads history for the new channel.
 struct ChatView: View {
     let serverId: String
     let channelName: String
@@ -27,13 +25,11 @@ struct ChatView: View {
     @EnvironmentObject private var ircManager: IRCClientManager
     @EnvironmentObject private var appState: AppState
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.navigateToDM) private var navigateToDM
 
     @StateObject private var viewModel: ChannelViewModel
 
-    // Text pre-fill fed from nick-tap / mention
     @State private var prefillText: String = ""
-
-    // Sheet state
     @State private var showMemberList = false
     @State private var showChannelMenu = false
     @State private var showTopicPopover = false
@@ -44,20 +40,16 @@ struct ChatView: View {
     init(serverId: String, channelName: String, ircManager: IRCClientManager) {
         self.serverId = serverId
         self.channelName = channelName
-        // Init StateObject with the manager reference so ChannelViewModel can
-        // call back into it.  Using _viewModel = StateObject(wrappedValue:) is
-        // the correct way to pass dependencies to a @StateObject.
         _viewModel = StateObject(wrappedValue:
-            ChannelViewModel(serverId: serverId, channelName: channelName, ircManager: ircManager)
+            ChannelViewModel(serverId: serverId, channelName: channelName,
+                             ircManager: ircManager)
         )
     }
 
     var body: some View {
         MessageListView(
             viewModel: viewModel,
-            onTapNick: { nick in
-                prefillText = "\(nick): "
-            }
+            onTapNick: { nick in prefillText = "\(nick): " }
         )
         .safeAreaInset(edge: .bottom, spacing: 0) {
             InputBarView(viewModel: viewModel, prefillText: $prefillText)
@@ -67,19 +59,16 @@ struct ChatView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { toolbarContent }
         .background(Color(.systemGroupedBackground))
-        .task {
-            await viewModel.start()
-        }
+        .task { await viewModel.start() }
         .onDisappear {
             viewModel.stop()
             viewModel.markRead()
         }
-        // Mark read when this channel is actively selected
         .onAppear { viewModel.markRead() }
-        // Member list sheet
+        // Member list sheet — passes viewModel so the list is reactive
         .sheet(isPresented: $showMemberList) {
             MemberListView(
-                members: viewModel.members,
+                viewModel: viewModel,
                 channelName: channelName,
                 serverId: serverId,
                 onMention: { nick in
@@ -88,22 +77,21 @@ struct ChatView: View {
                 },
                 onDM: { nick, sid in
                     showMemberList = false
-                    // Open or create DM channel, then navigate to it
-                    let dm = ConversationsViewModel(ircManager: ircManager).openDM(with: nick, serverId: sid)
-                    appState.selectedServerId = sid
-                    appState.selectedChannelId = dm.id
+                    // Create/find the DM channel in the DB via the manager
+                    ircManager.openOrCreateDM(with: nick, serverId: sid)
+                    // Navigate to the DM via the environment action injected by RootView
+                    navigateToDM?(nick, sid)
                 }
             )
             .environmentObject(ircManager)
         }
-        // Nick identity sheet
         .sheet(isPresented: $showNickSheet) {
-            if let server = try? DatabaseManager.shared.fetchServers().first(where: { $0.id == serverId }) {
+            if let server = try? DatabaseManager.shared.fetchServers()
+                .first(where: { $0.id == serverId }) {
                 NickIdentitySheet(server: server)
                     .environmentObject(ircManager)
             }
         }
-        // In-app Safari for rules URL
         .sheet(item: $safariURL) { url in
             SafariView(url: url)
                 .ignoresSafeArea()
@@ -114,7 +102,6 @@ struct ChatView: View {
 
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
-        // Centre: topic subtitle (tappable)
         ToolbarItem(placement: .principal) {
             VStack(spacing: 1) {
                 Text(channelName)
@@ -130,26 +117,18 @@ struct ChatView: View {
                     .accessibilityHint("Double-tap to view full topic")
                 }
             }
-            .popover(isPresented: $showTopicPopover) {
-                topicPopover
-            }
+            .popover(isPresented: $showTopicPopover) { topicPopover }
         }
 
-        // Right: rules (if URL in topic) + member count + menu
         ToolbarItemGroup(placement: .navigationBarTrailing) {
-            // Rules button — shown when the topic contains a URL
             if let url = viewModel.rulesURL {
-                Button {
-                    safariURL = url
-                } label: {
+                Button { safariURL = url } label: {
                     Image(systemName: "book.closed")
                 }
                 .accessibilityLabel("Channel Rules")
             }
 
-            Button {
-                showMemberList = true
-            } label: {
+            Button { showMemberList = true } label: {
                 Label(
                     viewModel.members.isEmpty ? "Members" : "\(viewModel.members.count)",
                     systemImage: "person.2"
@@ -158,9 +137,7 @@ struct ChatView: View {
                 .font(.subheadline)
             }
 
-            Menu {
-                channelMenuContent
-            } label: {
+            Menu { channelMenuContent } label: {
                 Image(systemName: "ellipsis.circle")
             }
             .menuOrder(.fixed)
@@ -192,9 +169,7 @@ struct ChatView: View {
 
     @ViewBuilder
     private var channelMenuContent: some View {
-        Button {
-            prefillText = "/topic "
-        } label: {
+        Button { prefillText = "/topic " } label: {
             Label("Set Topic", systemImage: "text.quote")
         }
 
@@ -207,9 +182,7 @@ struct ChatView: View {
             Label("Refresh Members", systemImage: "arrow.clockwise")
         }
 
-        Button {
-            showNickSheet = true
-        } label: {
+        Button { showNickSheet = true } label: {
             Label("Change Nick…", systemImage: "person.badge.plus")
         }
 
@@ -219,16 +192,13 @@ struct ChatView: View {
             Task {
                 guard let client = ircManager.getClient(for: serverId) else { return }
                 try? await client.leave(channel: channelName)
-                // Update the DB: clear joinedAt so the channel isn't auto-rejoined
                 if let ch = try? DatabaseManager.shared.fetchChannels(forServer: serverId)
                     .first(where: { $0.name.lowercased() == channelName.lowercased() }) {
                     var updated = ch
                     updated.joinedAt = nil
                     try? DatabaseManager.shared.saveChannel(updated, serverId: serverId)
                 }
-                // Clear unread badge
                 ircManager.clearUnread(channelId: viewModel.channelId)
-                // Navigate back to server sidebar
                 await MainActor.run { dismiss() }
             }
         } label: {
@@ -250,7 +220,7 @@ struct SafariView: UIViewControllerRepresentable {
     func makeUIViewController(context: Context) -> SFSafariViewController {
         SFSafariViewController(url: url)
     }
-    func updateUIViewController(_ uiViewController: SFSafariViewController, context: Context) {}
+    func updateUIViewController(_ vc: SFSafariViewController, context: Context) {}
 }
 
 // MARK: - Preview

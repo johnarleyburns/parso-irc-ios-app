@@ -2,6 +2,10 @@ import SwiftUI
 
 /// Full member list for a channel, grouped by privilege level.
 ///
+/// Receives the live `ChannelViewModel` as an `@ObservedObject` so the list
+/// updates reactively as NAMES / JOIN / PART / QUIT events arrive — even if
+/// the sheet was opened before the NAMES reply completed.
+///
 /// Sections (only shown when non-empty):
 ///   Founders & Admins  (~, &)
 ///   Operators          (@)
@@ -12,12 +16,12 @@ import SwiftUI
 /// A search bar filters across all sections simultaneously.
 /// Tapping a row opens `UserProfileSheet` for that nick.
 struct MemberListView: View {
-    /// All members for this channel (already sorted by ChannelViewModel).
-    let members: [ChannelMember]
+    /// Live channel view model — members update reactively.
+    @ObservedObject var viewModel: ChannelViewModel
     let channelName: String
     let serverId: String
 
-    /// Called when the user taps "Mention" in UserProfileSheet or taps a nick directly.
+    /// Called when the user taps "Mention" in UserProfileSheet.
     var onMention: ((String) -> Void)? = nil
     /// Called when the user taps "Send Direct Message". Provides (nick, serverId).
     var onDM: ((String, String) -> Void)? = nil
@@ -29,8 +33,10 @@ struct MemberListView: View {
     // MARK: - Filtered + grouped
 
     private var filtered: [ChannelMember] {
-        guard !searchText.isEmpty else { return members }
-        return members.filter { $0.nick.localizedCaseInsensitiveContains(searchText) }
+        guard !searchText.isEmpty else { return viewModel.members }
+        return viewModel.members.filter {
+            $0.nick.localizedCaseInsensitiveContains(searchText)
+        }
     }
 
     private var founders:  [ChannelMember] { filtered.filter { $0.mode == .founder || $0.mode == .admin } }
@@ -70,7 +76,8 @@ struct MemberListView: View {
                               members: regulars)
             }
             .listStyle(.insetGrouped)
-            .searchable(text: $searchText, placement: .navigationBarDrawer(displayMode: .always),
+            .searchable(text: $searchText,
+                        placement: .navigationBarDrawer(displayMode: .always),
                         prompt: "Search members")
             .navigationTitle(memberCountTitle)
             .navigationBarTitleDisplayMode(.inline)
@@ -127,7 +134,7 @@ struct MemberListView: View {
     // MARK: - Helpers
 
     private var memberCountTitle: String {
-        let total = members.count
+        let total = viewModel.members.count
         switch total {
         case 0:  return channelName
         case 1:  return "\(channelName) — 1 member"
@@ -137,16 +144,11 @@ struct MemberListView: View {
 }
 
 #Preview {
-    MemberListView(
-        members: [
-            ChannelMember(nick: "alice",   mode: .founder),
-            ChannelMember(nick: "bob",     mode: .operator_),
-            ChannelMember(nick: "charlie", mode: .halfop,    isAway: true),
-            ChannelMember(nick: "dave",    mode: .voice),
-            ChannelMember(nick: "eve",     username: "eve", hostname: "example.com", mode: .none),
-            ChannelMember(nick: "frank",   mode: .none,     isAway: true),
-        ],
-        channelName: "#linux",
-        serverId: "preview"
-    )
+    // Preview with a mock ChannelViewModel (can't init without real manager, so use a simple wrapper)
+    struct PreviewWrapper: View {
+        var body: some View {
+            Text("MemberListView preview — use in-app for live data")
+        }
+    }
+    return PreviewWrapper()
 }

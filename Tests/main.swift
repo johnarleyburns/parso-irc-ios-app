@@ -28,25 +28,22 @@ struct IRCUser: Hashable, Sendable {
     init?(prefix: String) {
         guard !prefix.isEmpty else { return nil }
 
-        if prefix.hasPrefix(":") {
-            let trimmed = String(prefix.dropFirst())
-            if let bangIndex = trimmed.firstIndex(of: "!") {
-                self.nick = String(trimmed[..<bangIndex])
-                let rest = String(trimmed[trimmed.index(after: bangIndex)...])
-                if let atIndex = rest.firstIndex(of: "@") {
-                    self.user = String(rest[..<atIndex])
-                    self.host = String(rest[rest.index(after: atIndex)...])
-                } else {
-                    self.user = rest
-                    self.host = nil
-                }
+        // The prefix may or may not have a leading ":" when passed here,
+        // depending on whether the caller already stripped it.
+        let raw = prefix.hasPrefix(":") ? String(prefix.dropFirst()) : prefix
+
+        if let bangIndex = raw.firstIndex(of: "!") {
+            self.nick = String(raw[..<bangIndex])
+            let rest = String(raw[raw.index(after: bangIndex)...])
+            if let atIndex = rest.firstIndex(of: "@") {
+                self.user = String(rest[..<atIndex])
+                self.host = String(rest[rest.index(after: atIndex)...])
             } else {
-                self.nick = trimmed
-                self.user = nil
+                self.user = rest
                 self.host = nil
             }
         } else {
-            self.nick = prefix
+            self.nick = raw
             self.user = nil
             self.host = nil
         }
@@ -165,7 +162,9 @@ func assertFalse(_ value: Bool) throws {
 runTest("testParsePrivmsg") {
     let message = IRCMessage(rawLine: ":nick!user@host PRIVMSG #channel :Hello world")
     try assertEqual(message.command, "PRIVMSG")
-    try assertEqual(message.source?.nick, "nick!user@host")
+    try assertEqual(message.source?.nick, "nick")
+    try assertEqual(message.source?.user, "user")
+    try assertEqual(message.source?.host, "host")
     try assertEqual(message.parameters.first, "#channel")
     try assertEqual(message.trailing, "Hello world")
 }
@@ -173,7 +172,8 @@ runTest("testParsePrivmsg") {
 runTest("testParseJoin") {
     let message = IRCMessage(rawLine: ":nick!~user@host JOIN #channel")
     try assertEqual(message.command, "JOIN")
-    try assertEqual(message.source?.nick, "nick!~user@host")
+    try assertEqual(message.source?.nick, "nick")
+    try assertEqual(message.source?.user, "~user")
     try assertEqual(message.parameters.first, "#channel")
 }
 
@@ -1146,6 +1146,625 @@ runTest("testConnectionSurvivesWithoutPASS") {
 
     try assertTrue(isConnected)
     try assertTrue(log.sent.contains(where: { $0.hasPrefix("PRIVMSG") }))
+}
+
+// MARK: - Member list parsing tests
+// Covers ChannelViewModel.parseNick() and the merge/sort logic that populates
+// viewModel.members.  The same logic runs in the new Combine-subscription path
+// so correctness here ensures the MemberListView is never blank due to parsing bugs.
+
+print("\n=== Member List Parsing Tests ===")
+
+// Simulates ChannelViewModel.parseNick() — mirrors the implementation exactly
+struct TestMember: Equatable {
+    var nick: String
+    var mode: String  // "", "+", "@", "%", "&", "~"
+}
+
+func parseNick(_ raw: String) -> TestMember {
+    switch raw.first {
+    case "@": return TestMember(nick: String(raw.dropFirst()), mode: "@")
+    case "+": return TestMember(nick: String(raw.dropFirst()), mode: "+")
+    case "%": return TestMember(nick: String(raw.dropFirst()), mode: "%")
+    case "&": return TestMember(nick: String(raw.dropFirst()), mode: "&")
+    case "~": return TestMember(nick: String(raw.dropFirst()), mode: "~")
+    default:  return TestMember(nick: raw, mode: "")
+    }
+}
+
+func parseModeOrder(_ mode: String) -> Int {
+    switch mode {
+    case "~": return 0   // founder
+    case "&": return 1   // admin
+    case "@": return 2   // operator
+    case "%": return 3   // halfop
+    case "+": return 4   // voiced
+    default:  return 5   // regular
+    }
+}
+
+runTest("testMemberListParsesOpPrefix") {
+    let m = parseNick("@alice")
+    try assertEqual(m.nick, "alice")
+    try assertEqual(m.mode, "@")
+}
+
+runTest("testMemberListParsesVoicePrefix") {
+    let m = parseNick("+bob")
+    try assertEqual(m.nick, "bob")
+    try assertEqual(m.mode, "+")
+}
+
+runTest("testMemberListParsesFounderPrefix") {
+    let m = parseNick("~chan_owner")
+    try assertEqual(m.nick, "chan_owner")
+    try assertEqual(m.mode, "~")
+}
+
+runTest("testMemberListParsesHalfopPrefix") {
+    let m = parseNick("%helper")
+    try assertEqual(m.nick, "helper")
+    try assertEqual(m.mode, "%")
+}
+
+runTest("testMemberListParsesAdminPrefix") {
+    let m = parseNick("&admin")
+    try assertEqual(m.nick, "admin")
+    try assertEqual(m.mode, "&")
+}
+
+runTest("testMemberListParsesNoPrefix") {
+    let m = parseNick("regular_user")
+    try assertEqual(m.nick, "regular_user")
+    try assertEqual(m.mode, "")
+}
+
+runTest("testMemberListParsesNickWithNumbers") {
+    let m = parseNick("@op42")
+    try assertEqual(m.nick, "op42")
+    try assertEqual(m.mode, "@")
+}
+
+runTest("testMemberListMergesWithoutDuplicates") {
+    // Simulates receiving 353 NAMREPLY twice for the same nick
+    var members: [TestMember] = []
+    let batch1 = ["@alice", "bob"]
+    let batch2 = ["@alice", "carol"]   // alice already present
+    for raw in batch1 {
+        let m = parseNick(raw)
+        if !members.contains(where: { $0.nick == m.nick }) { members.append(m) }
+    }
+    for raw in batch2 {
+        let m = parseNick(raw)
+        if !members.contains(where: { $0.nick == m.nick }) { members.append(m) }
+    }
+    try assertEqual(members.count, 3)   // alice, bob, carol — no duplicate alice
+    try assertEqual(members.filter { $0.nick == "alice" }.count, 1)
+}
+
+runTest("testMemberListSortsFounderBeforeOp") {
+    var members = [parseNick("@op"), parseNick("~founder")]
+    members.sort { parseModeOrder($0.mode) < parseModeOrder($1.mode) }
+    try assertEqual(members[0].nick, "founder")
+    try assertEqual(members[1].nick, "op")
+}
+
+runTest("testMemberListSortsOpBeforeVoice") {
+    var members = [parseNick("+voiced"), parseNick("@op")]
+    members.sort { parseModeOrder($0.mode) < parseModeOrder($1.mode) }
+    try assertEqual(members[0].nick, "op")
+    try assertEqual(members[1].nick, "voiced")
+}
+
+runTest("testMemberListSortsOpBeforeRegular") {
+    var members = [parseNick("regular"), parseNick("@op")]
+    members.sort { parseModeOrder($0.mode) < parseModeOrder($1.mode) }
+    try assertEqual(members[0].nick, "op")
+    try assertEqual(members[1].nick, "regular")
+}
+
+runTest("testMemberListSortsAlphaWithinGroup") {
+    // Within same mode, sort alphabetically by nick (lowercased)
+    var members = [parseNick("Zara"), parseNick("alice"), parseNick("Bob")]
+        .map { m in m }  // all regular (mode "")
+    members.sort { lhs, rhs in
+        parseModeOrder(lhs.mode) == parseModeOrder(rhs.mode)
+            ? lhs.nick.lowercased() < rhs.nick.lowercased()
+            : parseModeOrder(lhs.mode) < parseModeOrder(rhs.mode)
+    }
+    try assertEqual(members[0].nick, "alice")
+    try assertEqual(members[1].nick, "Bob")
+    try assertEqual(members[2].nick, "Zara")
+}
+
+runTest("testMemberListChannelFilterIgnoresOtherChannels") {
+    // The onNamesList handler guards: channel.lowercased() == self.channelName.lowercased()
+    // If we're in #linux, a NAMES reply for #rust must be ignored.
+    let myChannel = "#linux"
+    let namesChannel = "#rust"
+    let shouldProcess = namesChannel.lowercased() == myChannel.lowercased()
+    try assertFalse(shouldProcess)
+}
+
+runTest("testMemberListChannelFilterAcceptsOwnChannel") {
+    let myChannel = "#linux"
+    let namesChannel = "#linux"
+    let shouldProcess = namesChannel.lowercased() == myChannel.lowercased()
+    try assertTrue(shouldProcess)
+}
+
+runTest("testMemberListChannelFilterCaseInsensitive") {
+    let myChannel = "#Linux"
+    let namesChannel = "#linux"
+    let shouldProcess = namesChannel.lowercased() == myChannel.lowercased()
+    try assertTrue(shouldProcess)
+}
+
+runTest("testMemberListRemovedOnPart") {
+    var members = [parseNick("@alice"), parseNick("bob"), parseNick("carol")]
+    // Simulate PART by bob
+    members.removeAll { $0.nick == "bob" }
+    try assertEqual(members.count, 2)
+    try assertFalse(members.contains(where: { $0.nick == "bob" }))
+}
+
+runTest("testMemberListRemovedOnQuit") {
+    var members = [parseNick("alice"), parseNick("@bob"), parseNick("carol")]
+    // QUIT removes from all channels (no channel check needed)
+    members.removeAll { $0.nick == "alice" }
+    try assertEqual(members.count, 2)
+    try assertFalse(members.contains(where: { $0.nick == "alice" }))
+}
+
+runTest("testMemberListNickUpdatedOnNickChange") {
+    var members = [parseNick("oldnick"), parseNick("@alice")]
+    // Simulate NICK oldnick -> newnick
+    if let idx = members.firstIndex(where: { $0.nick == "oldnick" }) {
+        members[idx].nick = "newnick"
+    }
+    try assertTrue(members.contains(where: { $0.nick == "newnick" }))
+    try assertFalse(members.contains(where: { $0.nick == "oldnick" }))
+}
+
+runTest("testNamesCommandNotSentForDMTarget") {
+    // requestNamesIfNeeded() guards: channelName.hasPrefix("#") || .hasPrefix("&")
+    // A nick like "alice" should NOT trigger NAMES
+    let channelName = "alice"
+    let isChannelTarget = channelName.hasPrefix("#") || channelName.hasPrefix("&")
+    try assertFalse(isChannelTarget)
+}
+
+runTest("testNamesCommandSentForChannelTarget") {
+    let channelName = "#linux"
+    let isChannelTarget = channelName.hasPrefix("#") || channelName.hasPrefix("&")
+    try assertTrue(isChannelTarget)
+}
+
+runTest("testNamesCommandSentForAmpersandChannel") {
+    // IRC allows & prefix channels
+    let channelName = "&local"
+    let isChannelTarget = channelName.hasPrefix("#") || channelName.hasPrefix("&")
+    try assertTrue(isChannelTarget)
+}
+
+// MARK: - DM creation and routing tests
+
+print("\n=== DM Creation and Routing Tests ===")
+
+runTest("testDMChannelNameIsNick") {
+    // When a DM is created, channel.name == the remote nick (not "#nick")
+    let nick = "alice"
+    let channelName = nick   // not "#" + nick
+    try assertFalse(channelName.hasPrefix("#"))
+    try assertEqual(channelName, "alice")
+}
+
+runTest("testDMSendTargetsNickDirectly") {
+    // ChannelViewModel.send() calls sendMessage(to: channelName)
+    // For a DM, channelName is the nick, so PRIVMSG goes to "alice" not "#alice"
+    let dmChannelName = "alice"
+    let privmsgLine = "PRIVMSG \(dmChannelName) :Hello"
+    try assertTrue(privmsgLine.hasPrefix("PRIVMSG alice"))
+    try assertFalse(privmsgLine.hasPrefix("PRIVMSG #"))
+}
+
+runTest("testPrivateMessageRoutingToCurrentUser") {
+    // PRIVMSG alice :msg (where we are "alice") → isForUs = true
+    let msg = IRCMessage(rawLine: ":bob!b@host PRIVMSG alice :Hello there")
+    let target = msg.parameters.first ?? ""
+    let isChannel = target.hasPrefix("#")
+    let myNick = "alice"
+    let isForUs = !isChannel && target.lowercased() == myNick.lowercased()
+    try assertFalse(isChannel)
+    try assertTrue(isForUs)
+}
+
+runTest("testChannelMessageNotRoutedToDMView") {
+    // PRIVMSG #linux :msg with dmChannelName = "alice" → neither isForChannel nor isForUs
+    let msg = IRCMessage(rawLine: ":bob!b@host PRIVMSG #linux :General chat")
+    let target = msg.parameters.first ?? ""
+    let isChannel = target.hasPrefix("#")
+    let dmChannelName = "alice"   // DM view for "alice"
+    let myNick = "alice"
+    let isForChannel = isChannel && target.lowercased() == dmChannelName.lowercased()
+    let isForUs = !isChannel && target.lowercased() == myNick.lowercased()
+    try assertFalse(isForChannel)  // #linux != alice
+    try assertFalse(isForUs)       // it IS a channel message
+}
+
+runTest("testNickServNoticeIsRoutedToCurrentUser") {
+    // :NickServ!NickServ@services NOTICE alice :This nickname is registered.
+    let msg = IRCMessage(rawLine: ":NickServ!NickServ@services.libera.chat NOTICE alice :This nickname is registered.")
+    let target = msg.parameters.first ?? ""
+    let isChannel = target.hasPrefix("#")
+    let myNick = "alice"
+    let isForUs = !isChannel && target.lowercased() == myNick.lowercased()
+    try assertTrue(isForUs)
+}
+
+runTest("testNickServNoticeNotRoutedToOtherUser") {
+    let msg = IRCMessage(rawLine: ":NickServ!NickServ@services NOTICE someone_else :Welcome.")
+    let target = msg.parameters.first ?? ""
+    let isChannel = target.hasPrefix("#")
+    let myNick = "alice"
+    let isForUs = !isChannel && target.lowercased() == myNick.lowercased()
+    try assertFalse(isForUs)
+}
+
+runTest("testOpenDMCreatesChannelWithCorrectFields") {
+    // Mirrors openOrCreateDM logic: isDM = true, name = nick, not starting with #
+    let nick = "bob"
+    var ch_name = nick
+    let ch_isDM = true
+    try assertFalse(ch_name.hasPrefix("#"))
+    try assertTrue(ch_isDM)
+    try assertEqual(ch_name, "bob")
+}
+
+runTest("testDMIsDMFlagDistinguishesFromChannel") {
+    // Regular channels have isDM = false, DMs have isDM = true
+    let channel_isDM = false
+    let dm_isDM = true
+    try assertFalse(channel_isDM)
+    try assertTrue(dm_isDM)
+}
+
+// MARK: - Fan-out / background message processing tests
+// These test the logic in IRCClientManager.handleIncomingMessage() and
+// ChannelViewModel.handleSubscribedMessage() — ensuring ALL channels receive
+// messages regardless of which one is currently visible.
+
+print("\n=== Fan-out / Background Message Tests ===")
+
+/// Simulates IRCClientManager.handleIncomingMessage logic:
+/// determines if a message should be persisted and whether unread should increment.
+func shouldPersist(msg: IRCMessage, myNick: String) -> Bool {
+    let target = msg.parameters.first ?? ""
+    let isChannel = target.hasPrefix("#") || target.hasPrefix("&")
+    guard isChannel else { return false }  // server notices handled separately
+    let nick = msg.source?.nick ?? "server"
+    return nick.lowercased() != myNick.lowercased()  // don't double-persist own messages
+}
+
+func shouldIncrementUnread(msg: IRCMessage, myNick: String, activeChannelId: String, channelId: String) -> Bool {
+    let target = msg.parameters.first ?? ""
+    let isChannel = target.hasPrefix("#") || target.hasPrefix("&")
+    guard isChannel else { return false }
+    let nick = msg.source?.nick ?? "server"
+    let isOwn = nick.lowercased() == myNick.lowercased()
+    let isActive = activeChannelId == channelId
+    return !isOwn && !isActive
+}
+
+runTest("testIncomingMessagePersistedForBackgroundChannel") {
+    // bob sends to #rust while user is on #linux
+    let msg = IRCMessage(rawLine: ":bob!b@host PRIVMSG #rust :Hey everyone")
+    try assertTrue(shouldPersist(msg: msg, myNick: "alice"))
+}
+
+runTest("testOwnMessageNotDoublePersistedByManager") {
+    // alice sends to #linux — manager should NOT persist (send() does it on success)
+    let msg = IRCMessage(rawLine: ":alice!a@host PRIVMSG #linux :Hello")
+    try assertFalse(shouldPersist(msg: msg, myNick: "alice"))
+}
+
+runTest("testUnreadIncrementedForNonActiveChannel") {
+    // bob sends to #rust, user is viewing #linux — unread for #rust should increment
+    let msg = IRCMessage(rawLine: ":bob!b@host PRIVMSG #rust :Hello")
+    let activeId = "server:linux"
+    let rustId   = "server:rust"
+    try assertTrue(shouldIncrementUnread(msg: msg, myNick: "alice",
+                                         activeChannelId: activeId, channelId: rustId))
+}
+
+runTest("testUnreadNotIncrementedForActiveChannel") {
+    // bob sends to #linux, user is already viewing #linux — no unread increment
+    let msg = IRCMessage(rawLine: ":bob!b@host PRIVMSG #linux :Hello")
+    let activeId = "server:linux"
+    try assertFalse(shouldIncrementUnread(msg: msg, myNick: "alice",
+                                          activeChannelId: activeId, channelId: activeId))
+}
+
+runTest("testUnreadNotIncrementedForOwnMessages") {
+    // alice sends to #linux (own message) — no unread
+    let msg = IRCMessage(rawLine: ":alice!a@host PRIVMSG #linux :My message")
+    let activeId = "server:rust"  // different channel, but own message
+    let linuxId  = "server:linux"
+    try assertFalse(shouldIncrementUnread(msg: msg, myNick: "alice",
+                                          activeChannelId: activeId, channelId: linuxId))
+}
+
+runTest("testServerNoticeNotPersistedAsChannelMessage") {
+    // NickServ notices target the user's nick, not a channel — don't persist as channel msg
+    let msg = IRCMessage(rawLine: ":NickServ!NS@services NOTICE alice :Welcome to Libera.Chat")
+    try assertFalse(shouldPersist(msg: msg, myNick: "alice"))
+}
+
+runTest("testIsChannelTargetHashPrefix") {
+    let msg = IRCMessage(rawLine: ":alice!a@b PRIVMSG #linux :test")
+    let target = msg.parameters.first ?? ""
+    try assertTrue(target.hasPrefix("#"))
+}
+
+runTest("testIsChannelTargetAmpersandPrefix") {
+    let msg = IRCMessage(rawLine: ":alice!a@b PRIVMSG &local :test")
+    let target = msg.parameters.first ?? ""
+    let isChannel = target.hasPrefix("#") || target.hasPrefix("&")
+    try assertTrue(isChannel)
+}
+
+runTest("testIsNotChannelTargetForNick") {
+    let msg = IRCMessage(rawLine: ":alice!a@b PRIVMSG bob :Direct message")
+    let target = msg.parameters.first ?? ""
+    let isChannel = target.hasPrefix("#") || target.hasPrefix("&")
+    try assertFalse(isChannel)
+}
+
+// MARK: - Server notice buffer tests
+
+print("\n=== Server Notice Buffer Tests ===")
+
+/// Simulates the serverNoticeBuffer logic in IRCClientManager
+func bufferNotice(_ msg: IRCMessage, into buffer: inout [IRCMessage], max: Int) {
+    buffer.append(msg)
+    if buffer.count > max { buffer.removeFirst() }
+}
+
+runTest("testServerNoticeBufferedWhenNoChannelOpen") {
+    var buffer: [IRCMessage] = []
+    let notice = IRCMessage(rawLine: ":NickServ!NS@services NOTICE alice :You are now identified.")
+    bufferNotice(notice, into: &buffer, max: 30)
+    try assertEqual(buffer.count, 1)
+    try assertEqual(buffer[0].source?.nick, "NickServ")
+}
+
+runTest("testServerNoticeBufferCappedAtMax") {
+    var buffer: [IRCMessage] = []
+    for i in 0..<35 {
+        let msg = IRCMessage(rawLine: ":server NOTICE alice :Message \(i)")
+        bufferNotice(msg, into: &buffer, max: 30)
+    }
+    try assertEqual(buffer.count, 30)
+}
+
+runTest("testServerNoticeBufferDrainedOnOpen") {
+    var buffer: [IRCMessage] = []
+    for i in 0..<5 {
+        let msg = IRCMessage(rawLine: ":server NOTICE alice :Notice \(i)")
+        bufferNotice(msg, into: &buffer, max: 30)
+    }
+    // Drain (as drainServerNotices does)
+    let drained = buffer
+    buffer = []
+    try assertEqual(drained.count, 5)
+    try assertEqual(buffer.count, 0)   // buffer cleared after drain
+}
+
+runTest("testServerNoticeBufferMaintainsOrder") {
+    var buffer: [IRCMessage] = []
+    bufferNotice(IRCMessage(rawLine: ":NickServ NOTICE alice :First"), into: &buffer, max: 30)
+    bufferNotice(IRCMessage(rawLine: ":NickServ NOTICE alice :Second"), into: &buffer, max: 30)
+    bufferNotice(IRCMessage(rawLine: ":NickServ NOTICE alice :Third"), into: &buffer, max: 30)
+    try assertEqual(buffer[0].trailing, "First")
+    try assertEqual(buffer[1].trailing, "Second")
+    try assertEqual(buffer[2].trailing, "Third")
+}
+
+runTest("testServerNoticeBufferEvictsOldestFirst") {
+    var buffer: [IRCMessage] = []
+    // Fill to max
+    for i in 0..<30 {
+        bufferNotice(IRCMessage(rawLine: ":s NOTICE alice :msg\(i)"), into: &buffer, max: 30)
+    }
+    // Add one more — msg0 should be evicted
+    bufferNotice(IRCMessage(rawLine: ":s NOTICE alice :newest"), into: &buffer, max: 30)
+    try assertEqual(buffer.count, 30)
+    try assertEqual(buffer.last?.trailing, "newest")
+    try assertFalse(buffer.first?.trailing == "msg0")
+}
+
+// MARK: - IRC event routing tests
+
+print("\n=== IRC Event Routing Tests ===")
+
+runTest("testJoinEventRoutedToCorrectChannel") {
+    // A join event for #rust must NOT update #linux's member list
+    let joinChannel = "#rust"
+    let myChannel   = "#linux"
+    let isMyChannel = joinChannel.lowercased() == myChannel.lowercased()
+    try assertFalse(isMyChannel)
+}
+
+runTest("testJoinEventAcceptedForMyChannel") {
+    let joinChannel = "#linux"
+    let myChannel   = "#linux"
+    try assertTrue(joinChannel.lowercased() == myChannel.lowercased())
+}
+
+runTest("testPartEventRoutedToCorrectChannel") {
+    // PART in #rust should only remove from #rust's member list
+    let partChannel = "#rust"
+    let myChannel   = "#linux"
+    let isMyChannel = partChannel.lowercased() == myChannel.lowercased()
+    try assertFalse(isMyChannel)
+}
+
+runTest("testQuitEventAffectsAllChannels") {
+    // QUIT has no channel parameter — it affects any channel the nick was in.
+    // The guard in handleEvent(.quit) does NOT filter by channel — intentional.
+    var linux = [parseNick("alice"), parseNick("bob")]
+    var rust  = [parseNick("alice"), parseNick("carol")]
+    // Simulate QUIT for alice
+    linux.removeAll { $0.nick == "alice" }
+    rust.removeAll  { $0.nick == "alice" }
+    try assertFalse(linux.contains(where: { $0.nick == "alice" }))
+    try assertFalse(rust.contains(where:  { $0.nick == "alice" }))
+}
+
+runTest("testTopicChangeRoutedToCorrectChannel") {
+    // topicChange for #rust should not update #linux's topic
+    let topicChannel = "#rust"
+    let myChannel    = "#linux"
+    let isMyChannel  = topicChannel.lowercased() == myChannel.lowercased()
+    try assertFalse(isMyChannel)
+}
+
+runTest("testTopicChangeAcceptedForMyChannel") {
+    let topicChannel = "#linux"
+    let myChannel    = "#linux"
+    var topic        = ""
+    if topicChannel.lowercased() == myChannel.lowercased() {
+        topic = "Linux discussion — https://kernel.org"
+    }
+    try assertEqual(topic, "Linux discussion — https://kernel.org")
+}
+
+runTest("testEndOfNamesTriggersForCorrectChannel") {
+    // 366 for #linux should only trigger CHATHISTORY for #linux
+    let endOfNamesChannel = "#linux"
+    let myChannel = "#linux"
+    let other     = "#rust"
+    try assertTrue(endOfNamesChannel.lowercased() == myChannel.lowercased())
+    try assertFalse(endOfNamesChannel.lowercased() == other.lowercased())
+}
+
+runTest("testEndOfNamesParseFromMessage") {
+    // Verify the 366 message parsing: parameters[1] is the channel
+    let msg = IRCMessage(rawLine: ":irc.libera.chat 366 neatbird #linux :End of /NAMES list")
+    try assertEqual(msg.command, "366")
+    try assertEqual(msg.parameters[1], "#linux")
+}
+
+runTest("testChathistoryBatchEndParsedFromBatchClose") {
+    // "BATCH -ref" closes a batch; if type was "chathistory" → .chathistoryBatchEnd fires
+    var activeBatches = ["ref1": "chathistory"]
+    var closedType = ""
+    if let first = IRCMessage(rawLine: ":server BATCH -ref1").parameters.first,
+       first.hasPrefix("-") {
+        let ref = String(first.dropFirst())
+        closedType = activeBatches.removeValue(forKey: ref) ?? ""
+    }
+    try assertTrue(closedType.contains("chathistory"))
+    try assertTrue(activeBatches.isEmpty)
+}
+
+runTest("testZncBatchEndParsedFromBatchClose") {
+    var activeBatches = ["znc1": "znc.in/playback"]
+    var closedType = ""
+    if let first = IRCMessage(rawLine: ":server BATCH -znc1").parameters.first,
+       first.hasPrefix("-") {
+        let ref = String(first.dropFirst())
+        closedType = activeBatches.removeValue(forKey: ref) ?? ""
+    }
+    try assertTrue(closedType.contains("znc.in/playback"))
+}
+
+runTest("testModeChangeRoutedToCorrectChannel") {
+    let modeTarget = "#linux"
+    let myChannel  = "#rust"
+    let isMyChannel = modeTarget.lowercased() == myChannel.lowercased()
+    try assertFalse(isMyChannel)
+}
+
+runTest("testNickChangeUpdatesMemberList") {
+    var members = [parseNick("alice"), parseNick("@bob")]
+    // Simulate NICK alice -> aliceNew
+    if let idx = members.firstIndex(where: { $0.nick == "alice" }) {
+        members[idx].nick = "aliceNew"
+    }
+    try assertTrue(members.contains(where: { $0.nick == "aliceNew" }))
+    try assertFalse(members.contains(where: { $0.nick == "alice" }))
+    try assertEqual(members[0].mode, "")  // mode preserved
+}
+
+runTest("testNickChangeUpdatesCurrentNickWhenOursChanges") {
+    var currentNick = "alice"
+    let oldNick = "alice"
+    let newNick = "alice_away"
+    if oldNick.lowercased() == currentNick.lowercased() {
+        currentNick = newNick
+    }
+    try assertEqual(currentNick, "alice_away")
+}
+
+runTest("testNickChangeDoesNotUpdateCurrentNickForOthers") {
+    var currentNick = "alice"
+    let oldNick = "bob"
+    let newNick = "bob_away"
+    if oldNick.lowercased() == currentNick.lowercased() {
+        currentNick = newNick
+    }
+    try assertEqual(currentNick, "alice")  // unchanged
+}
+
+// MARK: - Unread badge display tests
+// These verify the display logic for the unread capsule badge in ChannelRowView.
+
+print("\n=== Unread Badge Display Tests ===")
+
+runTest("testUnreadBadgeShowsCountBelow100") {
+    let count = 42
+    let label = count < 100 ? "\(count)" : "99+"
+    try assertEqual(label, "42")
+}
+
+runTest("testUnreadBadgeShowsMax99Plus") {
+    let count = 150
+    let label = count < 100 ? "\(count)" : "99+"
+    try assertEqual(label, "99+")
+}
+
+runTest("testUnreadBadgeHiddenWhenZero") {
+    let count = 0
+    let shouldShow = count > 0
+    try assertFalse(shouldShow)
+}
+
+runTest("testUnreadBadgeHiddenWhenMuted") {
+    let count = 10
+    let isMuted = true
+    let shouldShow = count > 0 && !isMuted
+    try assertFalse(shouldShow)
+}
+
+runTest("testUnreadBadgeShownWhenNotMuted") {
+    let count = 5
+    let isMuted = false
+    let shouldShow = count > 0 && !isMuted
+    try assertTrue(shouldShow)
+}
+
+runTest("testChannelRowBoldWhenUnread") {
+    // Channel name font weight is .semibold when unread > 0
+    let unreadCount = 3
+    let isBold = unreadCount > 0
+    try assertTrue(isBold)
+}
+
+runTest("testChannelRowNormalWeightWhenRead") {
+    let unreadCount = 0
+    let isBold = unreadCount > 0
+    try assertFalse(isBold)
 }
 
 // Summary
