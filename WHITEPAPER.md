@@ -216,7 +216,28 @@ A partial list of regressions introduced during fixes:
 
 Each regression was caught by CI or device testing within one to two commits. The automated test suite was the mechanism that made this tolerable.
 
-### 4.5 Smaller Open-Source Models Are Not Viable for This Scale
+### 4.5 The O(N²) Crash the Agent Created, Didn't Catch, and Couldn't Find Itself
+
+The most instructive failure in the entire project was a performance bug that caused the app to freeze for ten seconds and then be killed by the iOS watchdog process — silently, with no crash report — every time the user opened a channel with chat history. The agent introduced it, the agent's unit tests did not catch it, and a human tester had to find it.
+
+**What the agent built:** `ChannelViewModel.rebuildDisplay()` was called after every single message append — including during CHATHISTORY batch replay. `rebuildDisplay()` iterates all accumulated messages. For a batch of N history messages, this produced N calls to an O(N) function: 1+2+3+...+N = O(N²) total work. Simultaneously, `MessageRowView.isMention` compiled a fresh `NSRegularExpression` on every render of every message row. With SwiftUI re-rendering all rows on every `displayMessages` change, this produced hundreds of regex compilations in the same tight loop.
+
+The combined effect saturated the main thread. iOS terminated the app after approximately ten seconds. Because this was a watchdog kill rather than a code crash, it produced no symbolicated crash report — only a "App Quit Unexpectedly" dialog. The user reported: "it freezes up for a long time, and finally has a crash report window, but I never receive the crash report." This is the characteristic fingerprint of a watchdog termination.
+
+**Why the agent's tests missed it:** The agent wrote 191 unit tests covering functional correctness of every component. Those tests verified that `rebuildDisplay()` produced correct output given correct input. No test asked how many times `rebuildDisplay()` would be called when 100 history messages arrived via Combine. No test asked whether `isMention` compiled a new regex on every invocation or reused a cached one. The agent assembled individually-correct components in a way that was collectively catastrophic under realistic load — and its test suite, which it also wrote, was not designed to catch this class of failure.
+
+**Why the fixes required three CI cycles:** Once the human identified the symptom, the agent correctly diagnosed all three root causes and proposed correct fixes. The fixes themselves — batching `rebuildDisplay()`, caching the regex in `NSCache`, converting `rulesURL` to a `@Published var` — are all sound. But implementing them introduced two new compilation failures that only appeared on the CI's macOS/Xcode 16.4 environment, not on the Linux `swift run` test harness used locally:
+
+1. `@Published private(set)` with `didSet` is not supported by Xcode 16.4's Swift compiler in the way the agent expected. This required one CI cycle to discover and one to fix incompletely.
+2. In fixing the `@Published private(set)` issue, an edit to `ChannelViewModel.swift` silently deleted five `@Published` property declarations — `members`, `currentNick`, `isLoadingHistory`, `unreadCount`, and `failedMessageIds`. These are the core observable properties the entire ViewModel is built around. They were deleted because the agent's edit used an anchor pattern that spanned the section containing them, and the replacement text did not include them. The agent did not verify that the edit preserved all content between the anchor points.
+
+The deleted properties caused 17 compilation errors across 3 view files. The local `swift run` test suite passed because the standalone Swift package does not compile SwiftUI views. CI failed. A human had to prompt "check the build." The agent diagnosed the errors, restored the properties, and pushed again. Green.
+
+Total time from first performance fix push to final green build: approximately 1.5 hours across four CI runs, each requiring a human to prompt the next step.
+
+**The compound lesson:** The agent introduced an O(N²) bug. Its own tests did not catch it. A human found it at runtime. The agent's fix introduced a silent code deletion. Its own tests did not catch that either. A different human prompt found it. The test suite that was supposed to be the safety net had two structural gaps: it did not test performance characteristics of integrated paths, and it did not run on the same compiler toolchain as the production build.
+
+### 4.6 Smaller Open-Source Models Are Not Viable for This Scale
 
 Prior to the OpenCode/Claude Sonnet approach, the team experimented with locally-run open-source models. The experience was instructive in establishing what the minimum viable capability level is.
 
@@ -277,10 +298,12 @@ The agent wrote the CI workflow that consumes all of these secrets. It cannot ge
 | Unit tests | 191 across 25 suites |
 | UI view files | 31 |
 | CI builds triggered | ~220 (one per commit) |
-| CI builds failing (compilation errors) | ~15 (~7%) |
+| CI builds failing (compilation errors) | ~18 (~8%) |
 | Major architectural rework cycles | 3 |
 | Bugs requiring 3+ fix attempts | 6+ |
 | Performance bugs causing watchdog crash | 1 (O(N²) + per-render regex) |
+| CI failures caused by agent's own fix introducing new bugs | 3 (for one performance fix) |
+| Agent-introduced silent code deletions caught only by CI | 1 (5 @Published properties dropped) |
 | Human application code written | 0 lines |
 | Human protocol research (estimated) | ~8 hours |
 | Apple dev account / CI plumbing (estimated) | ~7 hours |
@@ -336,22 +359,80 @@ The gap between "the agent wrote all the code" and "the app is on the App Store"
 
 Project timelines should account for this plumbing as a separate category from agentic coding time. They should not be conflated.
 
-### L8: The agent will silently introduce O(N²) performance bugs
+### L8: Unit tests matter more for agentic coding than for any other development approach — and the agent won't write the right ones without direction
 
-The most consequential performance failure we observed was a main-thread watchdog crash that appeared only at runtime, never as a compilation error or test failure, and produced no crash report.
+The most dangerous failure mode we encountered was not a bug the agent wrote — it was a class of bugs the agent's tests were structurally incapable of catching.
 
-The agent had designed `ChannelViewModel.rebuildDisplay()` to be called after every single message append. During IRC chat history replay (CHATHISTORY LATEST, receiving 100 messages in a batch), each message fired `append()` → `rebuildDisplay()`. `rebuildDisplay()` is O(N) — it iterates all accumulated messages. The result: 100 messages generated 1+2+3+...+100 = 5,050 iterations, with each iteration also triggering a SwiftUI layout pass via the `@Published` `displayMessages` property.
+The agent produced 191 unit tests. Every one of them asserted functional correctness: given this input, produce this output. Not one of them asked: how many times is this function called under realistic load? How many objects are allocated per render? What happens to computational complexity when N is 100 instead of 1?
 
-Simultaneously, `MessageRowView` — the view rendering each individual message bubble — contained a `isMention` computed property that called `String.range(of:options:.regularExpression)`, which internally compiles a new `NSRegularExpression` object on every invocation. With 100+ visible message rows, and SwiftUI re-rendering rows on every `displayMessages` change, this produced hundreds of regex compilations in the same tight loop.
+The O(N²) watchdog crash was not caught by any of those 191 tests because none of them modeled the integrated rendering pipeline under load. The agent wrote tests for the pieces it could reason about discretely. It did not spontaneously reason about the emergent behavior of those pieces combined — `append()` calling `rebuildDisplay()` calling SwiftUI's `@Published` observer triggering a layout pass, 100 times in sequence, while `isMention` compiled a fresh regex per row per pass.
 
-The combined effect saturated the main thread. After approximately ten seconds, iOS's watchdog process terminated the app. The termination appeared as an "App Quit Unexpectedly" dialog — no stack trace, no crash report in Xcode's organizer. This is expected behavior for watchdog kills (they generate `jetsam` events, not symbolicated crash logs), which is why the user reported that crash reports never arrived.
+This is not a limitation unique to Claude Sonnet. It is a structural property of how current models approach test generation: they write tests for the behaviors they were instructed to implement, covering the code paths they understand as important. They do not write tests for the performance failure modes they didn't predict.
 
-**The fixes:**
-- History batch replay: use `appendRaw()` per message (no rebuild), then `rebuildDisplay()` once when the `BATCH` closes — reducing O(N²) to O(N)
-- Mention regex: cache compiled `NSRegularExpression` in `NSCache<NSString, NSRegularExpression>` keyed by lowercased nick — compiled once per nick, reused for every render
-- Topic URL detection: convert `rulesURL` from a computed property (which created `NSDataDetector` on every call) to a `@Published var` updated only in the `topic` property's `didSet` observer
+**The implication for teams adopting agentic coding:** Unit tests written entirely by the agent are necessary but not sufficient. A human must direct the agent to write tests for the properties the agent won't think to test:
 
-**The lesson**: The agent does not reason about computational complexity when assembling components. It combines individually-correct pieces in ways that produce quadratic or worse behavior at scale. Algorithmic complexity review of hot paths — message lists, scroll callbacks, render-phase computed properties — must be part of the human review process for any UI-intensive feature.
+- **Performance path tests**: for any function that is called in a loop (especially a Combine subscriber processing a batch), assert an upper bound on the number of calls. `testRebuildCalledOncePerBatch()` would have caught the O(N²) bug before any human ran the app.
+- **Render-phase invariants**: for computed properties on View structs, assert that they do not perform expensive operations (regex compilation, object allocation, database calls). These execute on every layout pass.
+- **Integration tests under load**: for any feature involving batched data (history replay, bulk DB loads, multi-message events), test with N=100, not N=1.
+- **Post-edit completeness checks**: after any large edit to a file, a test that simply exercises every public method of the affected class will immediately surface "cannot find X in scope" errors from silent property deletions — before CI, not after.
+
+The second agent-introduced failure in the same fix cycle — five critical `@Published` property declarations silently deleted from `ChannelViewModel.swift` — is a different but equally important category: **the agent's editing process can silently remove code it didn't intend to remove, and its own test suite won't catch it if the deleted code isn't exercised by the test runner.**
+
+When the agent uses a find-and-replace edit, it identifies a section of a file by an `oldString` anchor and replaces it with `newString`. If the `oldString` spans a region that contains code beyond what the agent intends to change, and that code is absent from `newString`, it is silently deleted. The agent does not diff its edit against the original to verify that only the intended changes were made. It does not check that every symbol referenced elsewhere in the file still exists after the edit.
+
+In this case: five `@Published` properties — `members`, `currentNick`, `isLoadingHistory`, `unreadCount`, `failedMessageIds` — were deleted. These properties are referenced in dozens of places throughout the same file and in three other view files. The local test suite (a Linux `swift run` package) passed because it doesn't compile SwiftUI views. The Xcode build on CI failed with 17 "cannot find X in scope" errors. The human had to prompt "check the build."
+
+**The defense against silent code deletion is a test suite that is comprehensive enough to exercise the deleted code.** If there had been a test that called `viewModel.send()`, `viewModel.members`, `viewModel.currentNick`, and `viewModel.isLoadingHistory` — even trivially — the Linux test runner would have failed immediately on those symbols being missing. The five deleted properties were never directly tested as symbols; they were only tested indirectly through higher-level behavior. That gap allowed the deletion to go undetected locally.
+
+**The practical rule:** for every `@Published` property, every public method, and every computed property on any `ObservableObject`, there should be at least one test that references it by name. Not necessarily a deep test — just one that will fail to compile if the declaration is removed. Think of these as "symbol existence tests." They are trivial to write and provide essential protection against the agent's most common editing failure mode.
+
+### L9: The agent's test environment and the production build environment are not the same — this gap will cost you CI cycles
+
+Throughout this project, unit tests ran via `swift run` on a Linux toolchain. This was fast (under two minutes) and provided a useful functional correctness signal. It did not tell us whether the code would compile on Xcode 16.4 on macOS with SwiftUI's specific type checker.
+
+This gap produced at least three avoidable CI failures:
+
+1. `@Published private(set)` combined with `didSet` is rejected by Xcode 16.4's Swift compiler in contexts involving `@ObservedObject` key-path lookup. This works on Linux. It fails on macOS. The agent had no way to know this without running a macOS build.
+
+2. `@Published private(set)` on its own (without `didSet`) also broke `@ObservedObject` dynamic member subscript in Xcode 16.4 — a compiler-version-specific behavior. Again: passes Linux, fails macOS.
+
+3. The silent property deletion described in L8 was caught by CI, not by local tests, specifically because the CI ran on macOS with Xcode and attempted to compile the full SwiftUI view hierarchy.
+
+The pattern across all three: the agent's local test runner was the wrong environment for catching the errors the agent was making. The tests passed locally. The build failed remotely. A human had to observe the failure, prompt the agent, and wait for another CI cycle.
+
+**The structural fix:** any project using agentic coding should run at minimum a compilation check in the production build environment on every commit — not just a language-level test runner. For iOS, this means running `xcodebuild build` (or at minimum `xcodebuild analyze`) in the CI pipeline before the full test suite. Compilation failures surface in minutes; a full archive takes fifteen. The faster the feedback loop between "agent edits code" and "code is verified against the real compiler," the fewer wasted CI cycles.
+
+More broadly: be explicit with the agent about what the local test runner can and cannot verify. If the agent believes that `swift run` passing means the build is clean, it will commit platform-specific failures with confidence. It should instead be directed to treat any edit that touches Swift type annotations, property wrappers, or SwiftUI view protocols as "must be verified by CI before considering done."
+
+### L10: How a working app eventually emerged from this process
+
+It is worth being explicit about how the app reached a working state, because the path was not linear and the agent did not get there alone.
+
+The app works. It connects to Libera.Chat, sends and receives messages in real time, loads chat history, shows unread badges, supports direct messages, reconnects automatically, and has been submitted to the App Store. This is a genuine result. It is also the result of a specific kind of human-agent collaboration that is worth documenting precisely.
+
+**What the agent contributed:**
+- All application code — 14,400 lines across 55 Swift files, zero lines written by a human
+- Correct diagnosis of most bugs once the symptom was described with sufficient precision
+- Architectural designs that were sound at the component level (the Combine fan-out, the `CheckedContinuation`-based CAP handshake, the SQLite migration system)
+- 191 unit tests covering functional correctness of protocol parsing, message routing, SASL encoding, member list management, and routing logic
+- The CI/CD pipeline including dynamic simulator detection, SPM caching, and TestFlight upload
+- All of the above without any human writing a single line of application code
+
+**What the human contributed:**
+- IRC protocol research (RFC 1459, IRCv3 CAP, CHATHISTORY draft spec) translated into precise implementation prompts
+- On-device testing — every runtime failure was discovered by a human running the app on a phone
+- Observation and articulation of symptoms the agent could not see (the freeze-and-crash, the wrong message alignment, the DM appearing in a channel)
+- Persistence through the agent's own self-inflicted regressions — three prompts of "check the build now" across one bug fix
+- Apple developer account, certificate, provisioning profile, and GitHub Actions secret setup
+- The judgment to push back when the agent's explanation seemed incomplete and ask it to think harder
+
+**What neither the agent nor the human could have done alone:**
+- The human alone could not have written 14,400 lines of Swift in twelve days
+- The agent alone would have never run the app on a phone and noticed the freeze
+- The agent alone would have written tests that passed but missed the O(N²) path
+- The human alone would not have diagnosed the actor deadlock or the `PASS` command killing the Libera.Chat connection
+
+The working app is the product of genuine collaboration: the agent as an extremely fast, extremely knowledgeable implementer with significant blind spots; the human as the domain expert, quality assurance function, and error-recovery supervisor. Neither role is optional at the current state of the technology.
 
 ---
 
@@ -398,17 +479,21 @@ The two largest unmet needs in the current agentic coding stack are:
 | Agentic tool | OpenCode | Terminal CLI, TodoWrite task tracker |
 | Model | Claude Sonnet (Bedrock) | `bedrock-claude-sonnet-4-6` |
 
-### B. Six Significant Bugs: Root Causes and Fix Attempts
+### B. Nine Significant Bugs: Root Causes, Fix Attempts, and How Each Was Found
 
-| Bug | Symptom | Root cause | Fix attempts |
-|---|---|---|---|
-| Actor deadlock in CAP negotiation | Messages appeared locally, never reached IRC server | Polling loop inside actor held execution context; `handleMessage()` starved | 3 (sleep → polling → CheckedContinuation) |
-| PASS sent to public servers | Connection silently died; sends failed | `server.password` (NickServ credential) sent as IRC PASS command to Libera.Chat | 3 (different code paths each time) |
-| CHATHISTORY before join confirmed | No chat history ever loaded | `CHATHISTORY` sent before `366 RPL_ENDOFNAMES`; server ignores it | 2 |
-| Single-slot callback overwrite | Messages dropped for non-active channels | `client.onMessage` overwritten on each channel switch | 3 (two patches, one architectural rewrite) |
-| DM navigation dead-end | "Send DM" returned to channel | Throwaway ViewModel + missing navPath push + wrong environment key | 3 |
-| `isFromCurrentUser` not persisted | Own messages appeared left-aligned after navigation | Field not in SQLite schema; loaded messages defaulted to `false` | 1 (clean fix once diagnosed) |
-| O(N²) history replay + per-render regex | App froze 10s then crashed with no crash report (watchdog kill) | `rebuildDisplay()` called per message in batch (N² iterations); `NSRegularExpression` compiled per row per render | 1 (once correctly diagnosed) |
+The "Caught by" column is particularly important: every runtime failure was found by a human running the app on a physical device. The two compilation failures that were caught only by CI were introduced by the agent itself while fixing a different bug.
+
+| Bug | Symptom | Root cause | Fix attempts | Caught by |
+|---|---|---|---|---|
+| Actor deadlock in CAP negotiation | Messages appeared locally, never reached IRC server | Polling loop inside actor held execution context; `handleMessage()` starved | 3 (sleep → polling → CheckedContinuation) | Human on device |
+| PASS sent to public servers | Connection silently died; sends failed | `server.password` (NickServ credential) sent as IRC PASS command to Libera.Chat | 3 (different code paths each time) | Human on device |
+| CHATHISTORY before join confirmed | No chat history ever loaded | `CHATHISTORY` sent before `366 RPL_ENDOFNAMES`; server ignores it | 2 | Human on device |
+| Single-slot callback overwrite | Messages dropped for non-active channels | `client.onMessage` overwritten on each channel switch | 3 (two patches, one architectural rewrite) | Human on device |
+| DM navigation dead-end | "Send DM" returned to channel | Throwaway ViewModel + missing navPath push + wrong environment key | 3 | Human on device |
+| `isFromCurrentUser` not persisted | Own messages appeared left-aligned after navigation | Field not in SQLite schema; loaded messages defaulted to `false` | 1 (clean fix once diagnosed) | Human on device |
+| O(N²) history replay + per-render regex | App froze 10s then silently killed — no crash report (watchdog termination) | `rebuildDisplay()` called N times for N history messages; `NSRegularExpression` compiled per row per render | 1 (correct fix first try once diagnosed) | Human on device |
+| `@Published private(set)` + Xcode 16.4 | CI compilation failure on 3 files | Xcode 16.4's Swift compiler rejects this property wrapper combination; Linux toolchain accepts it | 2 CI cycles | CI only — local tests passed |
+| 5 `@Published` properties silently deleted | CI compilation failure — "cannot find X in scope" across 3 view files | Agent edit anchor spanned property declarations; replacement omitted them; no local test referenced them by name | 1 CI cycle | CI only — local tests passed |
 
 ### C. Sample Prompt Patterns
 
@@ -438,13 +523,93 @@ OpenCode operates as a terminal CLI that maintains a persistent conversation wit
 
 **TodoWrite task tracking**: Before implementing a multi-step plan, the agent can populate a task list that it updates as work proceeds. This is not cosmetic — it prevents the agent from losing track of sub-tasks in long sessions and provides the human with a progress view.
 
-**Read-before-edit discipline**: OpenCode reads files before editing them and refuses to edit files it hasn't read in the current session. This prevents the most common class of agentic edit failures (editing based on a stale mental model of a file's current content).
+**Read-before-edit discipline**: OpenCode reads files before editing them and refuses to edit files it hasn't read in the current session. This prevents the most common class of agentic edit failures (editing based on a stale mental model of a file's current content). It does not, however, verify that an edit preserved all content that was in the original — only that the `oldString` anchor was found and replaced.
 
 **Parallel tool calls**: For independent operations (reading multiple files, running multiple searches), OpenCode batches tool calls in a single turn. This reduces session latency significantly on multi-file analysis tasks.
 
 **CI integration**: The agent can monitor GitHub Actions run status via `gh run watch` and parse compilation errors from log output, enabling a tight edit/build/diagnose loop without human mediation for compilation failures.
 
----
+### E. Unit Tests the Agent Should Have Written But Didn't
+
+This appendix documents specific tests that would have caught real bugs before they reached a device or CI. They are presented not as criticism but as a practical pattern library for teams directing agents on similar projects.
+
+**E1 — Call-count test for batch operations (would have caught O(N²) crash)**
+
+```swift
+// This test would have caught the O(N²) rebuildDisplay() bug.
+// The agent wrote tests asserting rebuildDisplay() produced correct output.
+// It never wrote a test asserting how many times it was called.
+func testHistoryBatchCallsRebuildOnce() {
+    var rebuildCount = 0
+    let vm = ChannelViewModel(...)
+    vm.onRebuildDisplay = { rebuildCount += 1 }  // inject a counter
+
+    // Simulate 100 history messages arriving (a realistic CHATHISTORY batch)
+    for i in 0..<100 {
+        vm.receiveHistoryMessage(makeMessage(i))
+    }
+    vm.flushHistoryBatch()  // batch end event
+
+    XCTAssertEqual(rebuildCount, 1,
+        "rebuildDisplay() must be called exactly once per batch, not once per message")
+}
+```
+
+**E2 — Render-phase purity test (would have caught per-render regex compilation)**
+
+```swift
+// Computed properties on View structs execute on every layout pass.
+// This test verifies isMention doesn't compile a new regex each time.
+func testIsMentionUsesRegexCache() {
+    var compileCount = 0
+    let originalInit = NSRegularExpression.init
+    // Inject a counter (or use the NSCache directly)
+
+    for _ in 0..<100 {
+        _ = isMention(content: "hey alice", nick: "alice")
+    }
+
+    XCTAssertEqual(compileCount, 1,
+        "isMention must compile the regex once and cache it, not once per call")
+}
+```
+
+**E3 — Symbol existence test (would have caught silent property deletion)**
+
+```swift
+// A trivial test that references every @Published property by name.
+// If any property is accidentally deleted during an edit, this test
+// fails to compile immediately — before CI, before any human runs the app.
+func testChannelViewModelPublishedPropertiesExist() {
+    let vm = ChannelViewModel(serverId: "s", channelName: "#test", ircManager: .shared)
+    // Just access them — the test is the compilation, not the assertion
+    _ = vm.displayMessages
+    _ = vm.topic
+    _ = vm.members
+    _ = vm.isLoadingHistory
+    _ = vm.currentNick
+    _ = vm.unreadCount
+    _ = vm.failedMessageIds
+    _ = vm.rulesURL
+}
+```
+
+**E4 — Platform behavior test (would have helped surface Xcode 16.4 incompatibility)**
+
+```swift
+// Tests that use @ObservedObject subscript syntax will fail on Xcode 16.4
+// if @Published properties use private(set) — even if the Linux toolchain passes.
+// Writing a test that uses the projected value ($vm.members) exercises the
+// exact type-checker path that was broken.
+func testChannelViewModelObservableBinding() {
+    let vm = ChannelViewModel(...)
+    let binding = Binding(get: { vm.members }, set: { _ in })
+    XCTAssertNotNil(binding)
+    // If @Published private(set) breaks @ObservedObject, this fails to compile
+}
+```
+
+The pattern in E1, E2, and E3 is the same: the agent wrote tests for "what does this function return" but not "how does this function behave when called in the way the real system calls it." Directing the agent explicitly to write call-count tests, render-phase purity tests, and symbol existence tests for every major component would have caught all three of the post-fix regressions without any CI cycles.
 
 *Parso Consulting — April 2026*
 
