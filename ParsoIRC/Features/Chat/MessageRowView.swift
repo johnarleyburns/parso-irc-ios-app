@@ -1,5 +1,13 @@
 import SwiftUI
 
+// MARK: - Mention regex cache
+//
+// NSCache is thread-safe and handles memory pressure automatically.
+// The regex for a given nick is compiled ONCE and reused for every
+// message row render, eliminating the O(messages) regex compilations
+// per SwiftUI layout pass that caused the main-thread hang / watchdog crash.
+private let mentionRegexCache = NSCache<NSString, NSRegularExpression>()
+
 /// Renders a single row in the message list.
 ///
 /// Handles four visual styles:
@@ -40,13 +48,23 @@ struct MessageRowView: View {
     private var isAction: Bool { message.type == .action }
     private var isNotice: Bool { message.type == .notice }
 
-    // True when our nick appears as a whole word in the message (mention highlight)
+    // True when our nick appears as a whole word in the message (mention highlight).
+    // Uses a cached NSRegularExpression — compiled once per unique nick, never per render.
     private var isMention: Bool {
         guard !isOutgoing && !currentNick.isEmpty else { return false }
-        let escaped = NSRegularExpression.escapedPattern(for: currentNick)
-        // Match nick as a whole word, optionally followed by : or ,
-        let pattern = "(?i)(?<![\\w])\\Q\(escaped)\\E(?![\\w])"
-        return message.content.range(of: pattern, options: .regularExpression) != nil
+        let cacheKey = currentNick.lowercased() as NSString
+        let regex: NSRegularExpression
+        if let cached = mentionRegexCache.object(forKey: cacheKey) {
+            regex = cached
+        } else {
+            let escaped = NSRegularExpression.escapedPattern(for: currentNick)
+            let pattern = "(?i)(?<![\\w])\\Q\(escaped)\\E(?![\\w])"
+            guard let compiled = try? NSRegularExpression(pattern: pattern) else { return false }
+            mentionRegexCache.setObject(compiled, forKey: cacheKey)
+            regex = compiled
+        }
+        let range = NSRange(message.content.startIndex..., in: message.content)
+        return regex.firstMatch(in: message.content, range: range) != nil
     }
 
     var body: some View {

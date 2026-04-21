@@ -271,15 +271,16 @@ The agent wrote the CI workflow that consumes all of these secrets. It cannot ge
 | Metric | Value |
 |---|---|
 | Total calendar days | 12 (April 9–21, 2026) |
-| Total commits | 213 |
+| Total commits | 220+ |
 | Production lines of code | ~14,400 |
 | Source files | 55 Swift files |
-| Unit tests | 175 across 23 suites |
+| Unit tests | 191 across 25 suites |
 | UI view files | 31 |
-| CI builds triggered | ~213 (one per commit) |
+| CI builds triggered | ~220 (one per commit) |
 | CI builds failing (compilation errors) | ~15 (~7%) |
 | Major architectural rework cycles | 3 |
 | Bugs requiring 3+ fix attempts | 6+ |
+| Performance bugs causing watchdog crash | 1 (O(N²) + per-render regex) |
 | Human application code written | 0 lines |
 | Human protocol research (estimated) | ~8 hours |
 | Apple dev account / CI plumbing (estimated) | ~7 hours |
@@ -334,6 +335,23 @@ The agent can handle broad scope. It cannot simultaneously maintain correctness 
 The gap between "the agent wrote all the code" and "the app is on the App Store" is filled entirely by manual work. Developer accounts, certificates, provisioning profiles, secret management, and on-device testing cannot be delegated today. This gap is not shrinking as fast as the code generation capabilities are improving.
 
 Project timelines should account for this plumbing as a separate category from agentic coding time. They should not be conflated.
+
+### L8: The agent will silently introduce O(N²) performance bugs
+
+The most consequential performance failure we observed was a main-thread watchdog crash that appeared only at runtime, never as a compilation error or test failure, and produced no crash report.
+
+The agent had designed `ChannelViewModel.rebuildDisplay()` to be called after every single message append. During IRC chat history replay (CHATHISTORY LATEST, receiving 100 messages in a batch), each message fired `append()` → `rebuildDisplay()`. `rebuildDisplay()` is O(N) — it iterates all accumulated messages. The result: 100 messages generated 1+2+3+...+100 = 5,050 iterations, with each iteration also triggering a SwiftUI layout pass via the `@Published` `displayMessages` property.
+
+Simultaneously, `MessageRowView` — the view rendering each individual message bubble — contained a `isMention` computed property that called `String.range(of:options:.regularExpression)`, which internally compiles a new `NSRegularExpression` object on every invocation. With 100+ visible message rows, and SwiftUI re-rendering rows on every `displayMessages` change, this produced hundreds of regex compilations in the same tight loop.
+
+The combined effect saturated the main thread. After approximately ten seconds, iOS's watchdog process terminated the app. The termination appeared as an "App Quit Unexpectedly" dialog — no stack trace, no crash report in Xcode's organizer. This is expected behavior for watchdog kills (they generate `jetsam` events, not symbolicated crash logs), which is why the user reported that crash reports never arrived.
+
+**The fixes:**
+- History batch replay: use `appendRaw()` per message (no rebuild), then `rebuildDisplay()` once when the `BATCH` closes — reducing O(N²) to O(N)
+- Mention regex: cache compiled `NSRegularExpression` in `NSCache<NSString, NSRegularExpression>` keyed by lowercased nick — compiled once per nick, reused for every render
+- Topic URL detection: convert `rulesURL` from a computed property (which created `NSDataDetector` on every call) to a `@Published var` updated only in the `topic` property's `didSet` observer
+
+**The lesson**: The agent does not reason about computational complexity when assembling components. It combines individually-correct pieces in ways that produce quadratic or worse behavior at scale. Algorithmic complexity review of hot paths — message lists, scroll callbacks, render-phase computed properties — must be part of the human review process for any UI-intensive feature.
 
 ---
 
@@ -390,6 +408,7 @@ The two largest unmet needs in the current agentic coding stack are:
 | Single-slot callback overwrite | Messages dropped for non-active channels | `client.onMessage` overwritten on each channel switch | 3 (two patches, one architectural rewrite) |
 | DM navigation dead-end | "Send DM" returned to channel | Throwaway ViewModel + missing navPath push + wrong environment key | 3 |
 | `isFromCurrentUser` not persisted | Own messages appeared left-aligned after navigation | Field not in SQLite schema; loaded messages defaulted to `false` | 1 (clean fix once diagnosed) |
+| O(N²) history replay + per-render regex | App froze 10s then crashed with no crash report (watchdog kill) | `rebuildDisplay()` called per message in batch (N² iterations); `NSRegularExpression` compiled per row per render | 1 (once correctly diagnosed) |
 
 ### C. Sample Prompt Patterns
 

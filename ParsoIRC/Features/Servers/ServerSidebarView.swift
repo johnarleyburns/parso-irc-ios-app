@@ -119,7 +119,9 @@ struct ServerSidebarView: View {
 
             if expandedServers.contains(server.id) {
                 // ── Channels ──────────────────────────────────────────────────
-                ForEach(server.channels) { channel in
+                // Only show channels the user is currently joined to.
+                // Left channels have joinedAt = nil and must not appear here.
+                ForEach(server.channels.filter { $0.joinedAt != nil }) { channel in
                     ChannelRowView(
                         channel: channel,
                         serverId: server.id,

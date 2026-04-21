@@ -274,7 +274,10 @@ final class DatabaseManager {
         var result: [Server] = []
         
         for row in try db.prepare(servers) {
-            let serverChannels = try fetchChannels(forServer: row[serverId])
+            // Only load channels the user is currently joined to.
+            // Left channels (joinedAt = nil) are kept in the DB for history
+            // but must not appear in the server/channel sidebar list.
+            let serverChannels = try fetchJoinedChannels(forServer: row[serverId])
             
             let server = Server(
                 id: row[serverId],
@@ -359,61 +362,55 @@ final class DatabaseManager {
     
     func fetchChannels(forServer sid: String) throws -> [Channel] {
         guard let db = db else { return [] }
-        
         var result: [Channel] = []
         let query = channels.filter(channelServerId == sid)
-        
         for row in try db.prepare(query) {
-            let channel = Channel(
-                id: row[channelId],
-                serverId: row[channelServerId],
-                name: row[channelName],
-                topic: row[channelTopic],
-                isMuted: row[channelMuted] == 1,
-                notifications: Channel.NotificationLevel(rawValue: row[channelNotifications]) ?? .mentions,
-                lastReadMessageId: row[channelLastReadMessageId],
-                joinedAt: row[channelJoinedAt].flatMap { dateFormatter.date(from: $0) },
-                isWatched: row[channelIsWatched] == 1,
-                lastNotifiedAt: row[channelLastNotifiedAt].flatMap { dateFormatter.date(from: $0) },
-                lastCheckedAt: row[channelLastCheckedAt].flatMap { dateFormatter.date(from: $0) },
-                notifyOnAnyMessage: row[channelNotifyOnAnyMessage] == 1,
-                isDM: (try? row.get(channelIsDM) == 1) ?? false,
-                unreadCount: (try? row.get(channelUnreadCount)) ?? 0
-            )
-            result.append(channel)
+            result.append(channelFromRow(row))
         }
-        
         return result
+    }
+
+    /// Returns only channels the user is currently joined to (joinedAt IS NOT NULL).
+    /// Used by `fetchServers()` so left channels never appear in the sidebar.
+    func fetchJoinedChannels(forServer sid: String) throws -> [Channel] {
+        guard let db = db else { return [] }
+        var result: [Channel] = []
+        let query = channels.filter(channelServerId == sid && channelJoinedAt != nil)
+        for row in try db.prepare(query) {
+            result.append(channelFromRow(row))
+        }
+        return result
+    }
+
+    /// Converts a SQLite row to a `Channel` model.
+    private func channelFromRow(_ row: Row) -> Channel {
+        Channel(
+            id: row[channelId],
+            serverId: row[channelServerId],
+            name: row[channelName],
+            topic: row[channelTopic],
+            isMuted: row[channelMuted] == 1,
+            notifications: Channel.NotificationLevel(rawValue: row[channelNotifications]) ?? .mentions,
+            lastReadMessageId: row[channelLastReadMessageId],
+            joinedAt: row[channelJoinedAt].flatMap { dateFormatter.date(from: $0) },
+            isWatched: row[channelIsWatched] == 1,
+            lastNotifiedAt: row[channelLastNotifiedAt].flatMap { dateFormatter.date(from: $0) },
+            lastCheckedAt: row[channelLastCheckedAt].flatMap { dateFormatter.date(from: $0) },
+            notifyOnAnyMessage: row[channelNotifyOnAnyMessage] == 1,
+            isDM: (try? row.get(channelIsDM) == 1) ?? false,
+            unreadCount: (try? row.get(channelUnreadCount)) ?? 0
+        )
     }
     
     // MARK: - Watch Channel Operations
     
     func getWatchedChannels() throws -> [Channel] {
         guard let db = db else { return [] }
-        
         var result: [Channel] = []
         let query = channels.filter(channelIsWatched == 1)
-        
         for row in try db.prepare(query) {
-            let channel = Channel(
-                id: row[channelId],
-                serverId: row[channelServerId],
-                name: row[channelName],
-                topic: row[channelTopic],
-                isMuted: row[channelMuted] == 1,
-                notifications: Channel.NotificationLevel(rawValue: row[channelNotifications]) ?? .mentions,
-                lastReadMessageId: row[channelLastReadMessageId],
-                joinedAt: row[channelJoinedAt].flatMap { dateFormatter.date(from: $0) },
-                isWatched: true,
-                lastNotifiedAt: row[channelLastNotifiedAt].flatMap { dateFormatter.date(from: $0) },
-                lastCheckedAt: row[channelLastCheckedAt].flatMap { dateFormatter.date(from: $0) },
-                notifyOnAnyMessage: row[channelNotifyOnAnyMessage] == 1,
-                isDM: (try? row.get(channelIsDM) == 1) ?? false,
-                unreadCount: (try? row.get(channelUnreadCount)) ?? 0
-            )
-            result.append(channel)
+            result.append(channelFromRow(row))
         }
-        
         return result
     }
     

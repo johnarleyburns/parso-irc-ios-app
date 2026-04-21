@@ -21,36 +21,15 @@ final class ChannelViewModel: ObservableObject {
     @Published private(set) var displayMessages: [DisplayMessage] = []
 
     /// Current channel topic.
-    @Published private(set) var topic: String = ""
-
-    /// Live member list (populated from NAMES reply and updated on JOIN/PART/QUIT/NICK).
-    @Published private(set) var members: [ChannelMember] = []
-
-    /// True while the initial history load is in progress.
-    @Published private(set) var isLoadingHistory: Bool = false
-
-    /// The nickname this client is currently using on the server.
-    @Published private(set) var currentNick: String = ""
-
-    /// Unread count since the last time this channel was selected.
-    @Published private(set) var unreadCount: Int = 0
-
-    // MARK: - Send error tracking
-
-    /// IDs of messages that failed to send (for UI retry indicator).
-    @Published private(set) var failedMessageIds: Set<String> = []
+    @Published private(set) var topic: String = "" {
+        didSet { updateRulesURL() }
+    }
 
     /// The first URL found in the channel topic, if any (used for "Rules" button).
-    var rulesURL: URL? {
-        guard !topic.isEmpty else { return nil }
-        guard let detector = try? NSDataDetector(
-            types: NSTextCheckingResult.CheckingType.link.rawValue) else { return nil }
-        let range = NSRange(topic.startIndex..., in: topic)
-        let match = detector.firstMatch(in: topic, options: [], range: range)
-        guard let urlRange = match?.range,
-              let swiftRange = Range(urlRange, in: topic) else { return nil }
-        return URL(string: String(topic[swiftRange]))
-    }
+    /// Recomputed only when `topic` changes — NOT on every render.
+    /// Previously a computed property that created NSDataDetector on every call,
+    /// causing unnecessary allocations on every message-list layout pass.
+    @Published private(set) var rulesURL: URL? = nil
 
     let serverId: String
     let channelName: String   // e.g. "#linux"
@@ -159,6 +138,20 @@ final class ChannelViewModel: ObservableObject {
 
     var channelId: String { _cachedChannelId }
 
+    // MARK: - Topic URL extraction
+
+    /// Scans the current topic for the first URL and caches it in `rulesURL`.
+    /// Called only when `topic` changes via its `didSet` observer — never on render.
+    private func updateRulesURL() {
+        guard !topic.isEmpty else { rulesURL = nil; return }
+        guard let detector = try? NSDataDetector(
+            types: NSTextCheckingResult.CheckingType.link.rawValue) else { rulesURL = nil; return }
+        let range = NSRange(topic.startIndex..., in: topic)
+        guard let match = detector.firstMatch(in: topic, options: [], range: range),
+              let swiftRange = Range(match.range, in: topic) else { rulesURL = nil; return }
+        rulesURL = URL(string: String(topic[swiftRange]))
+    }
+
     // MARK: Persisted history
 
     private func loadPersistedMessages() async {
@@ -257,7 +250,10 @@ final class ChannelViewModel: ObservableObject {
         )
 
         if isHistory {
-            append(msg, persist: false)
+            // History batch: accumulate without rebuilding on every message.
+            // rebuildDisplay() will be called once when the batch closes
+            // (chathistoryBatchEnd / zncBatchEnd), reducing O(N²) to O(N).
+            appendRaw(msg)
             pendingHistoryMessageCount += 1
         } else {
             append(msg, persist: false)
@@ -369,7 +365,9 @@ final class ChannelViewModel: ObservableObject {
                 channelId: channelId, sender: "system",
                 content: "── \(count) message\(count == 1 ? "" : "s") loaded from history ──",
                 type: .system, isFromCurrentUser: false)
-            append(sep, persist: false)
+            // appendRaw then a single rebuildDisplay — not append() which would call rebuildDisplay twice
+            appendRaw(sep)
+            rebuildDisplay()
 
         case .zncBatchEnd:
             guard pendingHistoryMessageCount > 0 else { return }
@@ -379,7 +377,8 @@ final class ChannelViewModel: ObservableObject {
                 channelId: channelId, sender: "system",
                 content: "── ZNC replayed \(count) message\(count == 1 ? "" : "s") ──",
                 type: .system, isFromCurrentUser: false)
-            append(sep, persist: false)
+            appendRaw(sep)
+            rebuildDisplay()
 
         // ── Pass-through numerics ────────────────────────────────────────────
         case .unhandled:
