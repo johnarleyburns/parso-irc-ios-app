@@ -76,8 +76,29 @@ final class IRCClientManager: ObservableObject {
     private var serverNoticeBuffer: [String: [IRCMessage]] = [:]
     private let serverNoticeBufferMax = 30
 
-    /// Published so ServerSidebarView can observe when new DM channels are created.
-    @Published private(set) var dmChannelIds: Set<String> = []
+    /// Published so `ServerSidebarView` can observe when a channel is joined or left
+    /// and reload the channel list without requiring a full reconnect event.
+    @Published private(set) var channelMembershipVersion: Int = 0
+
+    /// Leaves a channel: sends PART, clears `joinedAt` in the DB, clears unread,
+    /// and bumps `channelMembershipVersion` so the sidebar reloads.
+    func leaveChannel(_ channelName: String, serverId: String) {
+        Task {
+            guard let client = connections[serverId] else { return }
+            try? await client.leave(channel: channelName)
+            // Clear joinedAt so the channel isn't auto-rejoined on next connect
+            if let ch = (try? DatabaseManager.shared.fetchChannels(forServer: serverId))?
+                .first(where: { $0.name.lowercased() == channelName.lowercased() }) {
+                var updated = ch
+                updated.joinedAt = nil
+                try? DatabaseManager.shared.saveChannel(updated, serverId: serverId)
+                clearUnread(channelId: ch.id)
+            }
+            await MainActor.run {
+                self.channelMembershipVersion += 1
+            }
+        }
+    }
 
     func messagePublisher(for serverId: String) -> AnyPublisher<IRCMessage, Never> {
         (messageSubjects[serverId] ?? PassthroughSubject()).eraseToAnyPublisher()
@@ -242,7 +263,20 @@ final class IRCClientManager: ObservableObject {
             Task { @MainActor in
                 guard let self else { return }
                 self.handleIncomingMessage(msg, serverId: server.id)
-                msgSubject.send(msg)
+
+                // Don't re-broadcast the server's echo of our own outgoing messages.
+                // ChannelViewModel.send() already appends them optimistically, so
+                // broadcasting the echo causes a duplicate second bubble.
+                // History replay messages (tagged with @batch=…) must still fan out.
+                let myNick = self.currentNicknames[server.id] ?? ""
+                let senderNick = msg.source?.nick ?? ""
+                let isOwnEcho = !myNick.isEmpty
+                    && senderNick.lowercased() == myNick.lowercased()
+                    && msg.tags?["batch"] == nil
+
+                if !isOwnEcho {
+                    msgSubject.send(msg)
+                }
             }
         }
 

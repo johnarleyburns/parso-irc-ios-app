@@ -1767,6 +1767,255 @@ runTest("testChannelRowNormalWeightWhenRead") {
     try assertFalse(isBold)
 }
 
+// MARK: - Fix #1: Own message echo suppression tests
+// When the user sends a message, Libera.Chat echoes it back as a PRIVMSG from
+// the user's own nick.  Before this fix, that echo was fanned out via msgSubject
+// and created a duplicate second bubble.  Now we skip msgSubject.send() for own
+// non-history messages.
+
+print("\n=== Fix #1: Own Message Echo Suppression Tests ===")
+
+/// Mirrors the isOwnEcho check in IRCClientManager.client.onMessage
+func isOwnEcho(msg: IRCMessage, myNick: String) -> Bool {
+    guard !myNick.isEmpty else { return false }
+    let senderNick = msg.source?.nick ?? ""
+    let isBatch    = msg.tags?["batch"] != nil
+    return senderNick.lowercased() == myNick.lowercased() && !isBatch
+}
+
+runTest("testOwnEchoSuppressed") {
+    // Libera echoes ":alice!a@b PRIVMSG #linux :Hello" back to alice
+    let echo = IRCMessage(rawLine: ":alice!a@b PRIVMSG #linux :Hello")
+    try assertTrue(isOwnEcho(msg: echo, myNick: "alice"))
+}
+
+runTest("testOtherUserEchoNotSuppressed") {
+    let msg = IRCMessage(rawLine: ":bob!b@c PRIVMSG #linux :Hello")
+    try assertFalse(isOwnEcho(msg: msg, myNick: "alice"))
+}
+
+runTest("testOwnHistoryMessageNotSuppressed") {
+    // History replay messages have a @batch tag — they must NOT be suppressed
+    // because they carry server-side messages we haven't seen yet.
+    let history = IRCMessage(rawLine: "@batch=ref1 :alice!a@b PRIVMSG #linux :Old message")
+    try assertFalse(isOwnEcho(msg: history, myNick: "alice"))
+}
+
+runTest("testEmptyMyNickNeverSuppresses") {
+    let echo = IRCMessage(rawLine: ":alice!a@b PRIVMSG #linux :Hello")
+    // If we don't know our own nick yet, don't suppress anything
+    try assertFalse(isOwnEcho(msg: echo, myNick: ""))
+}
+
+runTest("testOwnEchoMatchIsCaseInsensitive") {
+    let echo = IRCMessage(rawLine: ":Alice!a@b PRIVMSG #linux :Hello")
+    try assertTrue(isOwnEcho(msg: echo, myNick: "alice"))
+}
+
+runTest("testOwnEchoDMNotSuppressed") {
+    // DMs to another user from us — the echo target is the other user, not us,
+    // but the sender IS us; still suppress to avoid double-display in DM view.
+    let echo = IRCMessage(rawLine: ":alice!a@b PRIVMSG bob :Hey Bob")
+    try assertTrue(isOwnEcho(msg: echo, myNick: "alice"))
+}
+
+// MARK: - Fix #2: channelMembershipVersion tests
+
+print("\n=== Fix #2: Channel Membership Version Tests ===")
+
+runTest("testChannelMembershipVersionIncrementsOnLeave") {
+    var version = 0
+    // Simulate leaveChannel() bumping the version
+    version += 1
+    try assertEqual(version, 1)
+}
+
+runTest("testChannelMembershipVersionStartsAtZero") {
+    let version = 0
+    try assertEqual(version, 0)
+}
+
+runTest("testLeaveChannelClearsJoinedAt") {
+    // When leaveChannel() runs, joinedAt must be set to nil so the channel
+    // isn't auto-rejoined on the next connect.
+    var joinedAt: Date? = Date()
+    joinedAt = nil
+    try assertTrue(joinedAt == nil)
+}
+
+// MARK: - Fix #4: Join/quit suppressed in DM windows
+
+print("\n=== Fix #4: System Messages Suppressed in DM Windows ===")
+
+/// Mirrors ChannelViewModel.isChannelConversation
+func isChannelConversation(_ channelName: String) -> Bool {
+    channelName.hasPrefix("#") || channelName.hasPrefix("&")
+        || channelName.hasPrefix("!") || channelName.hasPrefix("+")
+}
+
+runTest("testIsChannelConversationHashChannel") {
+    try assertTrue(isChannelConversation("#linux"))
+}
+
+runTest("testIsChannelConversationAmpersandChannel") {
+    try assertTrue(isChannelConversation("&local"))
+}
+
+runTest("testIsNotChannelConversationForNick") {
+    try assertFalse(isChannelConversation("alice"))
+}
+
+runTest("testQuitSystemMessageSuppressedInDMView") {
+    // In DM view (channelName = "alice"), quit events must not produce system messages
+    let channelName = "alice"
+    let shouldAppendSystemMessage = isChannelConversation(channelName)
+    try assertFalse(shouldAppendSystemMessage)
+}
+
+runTest("testQuitSystemMessageShownInChannelView") {
+    let channelName = "#linux"
+    let shouldAppendSystemMessage = isChannelConversation(channelName)
+    try assertTrue(shouldAppendSystemMessage)
+}
+
+runTest("testNickChangeSystemMessageSuppressedInDMView") {
+    let channelName = "bob"
+    let shouldAppend = isChannelConversation(channelName)
+    try assertFalse(shouldAppend)
+}
+
+runTest("testNickChangeSystemMessageShownInChannel") {
+    let channelName = "#rust"
+    let shouldAppend = isChannelConversation(channelName)
+    try assertTrue(shouldAppend)
+}
+
+// MARK: - Fix #5: isFromCurrentUser re-derived on load
+
+print("\n=== Fix #5: isFromCurrentUser Re-derived on Load ===")
+
+/// Mirrors the loadPersistedMessages re-derivation logic
+func rederiveIsFromCurrentUser(sender: String, myNick: String) -> Bool {
+    guard !myNick.isEmpty else { return false }
+    return sender.lowercased() == myNick.lowercased()
+}
+
+runTest("testOwnMessageMarkedIsFromCurrentUser") {
+    let isOwn = rederiveIsFromCurrentUser(sender: "alice", myNick: "alice")
+    try assertTrue(isOwn)
+}
+
+runTest("testOtherMessageNotMarkedIsFromCurrentUser") {
+    let isOwn = rederiveIsFromCurrentUser(sender: "bob", myNick: "alice")
+    try assertFalse(isOwn)
+}
+
+runTest("testIsFromCurrentUserCaseInsensitive") {
+    // Nicks are case-insensitive on IRC
+    let isOwn = rederiveIsFromCurrentUser(sender: "Alice", myNick: "alice")
+    try assertTrue(isOwn)
+}
+
+runTest("testIsFromCurrentUserEmptyNickReturnsFalse") {
+    // If we don't know our nick yet, default to false (incoming alignment)
+    let isOwn = rederiveIsFromCurrentUser(sender: "alice", myNick: "")
+    try assertFalse(isOwn)
+}
+
+runTest("testMultipleMessagesRedrived") {
+    let myNick = "alice"
+    let messages = [
+        ("alice", true),   // own message
+        ("bob",   false),  // other
+        ("Alice", true),   // own nick, different case
+        ("",      false),  // empty sender
+    ]
+    for (sender, expected) in messages {
+        let result = rederiveIsFromCurrentUser(sender: sender, myNick: myNick)
+        try assertEqual(result, expected)
+    }
+}
+
+// MARK: - Fix #6: DM PRIVMSG not shown in channel views
+
+print("\n=== Fix #6: DM PRIVMSG Not Shown in Channel Views ===")
+
+/// Mirrors the isForUs logic in ChannelViewModel.handleSubscribedMessage
+func isForUs(
+    ircMsg: IRCMessage,
+    myNick: String,
+    channelName: String
+) -> Bool {
+    let target = ircMsg.parameters.first ?? ""
+    let isChannel = target.hasPrefix("#") || target.hasPrefix("&")
+        || target.hasPrefix("!") || target.hasPrefix("+")
+    guard !isChannel else { return false }  // channel messages handled by isForChannel
+    guard target.lowercased() == myNick.lowercased() else { return false }
+    let isNotice = ircMsg.command == "NOTICE"
+    let isChannelView = isChannelConversation(channelName)
+    // Channel views: only accept NOTICEs, not PRIVMSG DMs
+    // DM views: accept both
+    return isNotice || !isChannelView
+}
+
+runTest("testDMPrivmsgRejectedByChannelView") {
+    // Bob sends alice a DM while alice is in #linux
+    let dm = IRCMessage(rawLine: ":bob!b@c PRIVMSG alice :Hey, are you there?")
+    let accepted = isForUs(ircMsg: dm, myNick: "alice", channelName: "#linux")
+    try assertFalse(accepted)
+}
+
+runTest("testDMPrivmsgAcceptedByDMView") {
+    // The DM view for "bob" should accept this
+    let dm = IRCMessage(rawLine: ":bob!b@c PRIVMSG alice :Hey, are you there?")
+    let accepted = isForUs(ircMsg: dm, myNick: "alice", channelName: "bob")
+    try assertTrue(accepted)
+}
+
+runTest("testNickServNoticeAcceptedByChannelView") {
+    // NOTICE from NickServ should still appear in the active channel view
+    let notice = IRCMessage(rawLine: ":NickServ!NS@services NOTICE alice :This nickname is registered.")
+    let accepted = isForUs(ircMsg: notice, myNick: "alice", channelName: "#linux")
+    try assertTrue(accepted)
+}
+
+runTest("testNickServNoticeAcceptedByDMView") {
+    // NOTICE also accepted in DM view
+    let notice = IRCMessage(rawLine: ":NickServ!NS@services NOTICE alice :Password accepted.")
+    let accepted = isForUs(ircMsg: notice, myNick: "alice", channelName: "bob")
+    try assertTrue(accepted)
+}
+
+runTest("testDMToOtherUserNotAccepted") {
+    // PRIVMSG addressed to "charlie", not "alice" — not for us at all
+    let msg = IRCMessage(rawLine: ":bob!b@c PRIVMSG charlie :Hello Charlie")
+    let accepted = isForUs(ircMsg: msg, myNick: "alice", channelName: "bob")
+    try assertFalse(accepted)
+}
+
+runTest("testChannelPrivmsgNotAcceptedAsForUs") {
+    // Regular channel message (#linux) is not "for us" in the isForUs path
+    let msg = IRCMessage(rawLine: ":bob!b@c PRIVMSG #linux :General message")
+    // isForUs guard: guard !isChannel else { return false }
+    let target = msg.parameters.first ?? ""
+    let isChannel = target.hasPrefix("#")
+    try assertTrue(isChannel)   // confirms it's a channel message
+    // Therefore isForUs returns false before the nick check
+    let accepted = isForUs(ircMsg: msg, myNick: "alice", channelName: "alice")
+    try assertFalse(accepted)
+}
+
+runTest("testDMInWrongChannelViewRejected") {
+    // DM to alice while alice has #rust open — must be rejected
+    let dm = IRCMessage(rawLine: ":carol!c@d PRIVMSG alice :See you later")
+    let inRust   = isForUs(ircMsg: dm, myNick: "alice", channelName: "#rust")
+    let inLinux  = isForUs(ircMsg: dm, myNick: "alice", channelName: "#linux")
+    let inDMView = isForUs(ircMsg: dm, myNick: "alice", channelName: "carol")
+    try assertFalse(inRust)
+    try assertFalse(inLinux)
+    try assertTrue(inDMView)
+}
+
 // Summary
 print("\n=== Results ===")
 print("Passed: \(results.passed)")

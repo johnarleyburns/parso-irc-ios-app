@@ -148,6 +148,15 @@ final class ChannelViewModel: ObservableObject {
 
     // MARK: - Private helpers
 
+    // MARK: - Conversation type helpers
+
+    /// True when this ViewModel represents a standard IRC channel (#, &, !, +).
+    /// False for DM conversations (channelName is a nick).
+    private var isChannelConversation: Bool {
+        channelName.hasPrefix("#") || channelName.hasPrefix("&")
+            || channelName.hasPrefix("!") || channelName.hasPrefix("+")
+    }
+
     var channelId: String { _cachedChannelId }
 
     // MARK: Persisted history
@@ -155,9 +164,20 @@ final class ChannelViewModel: ObservableObject {
     private func loadPersistedMessages() async {
         isLoadingHistory = true
         let cid = channelId
+        // currentNick is set in start() before this is called.
+        // We use it to re-derive isFromCurrentUser, which is NOT stored in the DB schema.
+        // Without this, all loaded messages appear left-aligned (isFromCurrentUser = false).
+        let myNick = currentNick.isEmpty
+            ? (ircManager.currentNicknames[serverId] ?? "")
+            : currentNick
         let persisted = (try? DatabaseManager.shared.fetchMessages(
             forChannel: cid, limit: 200)) ?? []
-        for msg in persisted { appendRaw(msg) }
+        for var msg in persisted {
+            if !myNick.isEmpty {
+                msg.isFromCurrentUser = msg.sender.lowercased() == myNick.lowercased()
+            }
+            appendRaw(msg)
+        }
         rebuildDisplay()
         isLoadingHistory = false
     }
@@ -206,11 +226,18 @@ final class ChannelViewModel: ObservableObject {
         let resolvedNick = currentNick.isEmpty
             ? (ircManager.currentNicknames[serverId] ?? "") : currentNick
 
-        // Channel message: only show if it's for this channel
+        // Channel message: only show if it's for this specific channel.
         let isForChannel = isChannel && target.lowercased() == channelName.lowercased()
-        // User/notice: show if addressed to us (NickServ, DMs, etc.)
+
+        // Non-channel message routing:
+        //   • NOTICE (NickServ, MemoServ, server notices) → show in any active channel view
+        //   • PRIVMSG to our nick (actual DM) → show ONLY in DM views (not in channels)
+        // This prevents "alice DMs you" from appearing inside #linux.
+        let isNotice = ircMsg.command == "NOTICE"
         let isForUs = !isChannel
             && (resolvedNick.isEmpty || target.lowercased() == resolvedNick.lowercased())
+            && (isNotice || !isChannelConversation)
+            //    ↑ channel views accept server NOTICEs but reject PRIVMSG DMs
 
         guard isForChannel || isForUs else { return }
 
@@ -230,12 +257,9 @@ final class ChannelViewModel: ObservableObject {
         )
 
         if isHistory {
-            // History messages: append but don't persist (manager already did) and no unread
             append(msg, persist: false)
             pendingHistoryMessageCount += 1
         } else {
-            // Live messages: manager already persisted others-messages;
-            // own messages are persisted by send() on success
             append(msg, persist: false)
             if nick.lowercased() != resolvedNick.lowercased() {
                 unreadCount += 1
@@ -286,6 +310,8 @@ final class ChannelViewModel: ObservableObject {
 
         case .quit(let nick, let reason):
             members.removeAll { $0.nick == nick }
+            // Don't show quit notices in DM windows — they belong only in channel views.
+            guard isChannelConversation else { return }
             let detail = reason.map { " (\($0))" } ?? ""
             let msg = Message(channelId: channelId, sender: nick,
                               content: "\(nick) quit\(detail)", type: .quit)
@@ -305,6 +331,8 @@ final class ChannelViewModel: ObservableObject {
             if let idx = members.firstIndex(where: { $0.nick == oldNick }) {
                 members[idx].nick = newNick
             }
+            // Don't show nick-change notices in DM windows — channels only.
+            guard isChannelConversation else { return }
             let msg = Message(channelId: channelId, sender: oldNick,
                               content: "\(oldNick) is now known as \(newNick)", type: .nick)
             append(msg, persist: false)

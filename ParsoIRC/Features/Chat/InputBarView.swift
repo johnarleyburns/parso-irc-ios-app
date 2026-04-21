@@ -91,8 +91,8 @@ struct InputBarView: View {
                 TextField("Message \(viewModel.channelName)", text: $inputText, axis: .vertical)
                     .lineLimit(1...5)
                     .focused($isTextFieldFocused)
-                    .textInputAutocapitalization(.sentences)
-                    .autocorrectionDisabled(false)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled(true)
                     .onSubmit { submitIfSingleLine() }
                     .padding(.horizontal, 12)
                     .padding(.vertical, 9)

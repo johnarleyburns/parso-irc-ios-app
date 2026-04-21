@@ -69,8 +69,10 @@ struct ServerSidebarView: View {
         .onAppear(perform: reloadAndConnect)
         .onChange(of: ircManager.connectionStates) { _, _ in reloadServers() }
         .onChange(of: ircManager.currentNicknames) { _, _ in reloadServers() }
-        // Reload when a new DM is created from any other screen (e.g. ChatView member list)
+        // Reload when a DM is created from another screen
         .onChange(of: ircManager.dmChannelIds) { _, _ in reloadServers() }
+        // Reload when a channel is joined or left (joinedAt changes in DB)
+        .onChange(of: ircManager.channelMembershipVersion) { _, _ in reloadServers() }
         // New Message sheet (per-server)
         .alert("New Direct Message", isPresented: Binding(
             get: { newMessageServerId != nil },

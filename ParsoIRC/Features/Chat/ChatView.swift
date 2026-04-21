@@ -189,18 +189,10 @@ struct ChatView: View {
         Divider()
 
         Button(role: .destructive) {
-            Task {
-                guard let client = ircManager.getClient(for: serverId) else { return }
-                try? await client.leave(channel: channelName)
-                if let ch = try? DatabaseManager.shared.fetchChannels(forServer: serverId)
-                    .first(where: { $0.name.lowercased() == channelName.lowercased() }) {
-                    var updated = ch
-                    updated.joinedAt = nil
-                    try? DatabaseManager.shared.saveChannel(updated, serverId: serverId)
-                }
-                ircManager.clearUnread(channelId: viewModel.channelId)
-                await MainActor.run { dismiss() }
-            }
+            // leaveChannel() sends PART, clears joinedAt in DB, clears unread badge,
+            // and bumps channelMembershipVersion so ServerSidebarView reloads.
+            ircManager.leaveChannel(channelName, serverId: serverId)
+            dismiss()
         } label: {
             Label("Leave Channel", systemImage: "rectangle.portrait.and.arrow.right")
         }

@@ -155,14 +155,10 @@ struct ChannelRowView: View {
     // MARK: - Actions
 
     private func leaveChannel() {
-        Task {
-            guard let client = ircManager.getClient(for: serverId) else { return }
-            try? await client.leave(channel: channel.name)
-            // Remove from DB
-            // (In Phase 2 ChannelViewModel will handle the PART echo;
-            //  for now we eagerly remove from the sidebar.)
-            onLeave?()
-        }
+        // Use the manager's leaveChannel() which sends PART, clears joinedAt in DB,
+        // clears unread, and bumps channelMembershipVersion so the sidebar reloads.
+        ircManager.leaveChannel(channel.name, serverId: serverId)
+        onLeave?()
     }
 
     private func toggleMute() {
