@@ -20,6 +20,14 @@ struct RootView: View {
     @AppStorage("eulaAccepted") private var eulaAccepted: Bool = false
     @State private var showEULA: Bool = false
 
+    /// Controls whether the main IRC sidebar is rendered at full opacity.
+    /// Kept false until either:
+    ///   - a returning user (EULA accepted + servers exist) passes the splash, OR
+    ///   - onboarding is dismissed (new user finished setup).
+    /// This eliminates the single-frame flash where the empty sidebar is visible
+    /// between the EULA cover dismissing and the onboarding cover appearing.
+    @State private var mainUIVisible: Bool = false
+
     var body: some View {
         ZStack {
             NavigationStack(path: $navPath) {
@@ -51,14 +59,14 @@ struct RootView: View {
                 appState.selectedServerId  = serverId
                 appState.selectedChannelId = dm.id
             }
-            .opacity(showSplash ? 0 : 1)
+            // Hidden until the user has passed all first-launch gates.
+            // Using opacity(0) keeps the view in the tree (so NavigationStack
+            // state is preserved) but invisible to the user.
+            .opacity(mainUIVisible ? 1 : 0)
             .onChange(of: networkMonitor.isConnected) { _, isNow in
                 if isNow { reconnectDroppedServers() }
             }
-            // ── Deferred launch logic — runs AFTER the splash finishes ──────
-            // Waiting for showSplash → false guarantees the user sees the full
-            // Parso IRC splash animation before any gate (EULA or onboarding)
-            // appears on top of it.
+            // Deferred launch logic — fires after the splash finishes.
             .onChange(of: showSplash) { _, isShowing in
                 guard !isShowing else { return }
                 handlePostSplash()
@@ -69,9 +77,7 @@ struct RootView: View {
                     .zIndex(10)
             }
         }
-        // Onboarding — initialPage:1 skips the marketing welcome page and
-        // opens directly on the Identity (nick/user/password) screen, since
-        // the EULA already served as the formal agreement/welcome gate.
+        // Onboarding
         .fullScreenCover(isPresented: $showOnboarding, onDismiss: handleOnboardingDismiss) {
             OnboardingView(isPresented: $showOnboarding, initialPage: eulaAccepted ? 1 : 0)
                 .environmentObject(ircManager)
@@ -82,10 +88,11 @@ struct RootView: View {
             guard eulaAccepted else { return }
             let servers = (try? DatabaseManager.shared.fetchServers()) ?? []
             if servers.isEmpty {
-                // Present onboarding immediately — no delay needed.
-                // SwiftUI handles back-to-back fullScreenCover transitions cleanly
-                // and the delay was only causing a brief sidebar flash.
                 showOnboarding = true
+                // mainUIVisible stays false until onboarding dismisses
+            } else {
+                // Returning user who just re-accepted EULA — show main UI
+                mainUIVisible = true
             }
         }) {
             EULAView(isPresented: $showEULA)
@@ -94,6 +101,7 @@ struct RootView: View {
         .onReceive(NotificationCenter.default.publisher(for: .resetToOnboarding)) { _ in
             ircManager.disconnectAll()
             navPath = []
+            mainUIVisible = false
             eulaAccepted = false
             showEULA = true
             showOnboarding = false
@@ -102,33 +110,32 @@ struct RootView: View {
 
     // MARK: - Post-splash routing
 
-    /// Called exactly once per launch, immediately after the splash animation
-    /// completes.  Decides which gate (if any) to show before the main UI.
     private func handlePostSplash() {
         if !eulaAccepted {
-            // First launch or after a data reset — show EULA first.
-            // Onboarding follows in the EULA's onDismiss handler above.
+            // First launch — show EULA. Onboarding and mainUIVisible are set
+            // in the EULA onDismiss handler and handleOnboardingDismiss respectively.
             showEULA = true
         } else {
-            // Returning user who already accepted the EULA.
-            // Show onboarding only if no servers have been configured yet.
             let servers = (try? DatabaseManager.shared.fetchServers()) ?? []
             if servers.isEmpty {
+                // EULA accepted but no servers — show onboarding.
                 showOnboarding = true
+            } else {
+                // Returning user with servers — go straight to main UI.
+                mainUIVisible = true
             }
-            // Otherwise drop straight through to the main IRC sidebar.
         }
     }
 
     // MARK: - First-launch logic
 
     private func checkFirstLaunch() {
-        // Intentionally empty — all first-launch routing is now driven by
-        // handlePostSplash() which fires after the splash animation completes.
-        // Keeping this method so .onAppear doesn't need to be removed.
+        // Intentionally empty — routing is driven by handlePostSplash().
     }
 
     private func handleOnboardingDismiss() {
+        // Reveal the main UI now that the user has completed setup.
+        mainUIVisible = true
         Task {
             let servers = (try? DatabaseManager.shared.fetchServers()) ?? []
             for server in servers where server.autoConnect {
