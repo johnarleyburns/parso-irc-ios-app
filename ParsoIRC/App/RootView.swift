@@ -45,9 +45,6 @@ struct RootView: View {
                     }
                 }
             }
-            // Inject the navigateToDM action so any view inside the stack
-            // (ChatView, MemberListView, UserProfileSheet) can navigate to a
-            // DM without holding a direct navPath binding.
             .environment(\.navigateToDM) { [self] nick, serverId in
                 let dm = ircManager.openOrCreateDM(with: nick, serverId: serverId)
                 navPath = [.dm(serverId: serverId, channelId: dm.id, nick: nick)]
@@ -58,61 +55,78 @@ struct RootView: View {
             .onChange(of: networkMonitor.isConnected) { _, isNow in
                 if isNow { reconnectDroppedServers() }
             }
+            // ── Deferred launch logic — runs AFTER the splash finishes ──────
+            // Waiting for showSplash → false guarantees the user sees the full
+            // Parso IRC splash animation before any gate (EULA or onboarding)
+            // appears on top of it.
+            .onChange(of: showSplash) { _, isShowing in
+                guard !isShowing else { return }
+                handlePostSplash()
+            }
 
             if showSplash {
                 SplashScreenView(isPresented: $showSplash)
                     .zIndex(10)
             }
         }
-        .onAppear(perform: checkFirstLaunch)
-        // Onboarding
+        // Onboarding — initialPage:1 skips the marketing welcome page and
+        // opens directly on the Identity (nick/user/password) screen, since
+        // the EULA already served as the formal agreement/welcome gate.
         .fullScreenCover(isPresented: $showOnboarding, onDismiss: handleOnboardingDismiss) {
-            OnboardingView(isPresented: $showOnboarding)
+            OnboardingView(isPresented: $showOnboarding, initialPage: eulaAccepted ? 1 : 0)
                 .environmentObject(ircManager)
                 .environmentObject(appState)
         }
         // EULA gate
         .fullScreenCover(isPresented: $showEULA, onDismiss: {
-            // Once EULA is accepted, check whether to show onboarding
-            if eulaAccepted {
-                let servers = (try? DatabaseManager.shared.fetchServers()) ?? []
-                if servers.isEmpty {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                        showOnboarding = true
-                    }
+            guard eulaAccepted else { return }
+            let servers = (try? DatabaseManager.shared.fetchServers()) ?? []
+            if servers.isEmpty {
+                // Small delay so the EULA cover finishes its dismiss animation
+                // before the onboarding cover begins its present animation.
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                    showOnboarding = true
                 }
             }
         }) {
             EULAView(isPresented: $showEULA)
         }
-        // Reset to onboarding (triggered by "Exit Demo Mode")
+        // Reset to onboarding (triggered by "Exit Demo Mode" / "Delete Account")
         .onReceive(NotificationCenter.default.publisher(for: .resetToOnboarding)) { _ in
-            // Tear down all active connections
             ircManager.disconnectAll()
-            // Clear navigation
             navPath = []
-            // Re-show EULA then onboarding
             eulaAccepted = false
             showEULA = true
             showOnboarding = false
         }
     }
 
+    // MARK: - Post-splash routing
+
+    /// Called exactly once per launch, immediately after the splash animation
+    /// completes.  Decides which gate (if any) to show before the main UI.
+    private func handlePostSplash() {
+        if !eulaAccepted {
+            // First launch or after a data reset — show EULA first.
+            // Onboarding follows in the EULA's onDismiss handler above.
+            showEULA = true
+        } else {
+            // Returning user who already accepted the EULA.
+            // Show onboarding only if no servers have been configured yet.
+            let servers = (try? DatabaseManager.shared.fetchServers()) ?? []
+            if servers.isEmpty {
+                showOnboarding = true
+            }
+            // Otherwise drop straight through to the main IRC sidebar.
+        }
+    }
+
     // MARK: - First-launch logic
 
     private func checkFirstLaunch() {
-        // Show EULA if not yet accepted — onboarding follows after EULA dismiss
-        if !eulaAccepted {
-            showEULA = true
-            return
-        }
-        // EULA already accepted: check if onboarding is needed
-        let servers = (try? DatabaseManager.shared.fetchServers()) ?? []
-        if servers.isEmpty {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 2.6) {
-                showOnboarding = true
-            }
-        }
+        // Intentionally empty — all first-launch routing is now driven by
+        // handlePostSplash() which fires after the splash animation completes.
+        // Keeping this method so .onAppear doesn't need to be removed.
     }
 
     private func handleOnboardingDismiss() {

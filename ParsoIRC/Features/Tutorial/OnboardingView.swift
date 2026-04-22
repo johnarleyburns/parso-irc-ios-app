@@ -15,7 +15,17 @@ struct OnboardingView: View {
     @EnvironmentObject private var appState: AppState
     @EnvironmentObject private var ircManager: IRCClientManager
 
-    @State private var currentPage: Int = 0
+    /// Which page to open first.
+    /// Pass 1 to land directly on the Identity (nick/user/password) screen —
+    /// used when coming from the EULA so the user doesn't hit a redundant
+    /// "Welcome to Parso IRC" marketing page they just scrolled past.
+    /// Defaults to 0 (WelcomePage) for any other entry point.
+    @State private var currentPage: Int
+
+    init(isPresented: Binding<Bool>, initialPage: Int = 0) {
+        self._isPresented = isPresented
+        self._currentPage = State(initialValue: initialPage)
+    }
 
     var body: some View {
         TabView(selection: $currentPage) {
