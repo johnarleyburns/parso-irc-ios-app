@@ -599,7 +599,9 @@ final class IRCClientManager: ObservableObject {
         let content  = isAction ? String(body.dropFirst(8).dropLast()) : body
         let isOwnMsg = nick.lowercased() == myNick.lowercased()
 
-        // Persist messages from others immediately (own messages are persisted by send() on success)
+        // Persist messages from others — moved off @MainActor via a detached Task
+        // (Fix E) so the heavy SQLite write never blocks the SwiftUI render loop.
+        // Own messages are persisted by send() on success.
         if !isOwnMsg {
             let message = Message(
                 channelId: channel.id,
@@ -609,9 +611,11 @@ final class IRCClientManager: ObservableObject {
                 type: isAction ? .action : (msg.command == "NOTICE" ? .notice : .message),
                 isFromCurrentUser: false
             )
-            try? DatabaseManager.shared.saveMessage(message)
+            Task.detached(priority: .utility) {
+                try? DatabaseManager.shared.saveMessage(message)
+            }
 
-            // Increment unread for channels not currently active
+            // Increment unread for channels not currently active (main-actor work — fine)
             if AppState.shared.selectedChannelId != channel.id {
                 incrementUnread(channelId: channel.id)
             }

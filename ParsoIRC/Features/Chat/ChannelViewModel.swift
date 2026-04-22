@@ -154,7 +154,10 @@ final class ChannelViewModel: ObservableObject {
             do {
                 try await ircManager.sendMessage(trimmed, to: channelName, on: serverId)
                 if !failedMessageIds.contains(outgoing.id) {
-                    try? DatabaseManager.shared.saveMessage(outgoing)
+                    // Persist off @MainActor — SQLite write never blocks the render loop (Fix E).
+                    Task.detached(priority: .utility) {
+                        try? DatabaseManager.shared.saveMessage(outgoing)
+                    }
                 }
             } catch {
                 failedMessageIds.insert(outgoing.id)
@@ -594,9 +597,20 @@ final class ChannelViewModel: ObservableObject {
     private func appendRaw(_ message: Message) {
         seenMessageIds.insert(message.id)
         rawMessages.append(message)
-        if rawMessages.count > 1000 {
-            let removed = rawMessages.removeFirst()
-            seenMessageIds.remove(removed.id)
+
+        // Amortised O(1) trim: once we exceed the high-water mark (1200), drop the
+        // oldest 200 messages in a single batch.  This fires ~1/200th as often as
+        // the previous per-message removeFirst() call (which was O(N) every time the
+        // array exceeded 1000) and keeps the display window bounded at ≤ 1200 entries.
+        //
+        // Without this, on a busy channel after 12 hours:
+        //   43 200 messages × O(1000) Array.removeFirst() shifts ≈ 43M element moves
+        // all on @MainActor, saturating the main thread and producing the lock-up.
+        if rawMessages.count > 1200 {
+            let drop = 200
+            let removed = rawMessages.prefix(drop)
+            removed.forEach { seenMessageIds.remove($0.id) }
+            rawMessages.removeFirst(drop)
         }
     }
 

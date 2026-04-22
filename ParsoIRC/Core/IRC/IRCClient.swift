@@ -54,6 +54,20 @@ actor IRCClient {
     private var writeStream: OutputStream?
     private var useTLS = false
 
+    /// Resumed by handleStateChange(.ready) when the TCP connection becomes live.
+    /// Using a continuation (not a polling loop) so the actor is free to process
+    /// incoming state events while suspended — eliminating the lock-up root cause
+    /// where the poll loop held the actor and starved handleStateChange(.ready).
+    private var connectionReadyContinuation: CheckedContinuation<Void, Error>?
+
+    // MARK: - Stale-timeout cancellation tokens (Fix B)
+    //
+    // Each wait stores its timeout Task here so that connect() can cancel it
+    // on reconnect before it fires on the new connection's continuation.
+    private var connectionTimeoutTask:       Task<Void, Never>?
+    private var capNegotiationTimeoutTask:   Task<Void, Never>?
+    private var capAckTimeoutTask:           Task<Void, Never>?
+
     /// Accumulates partial IRC lines across TCP receive calls.
     /// IRC messages are \r\n-terminated but can span multiple TCP segments;
     /// without this buffer the tail of a split segment is silently discarded,
@@ -120,6 +134,19 @@ actor IRCClient {
         pendingCapabilities.removeAll()
         acknowledgedCapabilities.removeAll()
         activeBatches.removeAll()
+
+        // Cancel any stale timeout Tasks from a previous connect attempt so they
+        // cannot fire on the new connection's continuations (Fix B).
+        connectionTimeoutTask?.cancel();     connectionTimeoutTask     = nil
+        capNegotiationTimeoutTask?.cancel(); capNegotiationTimeoutTask = nil
+        capAckTimeoutTask?.cancel();         capAckTimeoutTask         = nil
+
+        // Resume and discard any leaked continuation from a previous attempt so it
+        // doesn't hold a suspended Task forever (Fix A).
+        if let stale = connectionReadyContinuation {
+            connectionReadyContinuation = nil
+            stale.resume(throwing: IRCError.connectionFailed("superseded by new connect()"))
+        }
         capNegotiationContinuation = nil
         capAckContinuation = nil
 
@@ -174,70 +201,43 @@ actor IRCClient {
         connection.start(queue: queue)
         debugLog.log("connection.start() called", type: .info)
 
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            Task {
-                do {
-                    debugLog.log("Waiting for connection (timeout 30s)...", type: .info)
-                    try await self.waitForConnection(timeout: 30)
-                    debugLog.log("Connection ready!", type: .info)
-                    self.isConnected = true
-                    self.currentNick = nickname
-
-                    // RFC 2812 §3.1: send CAP LS to begin capability negotiation
-                    try await self.send_raw("CAP LS 302")
-
-                    continuation.resume()
-                } catch {
-                    debugLog.log("Connection failed: \(error.localizedDescription)", type: .error)
-                    continuation.resume(throwing: error)
-                }
-            }
-        }
+        // Fix A: wait for .ready via continuation — no polling loop, actor stays
+        // free to process the stateUpdateHandler Task that resumes us.
+        debugLog.log("Waiting for connection ready (timeout 30s)...", type: .info)
+        try await waitForConnectionAsync(timeout: 30)
+        debugLog.log("Connection ready!", type: .info)
+        self.currentNick = nickname
 
         startReceiving()
-        
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            Task {
-                do {
-                    // Wait for server's CAP LS response before requesting capabilities.
-                    // Uses a continuation (not a polling loop) so the actor is free to
-                    // process incoming messages while we wait.
-                    await self.waitForCapNegotiationAsync(timeout: 10)
 
-                    var capsToRequest = ["batch", "server-time", "message-tags", "draft/chathistory", "chathistory", "znc.in/playback"]
-                    if useSASL {
-                        capsToRequest.append("sasl")
-                    }
-                    try await self.send_raw("CAP REQ :\(capsToRequest.joined(separator: " "))")
+        // RFC 2812 §3.1: send CAP LS to begin capability negotiation
+        try await send_raw("CAP LS 302")
 
-                    // Wait for CAP ACK/NAK via continuation — actor stays free to receive.
-                    await self.waitForCapAckAsync(timeout: 5)
+        // Wait for server's CAP LS response before requesting capabilities.
+        await waitForCapNegotiationAsync(timeout: 10)
 
-                    if useSASL && self.acknowledgedCapabilities.contains("sasl") {
-                        // Store credentials so the AUTHENTICATE + handler can send them
-                        self.pendingSaslUsername = nickname
-                        self.pendingSaslPassword = saslPassword ?? serverPassword ?? ""
-                        try await self.send_raw("AUTHENTICATE PLAIN")
-                        self.saslRequested = true
-                    }
+        var capsToRequest = ["batch", "server-time", "message-tags",
+                             "draft/chathistory", "chathistory", "znc.in/playback"]
+        if useSASL { capsToRequest.append("sasl") }
+        try await send_raw("CAP REQ :\(capsToRequest.joined(separator: " "))")
 
-                    // RFC 2812 §3.1: registration order is PASS (if any), then NICK, then USER.
-                    if let password = serverPassword, !password.isEmpty {
-                        try await self.send_raw("PASS \(password)")
-                    }
-                    // NICK takes a single middle parameter — do NOT use send() which appends ":"
-                    try await self.send_raw("NICK \(nickname)")
-                    // USER: second param must be "0" per modern IRC spec
-                    try await self.send_raw("USER \(username) 0 * :\(realname)")
+        // Wait for CAP ACK/NAK.
+        await waitForCapAckAsync(timeout: 5)
 
-                    try await self.send_raw("CAP END")
-
-                    continuation.resume()
-                } catch {
-                    continuation.resume(throwing: error)
-                }
-            }
+        if useSASL && acknowledgedCapabilities.contains("sasl") {
+            pendingSaslUsername = nickname
+            pendingSaslPassword = saslPassword ?? serverPassword ?? ""
+            try await send_raw("AUTHENTICATE PLAIN")
+            saslRequested = true
         }
+
+        // RFC 2812 §3.1: registration order is PASS (if any), then NICK, then USER.
+        if let password = serverPassword, !password.isEmpty {
+            try await send_raw("PASS \(password)")
+        }
+        try await send_raw("NICK \(nickname)")
+        try await send_raw("USER \(username) 0 * :\(realname)")
+        try await send_raw("CAP END")
     }
     
     /// Suspends until the server's first CAP LS reply sets `isCapNegotiationComplete`,
@@ -247,18 +247,16 @@ actor IRCClient {
         guard !isCapNegotiationComplete else { return }
         await withCheckedContinuation { (cont: CheckedContinuation<Void, Never>) in
             self.capNegotiationContinuation = cont
-            // Timeout fallback — runs as a separate actor-isolated Task.
-            Task { [weak self] in
+            // Store timeout Task so it can be cancelled on reconnect (Fix B).
+            capNegotiationTimeoutTask = Task { [weak self] in
                 try? await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
-                // timeoutCapNegotiation is actor-isolated, so property mutations are safe.
                 await self?.timeoutCapNegotiation()
             }
         }
     }
 
-    /// Called by the timeout Task when `waitForCapNegotiationAsync` doesn't get a reply.
-    /// Actor-isolated so it's safe to mutate actor properties.
     private func timeoutCapNegotiation() {
+        capNegotiationTimeoutTask = nil
         guard let cont = capNegotiationContinuation else { return }
         capNegotiationContinuation = nil
         isCapNegotiationComplete = true
@@ -270,33 +268,66 @@ actor IRCClient {
         guard !isCapAckReceived else { return }
         await withCheckedContinuation { (cont: CheckedContinuation<Void, Never>) in
             self.capAckContinuation = cont
-            Task { [weak self] in
+            // Store timeout Task so it can be cancelled on reconnect (Fix B).
+            capAckTimeoutTask = Task { [weak self] in
                 try? await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
                 await self?.timeoutCapAck()
             }
         }
     }
 
-    /// Called by the timeout Task when `waitForCapAckAsync` doesn't get a reply.
     private func timeoutCapAck() {
+        capAckTimeoutTask = nil
         guard let cont = capAckContinuation else { return }
         capAckContinuation = nil
         isCapAckReceived = true
         cont.resume()
     }
 
-    /// Clears the stored negotiation continuation (retained for explicit use in handleCapMessage).
-    private func clearCapNegotiationContinuation() {
-        capNegotiationContinuation = nil
+    /// Suspends until NWConnection reaches `.ready`, or throws on timeout/failure (Fix A).
+    ///
+    /// This replaces the old 100ms hot-poll loop (`waitForConnection`) which held the
+    /// actor and could starve the `handleStateChange(.ready)` Task that needed to run
+    /// to set `isConnected = true` — creating a livelock that left the main-thread
+    /// Task permanently suspended and froze the SwiftUI UI.
+    private func waitForConnectionAsync(timeout: Double) async throws {
+        guard !isConnected else { return }
+        try await withCheckedThrowingContinuation { (cont: CheckedContinuation<Void, Error>) in
+            self.connectionReadyContinuation = cont
+            // Store timeout Task so it can be cancelled on reconnect (Fix B).
+            connectionTimeoutTask = Task { [weak self] in
+                try? await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
+                await self?.timeoutConnectionReady()
+            }
+        }
     }
 
-    /// Clears the stored ACK continuation.
-    private func clearCapAckContinuation() {
-        capAckContinuation = nil
+    private func timeoutConnectionReady() {
+        connectionTimeoutTask = nil
+        guard let cont = connectionReadyContinuation else { return }
+        connectionReadyContinuation = nil
+        debugLog.log("Connection timeout (30s elapsed)", type: .error)
+        cont.resume(throwing: IRCError.timeout)
     }
+
+    private func clearCapNegotiationContinuation() { capNegotiationContinuation = nil }
+    private func clearCapAckContinuation()          { capAckContinuation = nil }
 
     func disconnect() {
         guard isConnected else { return }
+
+        // Cancel all pending timeout Tasks so they don't fire on the next connection.
+        connectionTimeoutTask?.cancel();     connectionTimeoutTask     = nil
+        capNegotiationTimeoutTask?.cancel(); capNegotiationTimeoutTask = nil
+        capAckTimeoutTask?.cancel();         capAckTimeoutTask         = nil
+
+        // Resume any leaked continuations so their Tasks don't remain suspended forever.
+        if let cont = connectionReadyContinuation {
+            connectionReadyContinuation = nil
+            cont.resume(throwing: IRCError.connectionFailed("disconnected"))
+        }
+        capNegotiationContinuation = nil
+        capAckContinuation = nil
 
         Task {
             try? await send_raw("QUIT :Parso IRC")
@@ -304,20 +335,16 @@ actor IRCClient {
             connection?.cancel()
             connection = nil
             isConnected = false
-            receiveBuffer = ""   // discard any buffered partial line
+            receiveBuffer = ""
         }
     }
 
     private func waitForConnection(timeout: Int) async throws {
+        // Deprecated: connect() now uses waitForConnectionAsync (continuation-based).
         let startTime = Date()
         while !isConnected {
-            let elapsed = Date().timeIntervalSince(startTime)
-            if Int(elapsed) % 5 == 0 && elapsed > 0.1 {
-                debugLog.log("Still waiting... \(Int(elapsed))s elapsed", type: .info)
-            }
             try await Task.sleep(nanoseconds: 100_000_000)
             if Date().timeIntervalSince(startTime) > Double(timeout) {
-                debugLog.log("Connection timeout after \(timeout)s", type: .error)
                 throw IRCError.timeout
             }
         }
@@ -329,6 +356,13 @@ actor IRCClient {
         case .ready:
             debugLog.log("Connection ready!", type: .info)
             isConnected = true
+            connectionTimeoutTask?.cancel()
+            connectionTimeoutTask = nil
+            // Resume the waitForConnectionAsync suspension (Fix A).
+            if let cont = connectionReadyContinuation {
+                connectionReadyContinuation = nil
+                cont.resume()
+            }
         case .failed(let error):
             debugLog.log("Connection failed: \(error.localizedDescription)", type: .error)
             Task { @MainActor in
@@ -511,6 +545,16 @@ actor IRCClient {
 
     // MARK: - Receiving
 
+    /// Starts a single long-lived Task that owns the entire receive lifetime (Fix C).
+    ///
+    /// The old recursive approach spawned a new Task inside the NWConnection completion
+    /// handler on every received chunk.  Under rapid message flow (JOIN/PART storms,
+    /// paste floods) Tasks accumulated on the actor's mailbox faster than they drained,
+    /// starving handleMessage() delivery and producing the "locked up" symptom.
+    ///
+    /// The new loop uses `withCheckedContinuation` to turn each async receive call into
+    /// a suspension point inside ONE Task that lives for the duration of the connection.
+    /// No recursive re-entry, no compounding Task depth.
     private func startReceiving() {
         debugLog.log("startReceiving() called", type: .info)
         guard let connection = connection else {
@@ -518,25 +562,42 @@ actor IRCClient {
             return
         }
 
-        connection.receive(minimumIncompleteLength: 1, maximumLength: 65536) { [weak self] data, _, isComplete, error in
-            Task {
-                if let error = error {
-                    self?.debugLog.log("receive error: \(error.localizedDescription)", type: .error)
-                }
-                
-                if let data = data, !data.isEmpty {
-                    await self?.handleReceivedData(data)
+        Task { [weak self] in
+            var keepGoing = true
+            while keepGoing {
+                guard let self, await self.isConnected else { break }
+
+                // Suspend here — the actor is FREE while waiting for data.
+                let (data, isComplete, error) = await withCheckedContinuation {
+                    (cont: CheckedContinuation<(Data?, Bool, Error?), Never>) in
+                    connection.receive(
+                        minimumIncompleteLength: 1,
+                        maximumLength: 65536
+                    ) { data, _, isComplete, error in
+                        cont.resume(returning: (data, isComplete, error))
+                    }
                 }
 
-                if isComplete {
-                    self?.debugLog.log("Connection completed (isComplete=true)", type: .error)
-                    await self?.disconnect()
-                } else if error != nil {
-                    self?.debugLog.log("receive loop ending due to error", type: .error)
-                    await self?.disconnect()
-                } else {
-                    await self?.startReceiving()
+                if let error = error {
+                    await self.debugLog.log(
+                        "receive error: \(error.localizedDescription)", type: .error)
                 }
+                if let data = data, !data.isEmpty {
+                    await self.handleReceivedData(data)
+                }
+                if isComplete {
+                    await self.debugLog.log(
+                        "Connection completed (isComplete=true)", type: .info)
+                    keepGoing = false
+                } else if error != nil {
+                    await self.debugLog.log(
+                        "receive loop ending due to error", type: .error)
+                    keepGoing = false
+                }
+            }
+            // Connection ended — trigger clean-up.
+            if let self, await self.isConnected {
+                await self.disconnect()
             }
         }
     }
