@@ -126,34 +126,40 @@ final class IRCClientContinuationTests: XCTestCase {
 
     func testCallbacksAreNilByDefault() {
         let client = IRCClient()
+        // nonisolated(unsafe) callbacks can be read from sync context
         XCTAssertNil(client.onWelcome)
         XCTAssertNil(client.onDisconnect)
         XCTAssertNil(client.onMessage)
         XCTAssertNil(client.onError)
     }
 
-    func testCapabilitiesStartFalse() {
+    func testCapabilitiesStartFalse() async {
+        // IRCClient is an actor — access its properties from an async context.
         let client = IRCClient()
-        XCTAssertFalse(client.chathistoryEnabled)
-        XCTAssertFalse(client.serverTimeEnabled)
-        XCTAssertFalse(client.zncPlaybackEnabled)
+        let chathistory = await client.chathistoryEnabled
+        let serverTime  = await client.serverTimeEnabled
+        let zncPlayback = await client.zncPlaybackEnabled
+        XCTAssertFalse(chathistory)
+        XCTAssertFalse(serverTime)
+        XCTAssertFalse(zncPlayback)
     }
 
-    func testChathistoryLimitDefault() {
+    func testChathistoryLimitDefault() async {
         let client = IRCClient()
-        // Default limit before any ISUPPORT negotiation.
-        XCTAssertEqual(client.getChathistoryLimit(), 100)
+        let limit = await client.getChathistoryLimit()
+        XCTAssertEqual(limit, 100)
     }
 
-    func testHasChathistorySupportFalseByDefault() {
+    func testHasChathistorySupportFalseByDefault() async {
         let client = IRCClient()
-        XCTAssertFalse(client.hasChathistorySupport())
+        let supported = await client.hasChathistorySupport()
+        XCTAssertFalse(supported)
     }
 
-    func testActiveBatchesStartEmpty() {
+    func testActiveBatchesStartEmpty() async {
         let client = IRCClient()
-        // activeBatches should be empty; no batches open before connection.
-        XCTAssertTrue(client.activeBatches.isEmpty)
+        let batches = await client.activeBatches
+        XCTAssertTrue(batches.isEmpty)
     }
 
     // MARK: Fix A — waitForConnectionAsync is non-blocking (verified indirectly)
@@ -210,19 +216,16 @@ final class StartReceivingBoundedTaskTests: XCTestCase {
     // connection set must not crash or spin up unbounded Tasks.
 
     func testMultipleStartReceivingCallsDoNotCrash() async {
-        // Create clients, call the equivalent operations safely.
-        // The real guard here is the `guard let connection = connection` inside
-        // startReceiving — if there is no connection, it returns immediately.
-        // We verify this path doesn't crash by exercising the client lifecycle.
         let client = IRCClient()
         XCTAssertNotNil(client)
-        // isConnectedToServer() must be false without a connection.
-        XCTAssertFalse(client.isConnectedToServer())
+        let connected = await client.isConnectedToServer()
+        XCTAssertFalse(connected)
     }
 
-    func testIsConnectedReturnsFalseBeforeConnect() {
+    func testIsConnectedReturnsFalseBeforeConnect() async {
         let client = IRCClient()
-        XCTAssertFalse(client.isConnectedToServer())
+        let connected = await client.isConnectedToServer()
+        XCTAssertFalse(connected)
     }
 }
 
