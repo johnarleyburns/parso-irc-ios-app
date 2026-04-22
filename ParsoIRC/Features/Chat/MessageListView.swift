@@ -8,12 +8,21 @@ import SwiftUI
 struct MessageListView: View {
     @ObservedObject var viewModel: ChannelViewModel
 
+    /// Channel name — used in violation reports.
+    var channelName: String = ""
+
     /// Called when the user taps a nick.
     var onTapNick: ((String) -> Void)? = nil
 
     // Long-press context menu state
     @State private var contextMessage: Message? = nil
     @State private var showContextMenu = false
+    @State private var showBlockConfirm = false
+    @State private var showReportFallbackAlert = false
+    @State private var reportFallbackText = ""
+
+    @AppStorage(DemoStep.userDefaultsKey) private var demoStepRaw: Int = 0
+    @EnvironmentObject private var appState: AppState
 
     // Tracks whether the user is scrolled near the bottom
     @State private var isNearBottom = true
@@ -103,14 +112,35 @@ struct MessageListView: View {
                 .accessibilityLabel("Scroll to latest message")
             }
         }
+        // Context menu (long-press)
         .confirmationDialog(
-            "Message",
+            "Message Options",
             isPresented: $showContextMenu,
             titleVisibility: .hidden
         ) {
             if let msg = contextMessage {
                 contextActions(for: msg)
             }
+        }
+        // Block user confirmation
+        .alert(
+            "Block User",
+            isPresented: $showBlockConfirm,
+            presenting: contextMessage
+        ) { msg in
+            Button("Block \(msg.sender)", role: .destructive) {
+                viewModel.blockSender(nick: msg.sender)
+                HapticManager.mediumImpact()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: { msg in
+            Text("Messages from \(msg.sender) will be hidden. You can unblock them in Settings > Blocked Users.")
+        }
+        // Report fallback (no Mail app)
+        .alert("Report Copied", isPresented: $showReportFallbackAlert) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("The violation report has been copied to your clipboard. Please email it to info@parso.guru.")
         }
     }
 
@@ -133,6 +163,10 @@ struct MessageListView: View {
                     contextMessage = tapped
                     showContextMenu = true
                     HapticManager.mediumImpact()
+                    // Advance demo step on first long-press
+                    if appState.isDemoMode && demoStepRaw == DemoStep.longPress.rawValue {
+                        demoStepRaw = DemoStep.useOptions.rawValue
+                    }
                 },
                 onRetry: { failedMsg in
                     viewModel.retrySend(message: failedMsg)
@@ -145,22 +179,94 @@ struct MessageListView: View {
 
     @ViewBuilder
     private func contextActions(for msg: Message) -> some View {
-        Button {
-            UIPasteboard.general.string = msg.content
-            HapticManager.selectionFeedback()
-        } label: {
-            Label("Copy Text", systemImage: "doc.on.doc")
+        let isSystem = msg.type == .join || msg.type == .part || msg.type == .quit
+            || msg.type == .nick || msg.type == .mode || msg.type == .topic
+            || msg.type == .kick || msg.type == .ban || msg.type == .invite
+            || msg.type == .system
+        let isOwn = msg.isFromCurrentUser
+
+        // Copy — always available for non-system messages
+        if !isSystem {
+            Button {
+                UIPasteboard.general.string = msg.content
+                HapticManager.selectionFeedback()
+            } label: {
+                Label("Copy Text", systemImage: "doc.on.doc")
+            }
         }
 
-        Button {
-            // Mention: pass nick back so InputBarView can pre-fill it
-            onTapNick?(msg.sender)
-        } label: {
-            Label("Mention \(msg.sender)", systemImage: "at")
+        // Mention — only for incoming non-system messages
+        if !isSystem && !isOwn {
+            Button {
+                onTapNick?(msg.sender)
+            } label: {
+                Label("Mention \(msg.sender)", systemImage: "at")
+            }
+        }
+
+        // Report for Violations — all non-system messages
+        if !isSystem {
+            Button {
+                reportMessage(msg)
+            } label: {
+                Label("Report for Violations", systemImage: "exclamationmark.shield")
+            }
+        }
+
+        // Delete (local hide) — all non-system messages (both own and incoming)
+        if !isSystem {
+            Button(role: .destructive) {
+                viewModel.locallyDeleteMessage(id: msg.id)
+                HapticManager.mediumImpact()
+            } label: {
+                Label("Delete Message", systemImage: "trash")
+            }
+        }
+
+        // Block User — incoming non-system messages only (can't block yourself)
+        if !isSystem && !isOwn {
+            Button(role: .destructive) {
+                showBlockConfirm = true
+            } label: {
+                Label("Block \(msg.sender)", systemImage: "person.fill.xmark")
+            }
         }
 
         Button(role: .cancel) {} label: {
             Text("Dismiss")
+        }
+    }
+
+    // MARK: - Report helper
+
+    private func reportMessage(_ msg: Message) {
+        let dateStr = msg.timestamp.formatted(date: .abbreviated, time: .shortened)
+        let body = """
+Violation Report — Parso IRC
+
+Channel: \(channelName.isEmpty ? "(unknown)" : channelName)
+Sender: \(msg.sender)
+Time: \(dateStr)
+
+Message:
+\(msg.content)
+
+---
+Reported via Parso IRC on \(Date().formatted(date: .abbreviated, time: .shortened))
+"""
+
+        let subject = "[Parso IRC] Content Report"
+        let encodedSubject = subject.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? subject
+        let encodedBody    = body.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? body
+        let urlString = "mailto:info@parso.guru?subject=\(encodedSubject)&body=\(encodedBody)"
+
+        if let url = URL(string: urlString), UIApplication.shared.canOpenURL(url) {
+            UIApplication.shared.open(url)
+        } else {
+            // Fallback: copy the report text to clipboard
+            UIPasteboard.general.string = "To: info@parso.guru\nSubject: \(subject)\n\n\(body)"
+            reportFallbackText = body
+            showReportFallbackAlert = true
         }
     }
 

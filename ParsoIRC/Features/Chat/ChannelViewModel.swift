@@ -44,6 +44,14 @@ final class ChannelViewModel: ObservableObject {
     /// IDs of messages that failed to send (for UI retry indicator).
     @Published var failedMessageIds: Set<String> = []
 
+    // MARK: - Local moderation state (persisted in DB)
+
+    /// Message IDs the user has locally deleted (hidden). Persisted across restarts.
+    @Published var hiddenMessageIds: Set<String> = []
+
+    /// Nicks whose messages are locally blocked/hidden. Persisted across restarts.
+    @Published var blockedNicks: Set<String> = []
+
     let serverId: String
     let channelName: String   // e.g. "#linux"
 
@@ -57,6 +65,21 @@ final class ChannelViewModel: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     /// Counts history messages arriving in a single batch (for the separator line).
     private var pendingHistoryMessageCount: Int = 0
+    /// Cycling index for demo bot replies.
+    private var demoBotReplyIndex: Int = 0
+
+    /// Pending debounced rebuild work item.  Live messages schedule a rebuild
+    /// 50 ms in the future; if another message arrives before the timer fires
+    /// the old item is cancelled and a new one is scheduled.  This collapses
+    /// rapid-fire messages (script pastes, history bursts) from O(N²) individual
+    /// SwiftUI diffs down to O(N) for the whole burst — a primary fix for the
+    /// 12-hour crash caused by sustained CPU/memory pressure on busy channels.
+    private var rebuildWorkItem: DispatchWorkItem?
+
+    /// Tracks whether the first NAMES chunk for this session has arrived.
+    /// The member list is cleared on the first chunk so that a manual "Refresh
+    /// Members" request doesn't double (or triple) the list.
+    private var receivedFirstNamesBatch = false
 
     // MARK: - Init
 
@@ -74,6 +97,15 @@ final class ChannelViewModel: ObservableObject {
 
     func start() async {
         currentNick = ircManager.currentNicknames[serverId] ?? ""
+
+        // Load persisted moderation state first so filtering is correct
+        await loadModerationState()
+
+        if IRCClientManager.isDemoServer(serverId) {
+            await loadDemoMessages()
+            return
+        }
+
         await loadPersistedMessages()
         registerSubscriptions()
         await requestNamesIfNeeded()
@@ -84,6 +116,8 @@ final class ChannelViewModel: ObservableObject {
     /// Tear down Combine subscriptions.  The manager's permanent IRCClient
     /// callbacks are NOT touched — they continue running for all channels.
     func stop() {
+        rebuildWorkItem?.cancel()
+        rebuildWorkItem = nil
         cancellables.removeAll()
     }
 
@@ -103,6 +137,19 @@ final class ChannelViewModel: ObservableObject {
         // Optimistic append — not persisted until send succeeds
         append(outgoing, persist: false)
         HapticManager.lightImpact()
+
+        if IRCClientManager.isDemoServer(serverId) {
+            // Schedule a bot reply after a short realistic delay
+            let replyIndex = demoBotReplyIndex
+            demoBotReplyIndex += 1
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+                guard let self else { return }
+                let reply = DemoContent.botReply(index: replyIndex)
+                self.append(reply, persist: false)
+            }
+            return
+        }
+
         Task {
             do {
                 try await ircManager.sendMessage(trimmed, to: channelName, on: serverId)
@@ -127,6 +174,23 @@ final class ChannelViewModel: ObservableObject {
                 rebuildDisplay()
             }
         }
+    }
+
+    // MARK: - Local moderation
+
+    /// Hides a message locally (persisted in DB so it survives restarts).
+    func locallyDeleteMessage(id: String) {
+        hiddenMessageIds.insert(id)
+        try? DatabaseManager.shared.hideMessage(id: id)
+        rebuildDisplay()
+    }
+
+    /// Blocks all messages from `nick` locally (persisted in DB).
+    func blockSender(nick: String) {
+        guard nick != currentNick else { return }
+        blockedNicks.insert(nick)
+        try? DatabaseManager.shared.blockUser(nick: nick)
+        rebuildDisplay()
     }
 
     // MARK: - Mark read
@@ -165,6 +229,36 @@ final class ChannelViewModel: ObservableObject {
         rulesURL = URL(string: String(topic[swiftRange]))
     }
 
+    // MARK: - Moderation state loading
+
+    private func loadModerationState() async {
+        hiddenMessageIds = (try? DatabaseManager.shared.fetchHiddenMessageIds()) ?? []
+        let blocked = (try? DatabaseManager.shared.fetchBlockedUsers()) ?? []
+        blockedNicks = Set(blocked)
+    }
+
+    // MARK: - Demo mode loading
+
+    private func loadDemoMessages() async {
+        isLoadingHistory = true
+        currentNick = DemoContent.nick
+
+        // Load members
+        members = DemoContent.members
+
+        // Load topic from channel model
+        topic = DemoContent.channel.topic ?? ""
+        updateRulesURL()
+
+        // Load pre-seeded messages
+        let msgs = DemoContent.messages(channelId: channelId)
+        for msg in msgs {
+            appendRaw(msg)
+        }
+        rebuildDisplay()
+        isLoadingHistory = false
+    }
+
     // MARK: Persisted history
 
     private func loadPersistedMessages() async {
@@ -179,6 +273,10 @@ final class ChannelViewModel: ObservableObject {
         let persisted = (try? DatabaseManager.shared.fetchMessages(
             forChannel: cid, limit: 200)) ?? []
         for var msg in persisted {
+            // Skip hidden messages
+            if hiddenMessageIds.contains(msg.id) { continue }
+            // Skip blocked users
+            if blockedNicks.contains(msg.sender) { continue }
             if !myNick.isEmpty {
                 msg.isFromCurrentUser = msg.sender.lowercased() == myNick.lowercased()
             }
@@ -199,21 +297,23 @@ final class ChannelViewModel: ObservableObject {
         cancellables.removeAll()
 
         // ── Incoming messages (PRIVMSG / NOTICE / history) ──────────────────
+        // Use DispatchQueue.main (not RunLoop.main) so delivery continues during
+        // sheet/alert presentation — RunLoop.main pauses in UITrackingRunLoopMode.
         ircManager.messagePublisher(for: serverId)
-            .receive(on: RunLoop.main)
+            .receive(on: DispatchQueue.main)
             .sink { [weak self] msg in self?.handleSubscribedMessage(msg) }
             .store(in: &cancellables)
 
         // ── IRC events (join/part/quit/names/topic/etc.) ─────────────────────
         ircManager.eventPublisher(for: serverId)
-            .receive(on: RunLoop.main)
+            .receive(on: DispatchQueue.main)
             .sink { [weak self] event in self?.handleEvent(event) }
             .store(in: &cancellables)
 
         // ── Reconnect — re-subscribe and re-request names ────────────────────
         ircManager.reconnectSubject
             .filter { [weak self] sid in sid == self?.serverId }
-            .receive(on: RunLoop.main)
+            .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in Task { await self?.handleReconnect() } }
             .store(in: &cancellables)
 
@@ -248,6 +348,10 @@ final class ChannelViewModel: ObservableObject {
         guard isForChannel || isForUs else { return }
 
         let nick = ircMsg.source?.nick ?? "server"
+
+        // Skip blocked senders
+        guard !blockedNicks.contains(nick) else { return }
+
         let body = ircMsg.parameters.count > 1 ? ircMsg.parameters[1] : ""
         let isAction = body.hasPrefix("\u{0001}ACTION ") && body.hasSuffix("\u{0001}")
         let content  = isAction ? String(body.dropFirst(8).dropLast()) : body
@@ -287,6 +391,13 @@ final class ChannelViewModel: ObservableObject {
         // ── Member list (NAMES batches) ──────────────────────────────────────
         case .namesList(let channel, let nicks):
             guard channel.lowercased() == channelName.lowercased() else { return }
+            // Clear the member list on the very first NAMES chunk of each session
+            // (and on any subsequent refresh request) so repeated NAMES replies
+            // don't double or triple the displayed member count.
+            if !receivedFirstNamesBatch {
+                members.removeAll()
+                receivedFirstNamesBatch = true
+            }
             let parsed = nicks.map { parseNick($0) }
             for member in parsed {
                 if !members.contains(where: { $0.nick == member.nick }) {
@@ -411,8 +522,9 @@ final class ChannelViewModel: ObservableObject {
     }
 
     private func handleReconnect() async {
-        members.removeAll()          // fresh state after reconnect
-        registerSubscriptions()      // re-subscribe (new subjects after reconnect)
+        members.removeAll()              // fresh state after reconnect
+        receivedFirstNamesBatch = false  // allow next NAMES response to re-populate cleanly
+        registerSubscriptions()          // re-subscribe (new subjects after reconnect)
         await requestNamesIfNeeded()
     }
 
@@ -476,7 +588,7 @@ final class ChannelViewModel: ObservableObject {
         guard !seenMessageIds.contains(message.id) else { return }
         appendRaw(message)
         if persist { try? DatabaseManager.shared.saveMessage(message) }
-        rebuildDisplay()
+        scheduleRebuildDisplay()
     }
 
     private func appendRaw(_ message: Message) {
@@ -488,6 +600,22 @@ final class ChannelViewModel: ObservableObject {
         }
     }
 
+    /// Debounces `rebuildDisplay()` with a 50 ms coalesce window.
+    ///
+    /// Without debouncing, a script pasting 20 lines causes 20 consecutive
+    /// O(N) array rebuilds + SwiftUI diffs — O(N²) total.  With debouncing,
+    /// all messages that arrive within 50 ms share a single rebuild, reducing
+    /// the cost to O(N) for the whole burst.  The history-batch path already
+    /// defers via `chathistoryBatchEnd`, so this only affects live messages.
+    private func scheduleRebuildDisplay() {
+        rebuildWorkItem?.cancel()
+        let item = DispatchWorkItem { [weak self] in
+            self?.rebuildDisplay()
+        }
+        rebuildWorkItem = item
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05, execute: item)
+    }
+
     // MARK: - Display message construction
 
     private func rebuildDisplay() {
@@ -497,6 +625,13 @@ final class ChannelViewModel: ObservableObject {
         var lastTimestamp: Date? = nil
 
         for msg in rawMessages {
+            // Skip locally hidden messages
+            if hiddenMessageIds.contains(msg.id) { continue }
+            // Skip messages from blocked users (except system messages)
+            if msg.type == .message || msg.type == .action || msg.type == .notice {
+                if blockedNicks.contains(msg.sender) { continue }
+            }
+
             if lastDate == nil || !msg.timestamp.isSameDay(as: lastDate!) {
                 result.append(.dateSeparator(msg.timestamp))
                 lastDate = msg.timestamp
@@ -509,12 +644,7 @@ final class ChannelViewModel: ObservableObject {
                 && lastSender == msg.sender
                 && lastTimestamp.map { msg.timestamp.timeIntervalSince($0) < 300 } == true
 
-            // Apply failed-send overlay for outgoing messages
-            if failedMessageIds.contains(msg.id) {
-                result.append(.message(msg, grouped: sameRun))
-            } else {
-                result.append(.message(msg, grouped: sameRun))
-            }
+            result.append(.message(msg, grouped: sameRun))
 
             if canGroup {
                 lastSender = msg.sender

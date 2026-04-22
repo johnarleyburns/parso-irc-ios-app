@@ -6,6 +6,8 @@ import SwiftUI
 /// Page 2 – Identity: set a global default nickname, username, and password.
 ///          These are stored in AppState (and UserDefaults) so every new
 ///          server inherits them unless overridden per-server.
+///          Special case: if the user enters "demo" as their nickname the app
+///          switches to demo mode and page 3 shows only the Parso Demo Server.
 /// Page 3 – Add first server: simplified server picker that saves to DB
 ///          and sets autoConnect so the app connects on first open.
 struct OnboardingView: View {
@@ -23,6 +25,9 @@ struct OnboardingView: View {
                 .tag(1)
             AddFirstServerPage(isPresented: $isPresented)
                 .tag(2)
+                // Force a full re-render when isDemoMode changes so the
+                // paged TabView cache doesn't show stale normal-mode content.
+                .id(appState.isDemoMode)
         }
         .tabViewStyle(.page(indexDisplayMode: .never))
         .background(Color(.systemGroupedBackground).ignoresSafeArea())
@@ -174,7 +179,7 @@ private struct IdentityPage: View {
                     .font(.system(size: 28, weight: .bold, design: .rounded))
                     .padding(.bottom, 8)
 
-                Text("Your nickname is how others see you on IRC. We've generated unique credentials — save your password somewhere safe.")
+                Text("Your nickname is how others see you on IRC. We've generated unique credentials — save your password somewhere safe.\n\nTip: enter \"demo\" as your nickname to try the app with a sample server.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -327,11 +332,23 @@ private struct IdentityPage: View {
     @State private var previousNick: String = ""
 
     private func saveIdentity() {
-        let nick = nickname.trimmingCharacters(in: .whitespaces)
-        let user = username.trimmingCharacters(in: .whitespaces)
+        var nick = nickname.trimmingCharacters(in: .whitespaces)
+        var user = username.trimmingCharacters(in: .whitespaces)
+        var pass = password
+
+        // Demo mode: normalise credentials
+        if nick.lowercased() == "demo" {
+            nick = DemoContent.nick
+            user = DemoContent.username
+            pass = DemoContent.password
+            appState.isDemoMode = true
+        } else {
+            appState.isDemoMode = false
+        }
+
         appState.globalNickname = nick
         appState.globalRealName = user.isEmpty ? nick : user
-        appState.globalPassword = password
+        appState.globalPassword = pass
     }
 }
 
@@ -341,11 +358,14 @@ private struct AddFirstServerPage: View {
     @Binding var isPresented: Bool
     @EnvironmentObject private var appState: AppState
 
-    /// Multi-select: set of indices into Server.defaultNetworks
+    /// Multi-select: set of indices into Server.defaultNetworks (non-demo mode only)
     @State private var selectedIndices: Set<Int> = [0]   // Libera.Chat pre-selected
     @State private var showAddServer = false
 
+    private var isDemo: Bool { appState.isDemoMode }
+
     private var buttonLabel: String {
+        if isDemo { return "Connect to Parso Demo Server" }
         switch selectedIndices.count {
         case 0: return "Select at least one network"
         case 1: return "Connect to \(Server.defaultNetworks[selectedIndices.first!].name)"
@@ -366,7 +386,9 @@ private struct AddFirstServerPage: View {
                 Text("Choose Networks")
                     .font(.system(size: 26, weight: .bold, design: .rounded))
 
-                Text("Select one or more servers to get started. You can add more later.")
+                Text(isDemo
+                     ? "Your demo server is ready. Tap below to connect."
+                     : "Select one or more servers to get started. You can add more later.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -374,52 +396,68 @@ private struct AddFirstServerPage: View {
             }
             .padding(.bottom, 16)
 
-            // Scrollable 2-column network grid — tap to toggle, checkmark when selected
-            ScrollView {
-                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
-                    ForEach(Array(Server.defaultNetworks.enumerated()), id: \.offset) { index, network in
-                        NetworkCard(
-                            network: network,
-                            isSelected: selectedIndices.contains(index)
-                        ) {
-                            if selectedIndices.contains(index) {
-                                selectedIndices.remove(index)
-                            } else {
-                                selectedIndices.insert(index)
+            if isDemo {
+                // Demo mode: show a single pre-selected demo server card
+                demoServerCard
+                    .padding(.horizontal, 20)
+                Spacer()
+            } else {
+                // Normal mode: 2-column network grid
+                ScrollView {
+                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+                        ForEach(Array(Server.defaultNetworks.enumerated()), id: \.offset) { index, network in
+                            NetworkCard(
+                                network: network,
+                                isSelected: selectedIndices.contains(index)
+                            ) {
+                                if selectedIndices.contains(index) {
+                                    selectedIndices.remove(index)
+                                } else {
+                                    selectedIndices.insert(index)
+                                }
                             }
                         }
                     }
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 8)
                 }
-                .padding(.horizontal, 20)
-                .padding(.bottom, 8)
             }
 
-            // Footer (fixed) — no "Skip for now" button
+            // Footer (fixed)
             VStack(spacing: 10) {
                 Divider()
                 Button {
-                    saveAndConnect()
+                    if isDemo {
+                        saveAndConnectDemo()
+                    } else {
+                        saveAndConnect()
+                    }
                 } label: {
                     Text(buttonLabel)
                         .font(.headline)
                         .frame(maxWidth: .infinity)
                         .padding()
-                        .background(selectedIndices.isEmpty ? Color.gray : Color.accentColor)
+                        .background(
+                            (isDemo || !selectedIndices.isEmpty) ? Color.accentColor : Color.gray
+                        )
                         .foregroundStyle(.white)
                         .clipShape(RoundedRectangle(cornerRadius: 16))
                 }
                 .padding(.horizontal, 24)
-                .disabled(selectedIndices.isEmpty)
+                .disabled(!isDemo && selectedIndices.isEmpty)
 
-                Button {
-                    showAddServer = true
-                } label: {
-                    Text("Configure a custom server")
-                        .font(.subheadline)
-                        .foregroundStyle(Color.accentColor)
+                if !isDemo {
+                    Button {
+                        showAddServer = true
+                    } label: {
+                        Text("Configure a custom server")
+                            .font(.subheadline)
+                            .foregroundStyle(Color.accentColor)
+                    }
                 }
-                .padding(.bottom, 40)
+                Spacer().frame(height: 24)
             }
+            .padding(.bottom, 16)
         }
         // Dismiss keyboard inherited from the previous identity page
         .onAppear {
@@ -440,6 +478,39 @@ private struct AddFirstServerPage: View {
         }
     }
 
+    // MARK: - Demo server card
+
+    private var demoServerCard: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Image(systemName: "lock.fill")
+                    .font(.caption)
+                    .foregroundStyle(Color(.systemTeal).opacity(0.8))
+                Spacer()
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundStyle(Color.accentColor)
+            }
+            Text(DemoContent.serverName)
+                .font(.headline)
+                .foregroundStyle(.primary)
+            Text(DemoContent.serverHost)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 14)
+                .fill(Color.accentColor.opacity(0.12))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14)
+                        .strokeBorder(Color.accentColor, lineWidth: 2)
+                )
+        )
+    }
+
+    // MARK: - Save helpers
+
     private func saveAndConnect() {
         guard !selectedIndices.isEmpty else { return }
         let nick = appState.globalNickname.isEmpty
@@ -459,8 +530,6 @@ private struct AddFirstServerPage: View {
                 nickname: nick,
                 realname: real,
                 password: pass,
-                // SASL requires the nick to be pre-registered with NickServ.
-                // New users connect without SASL; they can enable it after registering.
                 saslEnabled: false,
                 saslMechanism: "PLAIN",
                 autoConnect: true,
@@ -469,6 +538,18 @@ private struct AddFirstServerPage: View {
             )
             try? DatabaseManager.shared.saveServer(server)
         }
+        isPresented = false
+    }
+
+    private func saveAndConnectDemo() {
+        // Save demo server
+        let demoServer = DemoContent.server
+        try? DatabaseManager.shared.saveServer(demoServer)
+
+        // Save demo channel with joinedAt so it appears in sidebar
+        var ch = DemoContent.channel
+        ch.joinedAt = Date()
+        try? DatabaseManager.shared.saveChannel(ch, serverId: DemoContent.serverId)
         isPresented = false
     }
 }

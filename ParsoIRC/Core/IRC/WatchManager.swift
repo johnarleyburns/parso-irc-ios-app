@@ -83,9 +83,13 @@ class WatchManager: ObservableObject {
     /// Schedules the next background app-refresh task at the configured poll interval.
     nonisolated func scheduleNextBackgroundTask() {
         let request = BGAppRefreshTaskRequest(identifier: WatchManager.backgroundTaskIdentifier)
+        // Use a safe optional cast instead of the force-cast `as! Data` that
+        // crashes on backgrounding if UserDefaults ever holds a non-Data value
+        // for this key (e.g. written by a prior app version or a unit test).
         request.earliestBeginDate = Date(timeIntervalSinceNow: Double(
             (UserDefaults.standard.object(forKey: "watch_settings")
-                .flatMap { try? JSONDecoder().decode(WatchSettings.self, from: $0 as! Data) }
+                .flatMap { $0 as? Data }
+                .flatMap { try? JSONDecoder().decode(WatchSettings.self, from: $0) }
                 ?? WatchSettings.default
             ).pollIntervalMinutes * 60
         ))

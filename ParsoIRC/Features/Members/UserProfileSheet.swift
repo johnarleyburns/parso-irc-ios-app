@@ -35,6 +35,7 @@ struct UserProfileSheet: View {
     @State private var whoisDone: Bool = false
 
     @State private var savedUnhandledHandler: ((IRCMessage) -> Void)? = nil
+    @State private var showBlockConfirm = false
 
     var body: some View {
         NavigationStack {
@@ -89,6 +90,16 @@ struct UserProfileSheet: View {
         .presentationDragIndicator(.visible)
         .onAppear { fireWhois() }
         .onDisappear { deregisterWhoisCallback() }
+        .alert("Block User", isPresented: $showBlockConfirm) {
+            Button("Block \(nick)", role: .destructive) {
+                try? DatabaseManager.shared.blockUser(nick: nick)
+                HapticManager.mediumImpact()
+                dismiss()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Messages from \(nick) will be hidden. You can unblock them in Settings > Blocked Users.")
+        }
     }
 
     // MARK: - Hero header
@@ -230,6 +241,22 @@ struct UserProfileSheet: View {
                     .background(Color(.secondarySystemGroupedBackground))
                     .foregroundStyle(.primary)
                     .clipShape(RoundedRectangle(cornerRadius: 14))
+            }
+
+            // Block User (only for other users, not ourselves)
+            let myNick = AppState.shared.globalNickname
+            if nick.lowercased() != myNick.lowercased() {
+                Button {
+                    showBlockConfirm = true
+                } label: {
+                    Label("Block \(nick)", systemImage: "person.fill.xmark")
+                        .font(.headline)
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(Color(.systemRed).opacity(0.1))
+                        .foregroundStyle(.red)
+                        .clipShape(RoundedRectangle(cornerRadius: 14))
+                }
             }
         }
     }

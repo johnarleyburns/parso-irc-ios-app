@@ -12,6 +12,9 @@ struct InputBarView: View {
     // Pre-fill text from outside (e.g. "alice: " after tapping a nick)
     @Binding var prefillText: String
 
+    /// Optional callback invoked after a message is sent (used by demo mode step tracking).
+    var onSend: (() -> Void)? = nil
+
     @State private var inputText: String = ""
     @FocusState private var isTextFieldFocused: Bool
 
@@ -263,6 +266,7 @@ struct InputBarView: View {
         guard !trimmed.isEmpty else { return }
         viewModel.send(trimmed)
         inputText = ""
+        onSend?()
     }
 
     /// Submit on Return key only when the text is a single line (no \n).

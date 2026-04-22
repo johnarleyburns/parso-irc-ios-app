@@ -61,6 +61,16 @@ final class DatabaseManager {
     // Settings columns
     private let settingKey = Expression<String>("key")
     private let settingValue = Expression<String?>("value")
+
+    // Blocked users table + columns
+    private let blockedUsers = Table("blocked_users")
+    private let blockedNick = Expression<String>("nick")
+    private let blockedAt = Expression<String>("blocked_at")
+
+    // Deleted (hidden) messages table + columns
+    private let deletedMessages = Table("deleted_messages")
+    private let deletedMessageId = Expression<String>("message_id")
+    private let deletedAt = Expression<String>("deleted_at")
     
     // User columns
     private let userId = Expression<String>("id")
@@ -160,6 +170,26 @@ final class DatabaseManager {
         } catch {
             print("Migration failed (servers use_connection_password): \(error)")
         }
+
+        // Phase 7: blocked_users table (create if absent for existing installs)
+        do {
+            try db.run(blockedUsers.create(ifNotExists: true) { t in
+                t.column(blockedNick, primaryKey: true)
+                t.column(blockedAt)
+            })
+        } catch {
+            print("Migration failed (blocked_users): \(error)")
+        }
+
+        // Phase 7: deleted_messages table (create if absent for existing installs)
+        do {
+            try db.run(deletedMessages.create(ifNotExists: true) { t in
+                t.column(deletedMessageId, primaryKey: true)
+                t.column(deletedAt)
+            })
+        } catch {
+            print("Migration failed (deleted_messages): \(error)")
+        }
     }
     
     private func createTables() {
@@ -219,6 +249,18 @@ final class DatabaseManager {
             try db.run(settings.create(ifNotExists: true) { t in
                 t.column(settingKey, primaryKey: true)
                 t.column(settingValue)
+            })
+
+            // Blocked users
+            try db.run(blockedUsers.create(ifNotExists: true) { t in
+                t.column(blockedNick, primaryKey: true)
+                t.column(blockedAt)
+            })
+
+            // Locally deleted (hidden) message IDs
+            try db.run(deletedMessages.create(ifNotExists: true) { t in
+                t.column(deletedMessageId, primaryKey: true)
+                t.column(deletedAt)
             })
             
             try db.run("""
@@ -705,5 +747,69 @@ final class DatabaseManager {
         try db.run("""
             UPDATE users SET nickname = ?, avatar_seed = ?, status = ? WHERE id = ?
         """, user.nickname, user.avatarSeed, user.status, user.id)
+    }
+
+    // MARK: - Blocked Users
+
+    func blockUser(nick: String) throws {
+        guard let db = db else { return }
+        let insert = blockedUsers.insert(or: .replace,
+            blockedNick <- nick,
+            blockedAt <- dateFormatter.string(from: Date())
+        )
+        try db.run(insert)
+    }
+
+    func unblockUser(nick: String) throws {
+        guard let db = db else { return }
+        try db.run(blockedUsers.filter(blockedNick == nick).delete())
+    }
+
+    func fetchBlockedUsers() throws -> [String] {
+        guard let db = db else { return [] }
+        return try db.prepare(blockedUsers).map { $0[blockedNick] }
+    }
+
+    func isUserBlocked(nick: String) throws -> Bool {
+        guard let db = db else { return false }
+        return try db.scalar(blockedUsers.filter(blockedNick == nick).count) > 0
+    }
+
+    // MARK: - Hidden (locally deleted) Messages
+
+    func hideMessage(id: String) throws {
+        guard let db = db else { return }
+        let insert = deletedMessages.insert(or: .replace,
+            deletedMessageId <- id,
+            deletedAt <- dateFormatter.string(from: Date())
+        )
+        try db.run(insert)
+    }
+
+    func fetchHiddenMessageIds() throws -> Set<String> {
+        guard let db = db else { return [] }
+        let ids = try db.prepare(deletedMessages).map { $0[deletedMessageId] }
+        return Set(ids)
+    }
+
+    func isMessageHidden(id: String) throws -> Bool {
+        guard let db = db else { return false }
+        return try db.scalar(deletedMessages.filter(deletedMessageId == id).count) > 0
+    }
+
+    // MARK: - Reset All User Data (Exit Demo Mode)
+
+    /// Wipes the entire SQLite database file so the app returns to a clean state.
+    /// The caller is responsible for clearing UserDefaults and re-presenting onboarding.
+    func resetAllUserData() {
+        db = nil  // close connection
+        try? FileManager.default.removeItem(atPath: dbPath)
+        // Re-open a fresh database
+        do {
+            db = try Connection(dbPath)
+            createTables()
+        } catch {
+            print("resetAllUserData: failed to re-open DB: \(error)")
+        }
     }
 }

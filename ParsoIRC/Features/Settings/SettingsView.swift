@@ -2,14 +2,14 @@ import SwiftUI
 
 /// Root settings screen.
 ///
-/// Replaces `SettingsPlaceholderView` in `ServerSidebarView`.
-///
 /// Sections:
 ///   Servers          – list saved servers, tap to edit, swipe to delete
 ///   Identity         – global nick / realname
 ///   Appearance       – font size, message density
 ///   Notifications    – enable/style/preview/poll interval
 ///   Connection       – auto-reconnect toggle
+///   Safety           – blocked users list, contact support
+///   Demo Mode        – exit demo mode (only shown in demo mode)
 ///   Developer        – debug terminal
 ///   About            – version, licenses
 struct SettingsView: View {
@@ -20,6 +20,8 @@ struct SettingsView: View {
     @State private var servers: [Server] = []
     @State private var showAddServer = false
     @State private var editingServer: Server? = nil
+    @State private var showExitDemoAlert = false
+    @State private var showDeleteAccountAlert = false
 
     var body: some View {
         NavigationStack {
@@ -29,6 +31,11 @@ struct SettingsView: View {
                 appearanceSection
                 notificationsSection
                 connectionSection
+                safetySection
+                if appState.isDemoMode {
+                    demoModeSection
+                }
+                accountSection
                 developerSection
                 aboutSection
             }
@@ -48,6 +55,28 @@ struct SettingsView: View {
         .sheet(item: $editingServer, onDismiss: loadServers) { server in
             AddServerSheet(existingServer: server) { _ in }
                 .environmentObject(appState)
+        }
+        .alert("Exit Demo Mode", isPresented: $showExitDemoAlert) {
+            Button("Exit Demo", role: .destructive) {
+                dismiss()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                    appState.resetAllUserData()
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This will delete all your local data and return you to the setup screen. Are you sure?")
+        }
+        .alert("Delete All Data?", isPresented: $showDeleteAccountAlert) {
+            Button("Delete Everything", role: .destructive) {
+                dismiss()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                    appState.resetAllUserData()
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This will permanently remove all servers, messages, settings, and your account from this device and return you to the setup screen. This cannot be undone.")
         }
     }
 
@@ -165,6 +194,64 @@ struct SettingsView: View {
             } label: {
                 Label("Connection", systemImage: "network")
             }
+        }
+    }
+
+    // MARK: - Safety section
+
+    private var safetySection: some View {
+        Section {
+            NavigationLink {
+                BlockedUsersView()
+            } label: {
+                Label("Blocked Users", systemImage: "person.fill.xmark")
+            }
+
+            Button {
+                let subject = "Parso IRC Support"
+                let encodedSubject = subject
+                    .addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? subject
+                if let url = URL(string: "mailto:info@parso.guru?subject=\(encodedSubject)") {
+                    UIApplication.shared.open(url)
+                }
+            } label: {
+                Label("Contact Support", systemImage: "envelope")
+                    .foregroundStyle(Color.accentColor)
+            }
+        } header: {
+            Text("Safety")
+        }
+    }
+
+    // MARK: - Demo Mode section
+
+    private var demoModeSection: some View {
+        Section {
+            Button(role: .destructive) {
+                showExitDemoAlert = true
+            } label: {
+                Label("Exit Demo Mode", systemImage: "arrow.counterclockwise")
+            }
+        } header: {
+            Text("Demo Mode")
+        } footer: {
+            Text("Exits the demo and returns to the setup screen. All local data will be deleted.")
+        }
+    }
+
+    // MARK: - Account section (always visible)
+
+    private var accountSection: some View {
+        Section {
+            Button(role: .destructive) {
+                showDeleteAccountAlert = true
+            } label: {
+                Label("Delete All Data & Account", systemImage: "person.crop.circle.badge.minus")
+            }
+        } header: {
+            Text("Account")
+        } footer: {
+            Text("Permanently removes all servers, messages, and settings from this device and returns you to the setup screen.")
         }
     }
 

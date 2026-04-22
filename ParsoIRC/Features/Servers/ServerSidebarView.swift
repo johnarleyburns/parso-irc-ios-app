@@ -2,19 +2,6 @@ import SwiftUI
 
 /// Left-column sidebar (root of the NavigationStack) that shows saved servers
 /// and their joined channels.
-///
-/// Layout per server (when expanded):
-/// ```
-/// ┌──────────────────────────┐
-/// │ ● Libera.Chat       ⋯   │
-/// │   #linux            3   │  ← channel row with unread badge
-/// │   #rust                 │
-/// │   ── Messages ──         │  ← separator (only if DMs exist)
-/// │   👤 alice          1   │  ← DM row with unread badge
-/// │   + Join a channel      │
-/// │   + New Message         │
-/// └──────────────────────────┘
-/// ```
 struct ServerSidebarView: View {
     @Binding var navPath: [NavDestination]
     var onSelectChannel: (String, String, String, Bool, String?) -> Void
@@ -31,72 +18,81 @@ struct ServerSidebarView: View {
     @State private var showAddServer = false
     @State private var showSettings = false
     @State private var channelBrowserServerId: String? = nil
-    /// (serverId) when a "New Message" sheet is open for that server
     @State private var newMessageServerId: String? = nil
     @State private var newMessageNick: String = ""
 
+    @AppStorage(DemoStep.userDefaultsKey) private var demoStepRaw: Int = 0
+
     var body: some View {
-        List {
-            ForEach(servers) { server in
-                serverSection(for: server)
-            }
-        }
-        .listStyle(.insetGrouped)
-        .navigationTitle("Parso IRC")
-        .navigationBarTitleDisplayMode(.large)
-        .toolbar {
-            ToolbarItem(placement: .navigationBarTrailing) {
-                Button { showSettings = true } label: {
-                    Image(systemName: "gearshape")
+        ZStack(alignment: .top) {
+            List {
+                ForEach(servers) { server in
+                    serverSection(for: server)
                 }
-                .accessibilityLabel("Settings")
             }
-            ToolbarItem(placement: .navigationBarLeading) {
-                EditButton()
+            .listStyle(.insetGrouped)
+            .navigationTitle("Parso IRC")
+            .navigationBarTitleDisplayMode(.large)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button { showSettings = true } label: {
+                        Image(systemName: "gearshape")
+                    }
+                    .accessibilityLabel("Settings")
+                }
+                ToolbarItem(placement: .navigationBarLeading) {
+                    EditButton()
+                }
             }
-        }
-        .safeAreaInset(edge: .bottom) { addServerFooter }
-        .sheet(isPresented: $showAddServer, onDismiss: reloadServers) {
-            AddServerSheet(existingServer: nil) { newServer in
-                Task { try? await ircManager.connect(to: newServer) }
-            }
-            .environmentObject(appState)
-        }
-        .sheet(isPresented: $showSettings) {
-            SettingsView()
+            .safeAreaInset(edge: .bottom) { addServerFooter }
+            .sheet(isPresented: $showAddServer, onDismiss: reloadServers) {
+                AddServerSheet(existingServer: nil) { newServer in
+                    Task { try? await ircManager.connect(to: newServer) }
+                }
                 .environmentObject(appState)
-                .environmentObject(ircManager)
-        }
-        .onAppear(perform: reloadAndConnect)
-        .onChange(of: ircManager.connectionStates) { _, _ in reloadServers() }
-        .onChange(of: ircManager.currentNicknames) { _, _ in reloadServers() }
-        // Reload when a DM is created from another screen
-        .onChange(of: ircManager.dmChannelIds) { _, _ in reloadServers() }
-        // Reload when a channel is joined or left (joinedAt changes in DB)
-        .onChange(of: ircManager.channelMembershipVersion) { _, _ in reloadServers() }
-        // New Message sheet (per-server)
-        .alert("New Direct Message", isPresented: Binding(
-            get: { newMessageServerId != nil },
-            set: { if !$0 { newMessageServerId = nil; newMessageNick = "" } }
-        )) {
-            TextField("Nickname", text: $newMessageNick)
-                .autocorrectionDisabled()
-                .textInputAutocapitalization(.never)
-            Button("Open") {
-                guard let sid = newMessageServerId,
-                      !newMessageNick.trimmingCharacters(in: .whitespaces).isEmpty else { return }
-                let nick = newMessageNick.trimmingCharacters(in: .whitespaces)
-                let dm = ircManager.openOrCreateDM(with: nick, serverId: sid)
-                newMessageServerId = nil
-                newMessageNick = ""
-                onSelectChannel(sid, dm.id, nick, true, nick)
             }
-            Button("Cancel", role: .cancel) {
-                newMessageServerId = nil
-                newMessageNick = ""
+            .sheet(isPresented: $showSettings) {
+                SettingsView()
+                    .environmentObject(appState)
+                    .environmentObject(ircManager)
             }
-        } message: {
-            Text("Enter the nickname you want to message.")
+            .onAppear(perform: reloadAndConnect)
+            .onChange(of: ircManager.connectionStates) { _, _ in reloadServers() }
+            .onChange(of: ircManager.currentNicknames) { _, _ in reloadServers() }
+            .onChange(of: ircManager.dmChannelIds) { _, _ in reloadServers() }
+            .onChange(of: ircManager.channelMembershipVersion) { _, _ in reloadServers() }
+            .alert("New Direct Message", isPresented: Binding(
+                get: { newMessageServerId != nil },
+                set: { if !$0 { newMessageServerId = nil; newMessageNick = "" } }
+            )) {
+                TextField("Nickname", text: $newMessageNick)
+                    .autocorrectionDisabled()
+                    .textInputAutocapitalization(.never)
+                Button("Open") {
+                    guard let sid = newMessageServerId,
+                          !newMessageNick.trimmingCharacters(in: .whitespaces).isEmpty else { return }
+                    let nick = newMessageNick.trimmingCharacters(in: .whitespaces)
+                    let dm = ircManager.openOrCreateDM(with: nick, serverId: sid)
+                    newMessageServerId = nil
+                    newMessageNick = ""
+                    onSelectChannel(sid, dm.id, nick, true, nick)
+                }
+                Button("Cancel", role: .cancel) {
+                    newMessageServerId = nil
+                    newMessageNick = ""
+                }
+            } message: {
+                Text("Enter the nickname you want to message.")
+            }
+
+            // Demo overlays
+            VStack {
+                DemoOverlayView.expandServer()
+                    .environmentObject(appState)
+                DemoOverlayView.openChannel()
+                    .environmentObject(appState)
+            }
+            .padding(.top, 8)
         }
     }
 
@@ -110,8 +106,15 @@ struct ServerSidebarView: View {
                 isExpanded: Binding(
                     get: { expandedServers.contains(server.id) },
                     set: { expanded in
-                        if expanded { expandedServers.insert(server.id) }
-                        else { expandedServers.remove(server.id) }
+                        if expanded {
+                            expandedServers.insert(server.id)
+                            // Advance demo step when user expands demo server
+                            if server.id == DemoContent.serverId && demoStepRaw == DemoStep.expandServer.rawValue {
+                                demoStepRaw = DemoStep.openChannel.rawValue
+                            }
+                        } else {
+                            expandedServers.remove(server.id)
+                        }
                     }
                 ),
                 onServerUpdated: reloadServers
@@ -119,14 +122,15 @@ struct ServerSidebarView: View {
             .environmentObject(ircManager)
 
             if expandedServers.contains(server.id) {
-                // ── Channels ──────────────────────────────────────────────────
-                // Only show channels the user is currently joined to.
-                // Left channels have joinedAt = nil and must not appear here.
                 ForEach(server.channels.filter { $0.joinedAt != nil }) { channel in
                     ChannelRowView(
                         channel: channel,
                         serverId: server.id,
                         onSelect: { sid, cid in
+                            // Advance demo step when opening the demo channel
+                            if sid == DemoContent.serverId && demoStepRaw == DemoStep.openChannel.rawValue {
+                                demoStepRaw = DemoStep.sendMessage.rawValue
+                            }
                             onSelectChannel(sid, cid, channel.name, false, nil)
                         },
                         onLeave: reloadServers
@@ -138,7 +142,6 @@ struct ServerSidebarView: View {
                     reorderChannels(for: server, from: indices, to: dest)
                 }
 
-                // ── Direct Messages (inline, under channels) ─────────────────
                 let dms = conversationsVM.conversations.filter {
                     $0.serverId == server.id
                 }
@@ -155,7 +158,6 @@ struct ServerSidebarView: View {
                     }
                 }
 
-                // ── Action rows ───────────────────────────────────────────────
                 joinChannelRow(server: server)
                 newMessageRow(server: server)
             }
@@ -244,7 +246,7 @@ struct ServerSidebarView: View {
         }
     }
 
-    // MARK: - "New Message" row (start a DM with any nick)
+    // MARK: - "New Message" row
 
     private func newMessageRow(server: Server) -> some View {
         Button {

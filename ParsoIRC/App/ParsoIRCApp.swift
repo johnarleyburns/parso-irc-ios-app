@@ -1,6 +1,12 @@
 import SwiftUI
 import BackgroundTasks
 
+// MARK: - Notification name for full data reset
+
+extension Notification.Name {
+    static let resetToOnboarding = Notification.Name("resetToOnboarding")
+}
+
 @main
 struct ParsoIRCApp: App {
     @StateObject private var ircManager = IRCClientManager.shared
@@ -77,9 +83,45 @@ class AppState: ObservableObject {
     /// ChannelViewModel uses this to decide whether to re-fetch chat history.
     @Published var lastForegroundedAt: Date? = nil
 
+    /// True when the user is in the simulated "Parso Demo Server" experience.
+    @Published var isDemoMode: Bool {
+        didSet { UserDefaults.standard.set(isDemoMode, forKey: "isDemoMode") }
+    }
+
     init() {
         self.globalNickname = UserDefaults.standard.string(forKey: "globalNickname") ?? ""
         self.globalRealName = UserDefaults.standard.string(forKey: "globalRealName") ?? ""
         self.globalPassword = UserDefaults.standard.string(forKey: "globalPassword") ?? ""
+        self.isDemoMode     = UserDefaults.standard.bool(forKey: "isDemoMode")
+    }
+
+    // MARK: - Reset (Exit Demo Mode)
+
+    /// Wipes ALL local data and returns the app to a clean first-launch state.
+    /// Posts `.resetToOnboarding` so RootView can re-present EULA + onboarding.
+    func resetAllUserData() {
+        // 1. Wipe database
+        DatabaseManager.shared.resetAllUserData()
+
+        // 2. Clear all relevant UserDefaults keys
+        let keysToRemove = [
+            "globalNickname", "globalRealName", "globalPassword",
+            "isDemoMode", "eulaAccepted", "demoStep", "demoBotReplyIndex",
+            "autoReconnect", "explicitDisconnects", "lastConnectedServerIds"
+        ]
+        keysToRemove.forEach { UserDefaults.standard.removeObject(forKey: $0) }
+
+        // 3. Reset published state
+        globalNickname = ""
+        globalRealName = ""
+        globalPassword = ""
+        isDemoMode = false
+        selectedServerId = nil
+        selectedChannelId = nil
+        currentUser = nil
+        isAuthenticated = false
+
+        // 4. Notify RootView to show EULA + onboarding again
+        NotificationCenter.default.post(name: .resetToOnboarding, object: nil)
     }
 }

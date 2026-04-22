@@ -53,6 +53,12 @@ actor IRCClient {
     private var readStream: InputStream?
     private var writeStream: OutputStream?
     private var useTLS = false
+
+    /// Accumulates partial IRC lines across TCP receive calls.
+    /// IRC messages are \r\n-terminated but can span multiple TCP segments;
+    /// without this buffer the tail of a split segment is silently discarded,
+    /// causing protocol desynchronisation after many hours of chat.
+    private var receiveBuffer: String = ""
     
     private var pendingCapabilities: Set<String> = []
     private var acknowledgedCapabilities: Set<String> = []
@@ -111,6 +117,17 @@ actor IRCClient {
 
         let hostNW = NWEndpoint.Host(host)
         let portNW = NWEndpoint.Port(integerLiteral: UInt16(port))
+
+        // Explicitly cancel any existing connection before creating a new one.
+        // Abandoning an NWConnection without cancellation leaves the OS-level
+        // TCP socket open until the server's keepalive timeout (2-4 hours on
+        // IRC).  After a handful of reconnects this exhausts the process file-
+        // descriptor limit and crashes with EMFILE.
+        if let existing = connection {
+            existing.cancel()
+            connection = nil
+        }
+        receiveBuffer = ""
 
         debugLog.log("Creating NWConnection to \(host):\(port)...", type: .info)
         let parameters: NWParameters
@@ -264,6 +281,7 @@ actor IRCClient {
             connection?.cancel()
             connection = nil
             isConnected = false
+            receiveBuffer = ""   // discard any buffered partial line
         }
     }
 
@@ -501,11 +519,18 @@ actor IRCClient {
     }
 
     private func handleReceivedData(_ data: Data) async {
-        guard let string = String(data: data, encoding: .utf8) else { return }
+        guard let chunk = String(data: data, encoding: .utf8) else { return }
 
-        debugLog.log("RECV raw: \(string.prefix(200))", type: .received)
+        debugLog.log("RECV raw: \(chunk.prefix(200))", type: .received)
 
-        let lines = string.components(separatedBy: "\r\n")
+        // Append to the rolling buffer and split on \r\n.
+        // The last element of `components(separatedBy:)` is either an empty
+        // string (if the chunk ends with \r\n) or an incomplete line that must
+        // be held over for the next receive call.
+        receiveBuffer += chunk
+        var lines = receiveBuffer.components(separatedBy: "\r\n")
+        // Keep the last (possibly incomplete) fragment in the buffer.
+        receiveBuffer = lines.removeLast()
         for line in lines where !line.isEmpty {
             let message = IRCMessage(rawLine: line)
             await handleMessage(message)

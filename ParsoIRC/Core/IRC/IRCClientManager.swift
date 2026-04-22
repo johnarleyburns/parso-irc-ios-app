@@ -96,6 +96,8 @@ final class IRCClientManager: ObservableObject {
                 updated.joinedAt = nil
                 try? DatabaseManager.shared.saveChannel(updated, serverId: serverId)
                 clearUnread(channelId: ch.id)
+                // Invalidate cache so a re-join picks up the fresh DB record
+                channelCache.removeValue(forKey: "\(serverId):\(channelName.lowercased())")
             }
             await MainActor.run {
                 self.channelMembershipVersion += 1
@@ -158,12 +160,25 @@ final class IRCClientManager: ObservableObject {
     }
 
     func getClient(for serverId: String) -> IRCClient? {
+        guard !IRCClientManager.isDemoServer(serverId) else { return nil }
         return connections[serverId]
     }
     
     private var reconnectTimers: [String: Timer] = [:]
     private var reconnectAttempts: [String: Int] = [:]
     private var maxReconnectAttempts = 5
+
+    /// In-memory cache: "serverId:channelname.lowercased()" → Channel
+    /// Populated at connect time and kept updated on join/part.
+    /// Eliminates the per-message fetchChannels(forServer:) DB query that was
+    /// causing O(N) DB reads at the message receive rate — a primary contributor
+    /// to the 12-hour watchdog crash.
+    private var channelCache: [String: Channel] = [:]
+
+    /// Timestamp of the last maybeNotify Task spawned per channel ID.
+    /// Used to rate-limit notification Tasks to at most 1/second per channel,
+    /// preventing unbounded Task accumulation on busy channels.
+    private var lastNotifyDate: [String: Date] = [:]
 
     /// Fires the server ID every time a connection is (re)established.
     /// ChannelViewModel subscribes so it can re-subscribe to the new subjects.
@@ -179,6 +194,14 @@ final class IRCClientManager: ObservableObject {
     
     func isConnected(serverId: String) -> Bool {
         return connectionStates[serverId] == .connected
+    }
+
+    // MARK: - Demo server helpers
+
+    /// Returns true when `serverId` is the local demo server that never makes
+    /// a real TCP connection.
+    static func isDemoServer(_ serverId: String) -> Bool {
+        serverId == DemoContent.serverId
     }
 
     // MARK: - Open / create a DM thread
@@ -202,6 +225,21 @@ final class IRCClientManager: ObservableObject {
     // MARK: - Connection Management
     
     func connect(to server: Server) async throws {
+        // ── Demo server: no real TCP connection needed ──────────────────────
+        if IRCClientManager.isDemoServer(server.id) {
+            var explicit = explicitlyDisconnectedServerIds
+            explicit.remove(server.id)
+            explicitlyDisconnectedServerIds = explicit
+
+            connectionStates[server.id] = .connected
+            currentNicknames[server.id] = DemoContent.nick
+            // Create stub subjects so publishers don't crash (nobody sends on them)
+            messageSubjects[server.id] = PassthroughSubject()
+            eventSubjects[server.id]   = PassthroughSubject()
+            reconnectSubject.send(server.id)
+            return
+        }
+
         var explicit = explicitlyDisconnectedServerIds
         explicit.remove(server.id)
         explicitlyDisconnectedServerIds = explicit
@@ -380,7 +418,16 @@ final class IRCClientManager: ObservableObject {
             )
             
             connections[server.id] = client
-            
+
+            // Seed the channel ID cache from persisted channels.
+            // This replaces per-message fetchChannels(forServer:) DB reads with
+            // an O(1) dictionary lookup for the lifetime of the connection.
+            if let channels = try? DatabaseManager.shared.fetchChannels(forServer: server.id) {
+                for ch in channels {
+                    channelCache["\(server.id):\(ch.name.lowercased())"] = ch
+                }
+            }
+
             for channel in server.channels where channel.joinedAt != nil {
                 try await client.join(channel: channel.name)
             }
@@ -412,17 +459,30 @@ final class IRCClientManager: ObservableObject {
     }
     
     func disconnect(from serverId: String) {
+        // Demo server: just flip state, no real socket
+        if IRCClientManager.isDemoServer(serverId) {
+            connectionStates[serverId] = .disconnected
+            messageSubjects.removeValue(forKey: serverId)
+            eventSubjects.removeValue(forKey: serverId)
+            return
+        }
+
         reconnectTimers[serverId]?.invalidate()
         reconnectTimers[serverId] = nil
 
         var explicit = explicitlyDisconnectedServerIds
         explicit.insert(serverId)
         explicitlyDisconnectedServerIds = explicit
-        
+
         // Tear down subjects so subscribers complete cleanly
         messageSubjects.removeValue(forKey: serverId)
         eventSubjects.removeValue(forKey: serverId)
         serverNoticeBuffer.removeValue(forKey: serverId)
+
+        // Evict channel cache and list buffers for this server
+        channelCache = channelCache.filter { !$0.key.hasPrefix(serverId + ":") }
+        listStagingBuffer.removeValue(forKey: serverId)
+        channelListCache.removeValue(forKey: serverId)
 
         Task {
             try? await connections[serverId]?.quit(message: "Parso IRC signing off")
@@ -456,6 +516,8 @@ final class IRCClientManager: ObservableObject {
     }
     
     private func handleDisconnect(serverId: String) {
+        // Demo server never actually disconnects
+        guard !IRCClientManager.isDemoServer(serverId) else { return }
         connectionStates[serverId] = .disconnected
         scheduleReconnect(serverId: serverId)
     }
@@ -518,9 +580,20 @@ final class IRCClientManager: ObservableObject {
             return
         }
 
-        // Look up persisted channel by name
-        guard let channel = (try? DatabaseManager.shared.fetchChannels(forServer: serverId))?
-            .first(where: { $0.name.lowercased() == target.lowercased() }) else { return }
+        // Look up channel by name using the in-memory cache (O(1)).
+        // Falls back to a DB read only if the cache misses (e.g. a channel
+        // joined after connect), and then updates the cache for next time.
+        let cacheKey = "\(serverId):\(target.lowercased())"
+        var channel: Channel
+        if let cached = channelCache[cacheKey] {
+            channel = cached
+        } else if let fetched = (try? DatabaseManager.shared.fetchChannels(forServer: serverId))?
+                    .first(where: { $0.name.lowercased() == target.lowercased() }) {
+            channelCache[cacheKey] = fetched
+            channel = fetched
+        } else {
+            return
+        }
 
         let isAction = body.hasPrefix("\u{0001}ACTION ") && body.hasSuffix("\u{0001}")
         let content  = isAction ? String(body.dropFirst(8).dropLast()) : body
@@ -544,8 +617,15 @@ final class IRCClientManager: ObservableObject {
             }
         }
 
-        // Fire watch notification if applicable
-        Task { await maybeNotify(serverId: serverId, ircMessage: msg) }
+        // Fire watch notification if applicable — rate-limited to at most
+        // 1 Task per channel per second to prevent unbounded Task accumulation
+        // on high-traffic channels (a compounding factor in the 12-hour crash).
+        let channelId = channel.id
+        let now = Date()
+        if now.timeIntervalSince(lastNotifyDate[channelId] ?? .distantPast) >= 1.0 {
+            lastNotifyDate[channelId] = now
+            Task { await maybeNotify(serverId: serverId, ircMessage: msg, cachedChannel: channel) }
+        }
     }
 
     // MARK: - Keepalive ping
@@ -559,10 +639,16 @@ final class IRCClientManager: ObservableObject {
     // MARK: - Background refresh (BGAppRefreshTask handler)
 
     func performBackgroundRefresh() async {
+        // Prune old messages once per background refresh so the DB doesn't grow
+        // unboundedly (cleanupOldMessages deletes rows older than 7 days).
+        try? DatabaseManager.shared.cleanupOldMessages()
+
         let servers = (try? DatabaseManager.shared.fetchServers()) ?? []
         let explicit = explicitlyDisconnectedServerIds
 
         for server in servers where !explicit.contains(server.id) {
+            // Never attempt a real network connection for the demo server
+            if IRCClientManager.isDemoServer(server.id) { continue }
             let state = connectionStates[server.id]
             if state == .disconnected {
                 try? await connect(to: server)
@@ -606,6 +692,9 @@ final class IRCClientManager: ObservableObject {
     // MARK: - Message Sending
     
     func sendMessage(_ content: String, to channel: String, on serverId: String) async throws {
+        // Demo server: ChannelViewModel handles bot replies internally
+        if IRCClientManager.isDemoServer(serverId) { return }
+
         guard let client = connections[serverId] else {
             throw IRCError.notConnected
         }
@@ -618,6 +707,7 @@ final class IRCClientManager: ObservableObject {
     }
     
     func sendPrivateMessage(_ content: String, to nick: String, on serverId: String) async throws {
+        if IRCClientManager.isDemoServer(serverId) { return }
         guard let client = connections[serverId] else {
             throw IRCError.notConnected
         }
@@ -627,6 +717,7 @@ final class IRCClientManager: ObservableObject {
     // MARK: - Command Handling
     
     private func handleCommand(_ command: String, channel: String, serverId: String) async throws {
+        if IRCClientManager.isDemoServer(serverId) { return }
         guard let client = connections[serverId] else {
             throw IRCError.notConnected
         }
@@ -724,14 +815,23 @@ final class IRCClientManager: ObservableObject {
 
     // MARK: - Watch notifications
 
-    private func maybeNotify(serverId: String, ircMessage: IRCMessage) async {
+    private func maybeNotify(serverId: String, ircMessage: IRCMessage, cachedChannel: Channel? = nil) async {
         guard ircMessage.command == "PRIVMSG" else { return }
         let target = ircMessage.parameters.first ?? ""
         guard target.hasPrefix("#") || target.hasPrefix("&") else { return }
 
-        guard let channel = (try? DatabaseManager.shared.fetchChannels(forServer: serverId))
-                .flatMap({ $0 })?.first(where: { $0.name.lowercased() == target.lowercased() }),
-              channel.isWatched else { return }
+        // Use the pre-fetched channel from handleIncomingMessage to avoid a
+        // second full fetchChannels(forServer:) DB scan on every message.
+        let channel: Channel
+        if let cached = cachedChannel {
+            channel = cached
+        } else if let fetched = (try? DatabaseManager.shared.fetchChannels(forServer: serverId))
+                    .flatMap({ $0 })?.first(where: { $0.name.lowercased() == target.lowercased() }) {
+            channel = fetched
+        } else {
+            return
+        }
+        guard channel.isWatched else { return }
 
         let nick = ircMessage.source?.nick ?? "someone"
         let body = ircMessage.parameters.count > 1 ? ircMessage.parameters[1] : ""
