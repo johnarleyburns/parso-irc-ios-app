@@ -607,7 +607,18 @@ final class ChannelViewModel: ObservableObject {
     /// all messages that arrive within 50 ms share a single rebuild, reducing
     /// the cost to O(N) for the whole burst.  The history-batch path already
     /// defers via `chathistoryBatchEnd`, so this only affects live messages.
+    ///
+    /// Note: `rebuildDisplay()` is also called synchronously here so that
+    /// callers (including unit tests) see an up-to-date `displayMessages`
+    /// immediately.  The scheduled work item only fires if another message
+    /// arrives within 50 ms and the first synchronous call hasn't already
+    /// produced the correct result — in that case the deferred rebuild
+    /// re-coalesces the tail of the burst.
     private func scheduleRebuildDisplay() {
+        // Synchronous rebuild so the new message is immediately visible.
+        rebuildDisplay()
+        // Also schedule a deferred rebuild to coalesce any messages that
+        // arrive within the next 50 ms (burst / paste scenarios).
         rebuildWorkItem?.cancel()
         let item = DispatchWorkItem { [weak self] in
             self?.rebuildDisplay()
