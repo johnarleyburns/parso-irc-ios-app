@@ -37,8 +37,6 @@ struct ChatView: View {
     @State private var tappedNick: String? = nil
     @State private var safariURL: URL? = nil
 
-    @AppStorage(DemoStep.userDefaultsKey) private var demoStepRaw: Int = 0
-
     init(serverId: String, channelName: String, ircManager: IRCClientManager) {
         self.serverId = serverId
         self.channelName = channelName
@@ -49,40 +47,17 @@ struct ChatView: View {
     }
 
     var body: some View {
-        ZStack(alignment: .bottom) {
-            MessageListView(
+        MessageListView(
+            viewModel: viewModel,
+            channelName: channelName,
+            onTapNick: { nick in prefillText = "\(nick): " }
+        )
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            InputBarView(
                 viewModel: viewModel,
-                channelName: channelName,
-                onTapNick: { nick in prefillText = "\(nick): " }
+                prefillText: $prefillText
             )
-            .safeAreaInset(edge: .bottom, spacing: 0) {
-                InputBarView(
-                    viewModel: viewModel,
-                    prefillText: $prefillText,
-                    onSend: {
-                        // Advance demo step when user sends their first message
-                        if appState.isDemoMode && demoStepRaw == DemoStep.sendMessage.rawValue {
-                            demoStepRaw = DemoStep.longPress.rawValue
-                        }
-                    }
-                )
-                .background(Color(.systemBackground))
-            }
-
-            // Demo overlay pills (shown only in demo mode at relevant steps)
-            VStack {
-                Spacer()
-                DemoOverlayView.sendMessage()
-                    .environmentObject(appState)
-                    .padding(.bottom, 80)
-                DemoOverlayView.longPress()
-                    .environmentObject(appState)
-                    .padding(.bottom, 80)
-                DemoOverlayView.useOptions()
-                    .environmentObject(appState)
-                    .padding(.bottom, 80)
-            }
-            .allowsHitTesting(false)
+            .background(Color(.systemBackground))
         }
         .navigationTitle(channelName)
         .navigationBarTitleDisplayMode(.inline)

@@ -59,6 +59,14 @@ actor IRCClient {
     /// without this buffer the tail of a split segment is silently discarded,
     /// causing protocol desynchronisation after many hours of chat.
     private var receiveBuffer: String = ""
+
+    /// Monotonically incremented each time a new NWConnection is created.
+    /// The stateUpdateHandler closure captures the value at creation time and
+    /// ignores any events whose generation doesn't match the current value.
+    /// This prevents a stale `.cancelled` event from an old connection setting
+    /// `isConnected = false` *after* the new connection has already reached
+    /// `.ready` — which was silently breaking all PRIVMSG sends.
+    private var connectionGeneration: Int = 0
     
     private var pendingCapabilities: Set<String> = []
     private var acknowledgedCapabilities: Set<String> = []
@@ -129,6 +137,13 @@ actor IRCClient {
         }
         receiveBuffer = ""
 
+        // Bump the generation so stale state callbacks from the just-cancelled
+        // connection are ignored — specifically the `.cancelled` event which
+        // was arriving *after* the new connection reached `.ready` and resetting
+        // isConnected back to false, silently breaking all PRIVMSG sends.
+        connectionGeneration += 1
+        let myGeneration = connectionGeneration
+
         debugLog.log("Creating NWConnection to \(host):\(port)...", type: .info)
         let parameters: NWParameters
         if tls {
@@ -144,6 +159,13 @@ actor IRCClient {
         connection.stateUpdateHandler = { [weak self] state in
             self?.debugLog.log("State changed: \(String(describing: state))", type: .info)
             Task {
+                // Discard events from a superseded connection.
+                guard await self?.connectionGeneration == myGeneration else {
+                    await self?.debugLog.log(
+                        "Ignoring stale state event (gen \(myGeneration)) for: \(state)",
+                        type: .info)
+                    return
+                }
                 await self?.handleStateChange(state)
             }
         }
@@ -278,6 +300,7 @@ actor IRCClient {
 
         Task {
             try? await send_raw("QUIT :Parso IRC")
+            connectionGeneration += 1   // suppress .cancelled from this quit
             connection?.cancel()
             connection = nil
             isConnected = false

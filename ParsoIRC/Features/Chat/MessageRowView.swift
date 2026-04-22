@@ -216,26 +216,29 @@ struct MessageRowView: View {
                     .accessibilityLabel("View profile for \(message.sender)")
                 }
 
-                // Bubble
-                bubbleText(
-                    isNotice ? "[\(message.sender)] \(message.content)" : message.content,
-                    background: isMention
-                        ? Color(.systemYellow).opacity(0.18)
-                        : Color.theme.receivedBubble,
-                    foreground: .primary,
-                    corners: grouped ? [.topRight, .bottomLeft, .bottomRight]
-                                     : [.topLeft, .topRight, .bottomRight]
-                )
-                .overlay(
-                    isMention
-                        ? RoundedRectangle(cornerRadius: 2)
+                // Bubble — mention gets a yellow left-accent bar rendered as
+                // a sibling in an HStack so it always sits flush to the left
+                // edge of the bubble regardless of bubble width.
+                // NOTE: .textSelection(.enabled) is intentionally omitted —
+                // it intercepts long-press before our custom context menu fires,
+                // showing the system "Copy/Share" popover instead.
+                HStack(spacing: 0) {
+                    if isMention {
+                        RoundedRectangle(cornerRadius: 2)
                             .fill(Color(.systemYellow))
                             .frame(width: 3)
                             .padding(.vertical, 4)
-                            .frame(maxHeight: .infinity, alignment: .leading)
-                            .allowsHitTesting(false)
-                        : nil
-                )
+                    }
+                    bubbleText(
+                        isNotice ? "[\(message.sender)] \(message.content)" : message.content,
+                        background: isMention
+                            ? Color(.systemYellow).opacity(0.18)
+                            : Color.theme.receivedBubble,
+                        foreground: .primary,
+                        corners: grouped ? [.topRight, .bottomLeft, .bottomRight]
+                                         : [.topLeft, .topRight, .bottomRight]
+                    )
+                }
 
                 if !grouped {
                     Text(message.timestamp.formattedTime())
@@ -279,7 +282,10 @@ struct MessageRowView: View {
                 BubbleShape(corners: corners)
                     .fill(background)
             )
-            .textSelection(.enabled)
+        // .textSelection(.enabled) intentionally removed — it intercepts
+        // long-press before onLongPressGesture fires, showing the system
+        // Copy/Share popover instead of our custom Report/Delete/Block menu.
+        // "Copy Text" is available in our long-press context menu instead.
     }
 }
 

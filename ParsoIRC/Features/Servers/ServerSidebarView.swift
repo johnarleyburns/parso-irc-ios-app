@@ -21,16 +21,13 @@ struct ServerSidebarView: View {
     @State private var newMessageServerId: String? = nil
     @State private var newMessageNick: String = ""
 
-    @AppStorage(DemoStep.userDefaultsKey) private var demoStepRaw: Int = 0
-
     var body: some View {
-        ZStack(alignment: .top) {
-            List {
-                ForEach(servers) { server in
-                    serverSection(for: server)
-                }
+        List {
+            ForEach(servers) { server in
+                serverSection(for: server)
             }
-            .listStyle(.insetGrouped)
+        }
+        .listStyle(.insetGrouped)
             .navigationTitle("Parso IRC")
             .navigationBarTitleDisplayMode(.large)
             .toolbar {
@@ -84,16 +81,6 @@ struct ServerSidebarView: View {
             } message: {
                 Text("Enter the nickname you want to message.")
             }
-
-            // Demo overlays
-            VStack {
-                DemoOverlayView.expandServer()
-                    .environmentObject(appState)
-                DemoOverlayView.openChannel()
-                    .environmentObject(appState)
-            }
-            .padding(.top, 8)
-        }
     }
 
     // MARK: - Server section
@@ -108,10 +95,6 @@ struct ServerSidebarView: View {
                     set: { expanded in
                         if expanded {
                             expandedServers.insert(server.id)
-                            // Advance demo step when user expands demo server
-                            if server.id == DemoContent.serverId && demoStepRaw == DemoStep.expandServer.rawValue {
-                                demoStepRaw = DemoStep.openChannel.rawValue
-                            }
                         } else {
                             expandedServers.remove(server.id)
                         }
@@ -127,10 +110,6 @@ struct ServerSidebarView: View {
                         channel: channel,
                         serverId: server.id,
                         onSelect: { sid, cid in
-                            // Advance demo step when opening the demo channel
-                            if sid == DemoContent.serverId && demoStepRaw == DemoStep.openChannel.rawValue {
-                                demoStepRaw = DemoStep.sendMessage.rawValue
-                            }
                             onSelectChannel(sid, cid, channel.name, false, nil)
                         },
                         onLeave: reloadServers

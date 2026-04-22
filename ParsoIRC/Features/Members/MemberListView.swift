@@ -101,6 +101,12 @@ struct MemberListView: View {
                     selectedMember = nil
                     dismiss()
                     onDM?(nick, sid)
+                },
+                onBlock: { nick in
+                    // Update the live ChannelViewModel so messages disappear
+                    // immediately — without this the messages only hide on next launch.
+                    viewModel.blockSender(nick: nick)
+                    selectedMember = nil
                 }
             )
         }

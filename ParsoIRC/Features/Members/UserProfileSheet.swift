@@ -18,6 +18,10 @@ struct UserProfileSheet: View {
     var onMention: ((String) -> Void)? = nil
     /// Called when the user taps "Send Direct Message". Provides (nick, serverId).
     var onDM: ((String, String) -> Void)? = nil
+    /// Called when the user confirms blocking this nick.
+    /// The caller (MemberListView or MessageListView) should call viewModel.blockSender(nick:)
+    /// so the live message list is updated immediately without waiting for a restart.
+    var onBlock: ((String) -> Void)? = nil
 
     @EnvironmentObject private var ircManager: IRCClientManager
     @Environment(\.dismiss) private var dismiss
@@ -92,7 +96,10 @@ struct UserProfileSheet: View {
         .onDisappear { deregisterWhoisCallback() }
         .alert("Block User", isPresented: $showBlockConfirm) {
             Button("Block \(nick)", role: .destructive) {
+                // Persist to DB
                 try? DatabaseManager.shared.blockUser(nick: nick)
+                // Notify caller so the live ChannelViewModel updates immediately
+                onBlock?(nick)
                 HapticManager.mediumImpact()
                 dismiss()
             }

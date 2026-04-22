@@ -82,11 +82,10 @@ struct RootView: View {
             guard eulaAccepted else { return }
             let servers = (try? DatabaseManager.shared.fetchServers()) ?? []
             if servers.isEmpty {
-                // Small delay so the EULA cover finishes its dismiss animation
-                // before the onboarding cover begins its present animation.
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                    showOnboarding = true
-                }
+                // Present onboarding immediately — no delay needed.
+                // SwiftUI handles back-to-back fullScreenCover transitions cleanly
+                // and the delay was only causing a brief sidebar flash.
+                showOnboarding = true
             }
         }) {
             EULAView(isPresented: $showEULA)

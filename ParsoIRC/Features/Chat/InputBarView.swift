@@ -12,9 +12,6 @@ struct InputBarView: View {
     // Pre-fill text from outside (e.g. "alice: " after tapping a nick)
     @Binding var prefillText: String
 
-    /// Optional callback invoked after a message is sent (used by demo mode step tracking).
-    var onSend: (() -> Void)? = nil
-
     @State private var inputText: String = ""
     @FocusState private var isTextFieldFocused: Bool
 
@@ -64,7 +61,11 @@ struct InputBarView: View {
     }
 
     private var showSlashAutocomplete: Bool { !filteredCommands.isEmpty && inputText != filteredCommands.first?.cmd }
-    private var showNickCompletion: Bool { !nickSuggestions.isEmpty && nickCompletionPrefix != nil && nickCompletionPrefix!.count >= 1 }
+    private var showNickCompletion: Bool {
+        // Require at least 2 characters before showing nick suggestions to
+        // avoid the autocomplete strip appearing after every single keystroke.
+        !nickSuggestions.isEmpty && nickCompletionPrefix != nil && nickCompletionPrefix!.count >= 2
+    }
     private var canSend: Bool { !inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
 
     var body: some View {
@@ -266,7 +267,6 @@ struct InputBarView: View {
         guard !trimmed.isEmpty else { return }
         viewModel.send(trimmed)
         inputText = ""
-        onSend?()
     }
 
     /// Submit on Return key only when the text is a single line (no \n).

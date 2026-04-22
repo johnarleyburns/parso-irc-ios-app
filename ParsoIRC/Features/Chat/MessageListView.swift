@@ -21,7 +21,6 @@ struct MessageListView: View {
     @State private var showReportFallbackAlert = false
     @State private var reportFallbackText = ""
 
-    @AppStorage(DemoStep.userDefaultsKey) private var demoStepRaw: Int = 0
     @EnvironmentObject private var appState: AppState
 
     // Tracks whether the user is scrolled near the bottom
@@ -163,10 +162,6 @@ struct MessageListView: View {
                     contextMessage = tapped
                     showContextMenu = true
                     HapticManager.mediumImpact()
-                    // Advance demo step on first long-press
-                    if appState.isDemoMode && demoStepRaw == DemoStep.longPress.rawValue {
-                        demoStepRaw = DemoStep.useOptions.rawValue
-                    }
                 },
                 onRetry: { failedMsg in
                     viewModel.retrySend(message: failedMsg)
