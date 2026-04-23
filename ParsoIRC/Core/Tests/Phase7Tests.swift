@@ -17,6 +17,7 @@ import XCTest
 /// Verifies that the demo fast path in joinChannel() works correctly.
 /// The logic being tested mirrors ChannelBrowserSheet.joinChannel():
 ///   if isDemoServer → save channel + call onJoined, do NOT call getClient.
+@MainActor
 final class DemoJoinChannelTests: XCTestCase {
 
     // Helper that mirrors the fixed joinChannel() logic for unit testing.
