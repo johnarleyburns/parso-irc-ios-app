@@ -797,6 +797,11 @@ final class DatabaseManager {
         return try db.scalar(deletedMessages.filter(deletedMessageId == id).count) > 0
     }
 
+    func unhideMessage(id: String) throws {
+        guard let db = db else { return }
+        try db.run(deletedMessages.filter(deletedMessageId == id).delete())
+    }
+
     // MARK: - Reset All User Data (Exit Demo Mode)
 
     /// Wipes the entire SQLite database file so the app returns to a clean state.

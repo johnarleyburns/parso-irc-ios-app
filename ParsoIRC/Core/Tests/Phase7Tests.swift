@@ -225,6 +225,14 @@ final class DemoDMViewModelTests: XCTestCase {
     }
 
     override func tearDown() async throws {
+        // Clean up any moderation state written to the shared DB during tests.
+        // Demo DM intro messages use stable IDs — without cleanup, a test that
+        // blocks Alice or hides "dm-alice-0" contaminates subsequent tests that
+        // load those same IDs via loadModerationState().
+        try? DatabaseManager.shared.unblockUser(nick: "Alice")
+        for id in ["dm-alice-0", "dm-alice-1", "dm-alice-2"] {
+            try? DatabaseManager.shared.unhideMessage(id: id)
+        }
         viewModel = nil
     }
 
@@ -458,7 +466,21 @@ final class DemoChannelViewModelTests: XCTestCase {
         )
     }
 
-    override func tearDown() async throws { viewModel = nil }
+    override func tearDown() async throws {
+        // Clean up moderation state written to the shared DB during tests.
+        // Demo channel messages use stable IDs — without cleanup, a hide/block
+        // from one test contaminates subsequent tests via loadModerationState().
+        try? DatabaseManager.shared.unblockUser(nick: "Alice")
+        let stableChannelIds = ["demo-sys-0", "demo-sys-1", "demo-sys-2",
+                                "demo-msg-1", "demo-msg-2", "demo-msg-3",
+                                "demo-msg-4", "demo-msg-5", "demo-msg-6",
+                                "demo-msg-7", "demo-msg-8", "demo-msg-9",
+                                "demo-msg-10", "demo-msg-11"]
+        for id in stableChannelIds {
+            try? DatabaseManager.shared.unhideMessage(id: id)
+        }
+        viewModel = nil
+    }
 
     func testDemoChannelLoadsMessages() async {
         await viewModel.start()

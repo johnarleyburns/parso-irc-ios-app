@@ -664,8 +664,8 @@ final class ChannelViewModel: ObservableObject {
         for msg in rawMessages {
             // Skip locally hidden messages
             if hiddenMessageIds.contains(msg.id) { continue }
-            // Skip messages from blocked users (except system messages)
-            if msg.type == .message || msg.type == .action || msg.type == .notice {
+            // Skip messages from blocked users (all types except system/structural)
+            if msg.type != .system {
                 if blockedNicks.contains(msg.sender) { continue }
             }
 
