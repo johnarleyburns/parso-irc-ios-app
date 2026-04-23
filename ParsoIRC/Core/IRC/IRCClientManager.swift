@@ -545,8 +545,13 @@ final class IRCClientManager: ObservableObject {
                 }
             }
         } else {
-            reconnectTimers[serverId] = Timer.scheduledTimer(
-                withTimeInterval: delay, repeats: false) { [weak self] _ in
+            // Explicitly add to RunLoop.main so the timer fires reliably even
+            // when scheduleReconnect is called from a non-main-thread context
+            // (e.g. a background Task).  Timer.scheduledTimer schedules on the
+            // *current* RunLoop, which may not be the main RunLoop — if that
+            // thread exits the timer silently never fires, leaving the server
+            // permanently disconnected until the next app foreground.
+            let timer = Timer(timeInterval: delay, repeats: false) { [weak self] _ in
                 Task { @MainActor in
                     if let server = try? DatabaseManager.shared.fetchServers()
                         .first(where: { $0.id == serverId }) {
@@ -554,6 +559,8 @@ final class IRCClientManager: ObservableObject {
                     }
                 }
             }
+            RunLoop.main.add(timer, forMode: .common)
+            reconnectTimers[serverId] = timer
         }
     }
 

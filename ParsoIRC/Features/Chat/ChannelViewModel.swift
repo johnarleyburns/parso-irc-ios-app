@@ -139,12 +139,20 @@ final class ChannelViewModel: ObservableObject {
         HapticManager.lightImpact()
 
         if IRCClientManager.isDemoServer(serverId) {
-            // Schedule a bot reply after a short realistic delay
+            // Schedule a bot reply after a short realistic delay.
+            // For DMs the reply comes from the remote nick; for channels it
+            // comes from DemoBot.  In both cases the channelId is this view
+            // model's channelId so the message is routed to the right view.
             let replyIndex = demoBotReplyIndex
             demoBotReplyIndex += 1
+            let cid = channelId
+            let targetNick = channelName  // only used for DM path
+            let isDM = !isChannelConversation
             DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
                 guard let self else { return }
-                let reply = DemoContent.botReply(index: replyIndex)
+                let reply: Message = isDM
+                    ? DemoContent.dmBotReply(to: targetNick, index: replyIndex, channelId: cid)
+                    : DemoContent.botReply(index: replyIndex, channelId: cid)
                 self.append(reply, persist: false)
             }
             return
@@ -246,18 +254,22 @@ final class ChannelViewModel: ObservableObject {
         isLoadingHistory = true
         currentNick = DemoContent.nick
 
-        // Load members
-        members = DemoContent.members
-
-        // Load topic from channel model
-        topic = DemoContent.channel.topic ?? ""
-        updateRulesURL()
-
-        // Load pre-seeded messages
-        let msgs = DemoContent.messages(channelId: channelId)
-        for msg in msgs {
-            appendRaw(msg)
+        if isChannelConversation {
+            // ── #demo channel ───────────────────────────────────────────────
+            members = DemoContent.members
+            topic = DemoContent.channel.topic ?? ""
+            updateRulesURL()
+            let msgs = DemoContent.messages(channelId: channelId)
+            for msg in msgs { appendRaw(msg) }
+        } else {
+            // ── Demo DM thread ───────────────────────────────────────────────
+            // Load per-nick intro messages so each DM feels like a real
+            // conversation.  The channel name IS the remote nick for DMs.
+            let msgs = DemoContent.dmIntroMessages(for: channelName,
+                                                    channelId: channelId)
+            for msg in msgs { appendRaw(msg) }
         }
+
         rebuildDisplay()
         isLoadingHistory = false
     }

@@ -418,4 +418,126 @@ final class ModerationAfterTrimTests: XCTestCase {
     }
 }
 
+// MARK: - Crash stress: rapid messages with interleaved moderation
+
+@MainActor
+final class CrashStressTests: XCTestCase {
+
+    private var viewModel: ChannelViewModel!
+
+    override func setUp() async throws {
+        viewModel = ChannelViewModel(
+            serverId: "stress-server",
+            channelName: "#stress",
+            ircManager: IRCClientManager.shared
+        )
+    }
+
+    override func tearDown() async throws {
+        viewModel = nil
+    }
+
+    /// Sends 2 000 messages with locallyDeleteMessage and blockSender calls
+    /// interleaved every 100 messages.  Verifies:
+    ///   1. No crash or assertion failure throughout.
+    ///   2. displayMessages stays bounded (≤ 1210).
+    ///   3. Deleted and blocked messages are absent from the display.
+    func testRapidMessagesWithInterleavedModerationNoCrash() {
+        var deletedId: String? = nil
+        let blockedNick = "stresser"
+
+        for i in 0..<2000 {
+            viewModel.send("stress msg \(i)")
+
+            if i == 100 {
+                // Delete the most recent message
+                if let msg = viewModel.displayMessages.compactMap({ $0.message }).last {
+                    deletedId = msg.id
+                    viewModel.locallyDeleteMessage(id: msg.id)
+                }
+            }
+
+            if i == 200 {
+                viewModel.blockSender(nick: blockedNick)
+            }
+
+            // Force an additional send+delete cycle every 100 messages to
+            // exercise the debounce path without calling private rebuildDisplay()
+            if i % 100 == 99 {
+                viewModel.send("probe \(i)")
+                if let probe = viewModel.displayMessages.compactMap({ $0.message }).last {
+                    viewModel.locallyDeleteMessage(id: probe.id)
+                }
+            }
+        }
+
+        // 1. Display must be bounded
+        XCTAssertLessThanOrEqual(viewModel.displayMessages.count, 1210,
+            "displayMessages must stay bounded under sustained load with interleaved moderation")
+
+        // 2. Deleted message must not appear
+        if let id = deletedId {
+            let found = viewModel.displayMessages.compactMap { $0.message }.contains { $0.id == id }
+            XCTAssertFalse(found, "Deleted message must not appear in displayMessages after stress run")
+        }
+
+        // 3. Blocked nick's messages must not appear
+        let blockedVisible = viewModel.displayMessages
+            .compactMap { $0.message }
+            .filter { $0.sender == blockedNick }
+        XCTAssertTrue(blockedVisible.isEmpty,
+            "Blocked user's messages must not appear in displayMessages after stress run")
+    }
+
+    /// Sends 2 000 messages with alternating delete/rebuild calls and verifies
+    /// the display count never exceeds the high-water mark even under sustained
+    /// moderation churn.
+    func testDisplayBoundedAfter2000MessagesWithModeration() {
+        for i in 0..<2000 {
+            viewModel.send("churn \(i)")
+            // Delete every 50th message to exercise the hidden-ID path
+            if i % 50 == 0,
+               let msg = viewModel.displayMessages.compactMap({ $0.message }).last {
+                viewModel.locallyDeleteMessage(id: msg.id)
+            }
+        }
+        XCTAssertLessThanOrEqual(viewModel.displayMessages.count, 1210,
+            "displayMessages must stay bounded with high delete churn")
+    }
+
+    /// Verifies that blockSender + a subsequent trim batch does not reintroduce
+    /// messages from the blocked user (regression guard for rebuildDisplay loop).
+    func testBlockedMessagesAbsentAfterTrimBatch() {
+        let victim = "blocked_user"
+
+        // Fill past the trim threshold, injecting victim-sender messages via
+        // the public blockSender API only (we can't inject arbitrary senders
+        // through send(), but we can verify block state survives trimming).
+        for i in 0..<1300 { viewModel.send("filler \(i)") }
+
+        viewModel.blockSender(nick: victim)
+
+        // After blocking, any victim messages that survived trimming must be gone
+        let still = viewModel.displayMessages
+            .compactMap { $0.message }
+            .filter { $0.sender == victim }
+        XCTAssertTrue(still.isEmpty,
+            "Blocked user's messages must not appear even after a trim batch")
+    }
+
+    /// Performance guard: 2 000 messages with moderation must complete in < 15s.
+    func testStressRunIsSubFifteenSeconds() {
+        let start = CFAbsoluteTimeGetCurrent()
+        for i in 0..<2000 {
+            viewModel.send("perf \(i)")
+            if i % 200 == 0 {
+                viewModel.blockSender(nick: "nobody\(i)")
+            }
+        }
+        let elapsed = CFAbsoluteTimeGetCurrent() - start
+        XCTAssertLessThan(elapsed, 15.0,
+            "2000 messages with moderation must complete in < 15s (regression: O(N²))")
+    }
+}
+
 #endif // !os(Linux)

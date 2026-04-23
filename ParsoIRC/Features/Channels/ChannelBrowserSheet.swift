@@ -477,6 +477,18 @@ struct ChannelBrowserSheet: View {
         guard !name.isEmpty else { return }
         if !name.hasPrefix("#") && !name.hasPrefix("&") { name = "#\(name)" }
 
+        // Demo server: no real TCP join needed — just save the channel locally
+        // and navigate to it.  Without this guard, getClient(for:) returns nil
+        // for the demo server, producing a "Not connected to Parso Demo Server"
+        // error even though the demo channel is fully functional.
+        if IRCClientManager.isDemoServer(server.id) {
+            let ch = Channel(serverId: server.id, name: name, joinedAt: Date())
+            try? DatabaseManager.shared.saveChannel(ch, serverId: server.id)
+            onJoined?(name)
+            dismiss()
+            return
+        }
+
         Task {
             guard let client = ircManager.getClient(for: server.id) else {
                 joinError = "Not connected to \(server.name)"

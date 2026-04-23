@@ -149,7 +149,7 @@ enum DemoContent {
         ]
     }
 
-    // MARK: - DemoBot rotating replies
+    // MARK: - DemoBot rotating replies (channel)
 
     static let botReplies: [String] = [
         "Glad you're here! IRC has been around since 1988 and it's still going strong.",
@@ -159,7 +159,9 @@ enum DemoContent {
         "When you're ready, tap 'Add Server' to connect to a real IRC network!",
     ]
 
-    static func botReply(index: Int) -> Message {
+    /// Returns a rotating channel bot reply.  `channelId` defaults to the
+    /// demo channel but can be overridden for DM threads.
+    static func botReply(index: Int, channelId: String = DemoContent.channelId) -> Message {
         let text = botReplies[index % botReplies.count]
         return Message(
             id: UUID().uuidString,
@@ -168,6 +170,118 @@ enum DemoContent {
             content: text,
             timestamp: Date(),
             type: .message
+        )
+    }
+
+    // MARK: - DM intro messages
+
+    /// Returns pre-seeded DM conversation intro messages between the demo user
+    /// and `nick`.  Messages are anchored to `now` so timestamps look natural.
+    static func dmIntroMessages(for nick: String, channelId dmChannelId: String) -> [Message] {
+        let now = Date()
+        func t(_ minutesAgo: Double) -> Date { now.addingTimeInterval(-minutesAgo * 60) }
+
+        // Per-nick flavour so each DM feels distinct
+        switch nick.lowercased() {
+        case "alice":
+            return [
+                Message(id: "dm-alice-0", channelId: dmChannelId, sender: "Alice",
+                        content: "Hey! Glad you found the DM feature 😊",
+                        timestamp: t(10)),
+                Message(id: "dm-alice-1", channelId: dmChannelId, sender: "Alice",
+                        content: "You can long-press any message here to report, delete, or block — same as in channels.",
+                        timestamp: t(9)),
+                Message(id: "dm-alice-2", channelId: dmChannelId, sender: "Alice",
+                        content: "Try sending a message — I'll reply!",
+                        timestamp: t(1)),
+            ]
+        case "bob":
+            return [
+                Message(id: "dm-bob-0", channelId: dmChannelId, sender: "Bob",
+                        content: "Oh hey, a direct message! Nice.",
+                        timestamp: t(8)),
+                Message(id: "dm-bob-1", channelId: dmChannelId, sender: "Bob",
+                        content: "IRC DMs work just like a private channel — fully encrypted with TLS.",
+                        timestamp: t(7)),
+                Message(id: "dm-bob-2", channelId: dmChannelId, sender: "Bob",
+                        content: "Feel free to type something below!",
+                        timestamp: t(2)),
+            ]
+        case "charlie":
+            return [
+                Message(id: "dm-charlie-0", channelId: dmChannelId, sender: "Charlie",
+                        content: "waves",
+                        timestamp: t(12), type: .action),
+                Message(id: "dm-charlie-1", channelId: dmChannelId, sender: "Charlie",
+                        content: "This is the DM screen. Long-press my message to see moderation options.",
+                        timestamp: t(11)),
+                Message(id: "dm-charlie-2", channelId: dmChannelId, sender: "Charlie",
+                        content: "Go ahead — say something!",
+                        timestamp: t(3)),
+            ]
+        default:
+            // DemoBot or any other nick
+            return [
+                Message(id: "dm-bot-0", channelId: dmChannelId, sender: nick,
+                        content: "Hello! I'm \(nick) — your demo conversation partner.",
+                        timestamp: t(6)),
+                Message(id: "dm-bot-1", channelId: dmChannelId, sender: nick,
+                        content: "Long-press this message to try report, delete, or block.",
+                        timestamp: t(5)),
+                Message(id: "dm-bot-2", channelId: dmChannelId, sender: nick,
+                        content: "Send a message and I'll reply!",
+                        timestamp: t(1)),
+            ]
+        }
+    }
+
+    // MARK: - DM bot replies (per-nick flavour)
+
+    private static let dmBotReplies: [String: [String]] = [
+        "alice": [
+            "Parso IRC supports ZNC bouncers — great for staying connected.",
+            "You can add a real server with 'Add Server' in the sidebar.",
+            "Libera.Chat has thousands of channels — #linux, #python, and more.",
+            "Try long-pressing a message — you can report, delete, or block.",
+            "Hope you're enjoying the demo! The real thing is even better 😊",
+        ],
+        "bob": [
+            "IRC is one of the oldest and most reliable chat protocols around.",
+            "Parso supports TLS out of the box — your messages are encrypted.",
+            "Did you know you can watch channels from the Apple Watch app too?",
+            "Long-press any message to see the moderation options.",
+            "When you're ready, add a real IRC server and say hi on #linux!",
+        ],
+        "charlie": [
+            "grins",
+            "IRC has been my home on the internet for years.",
+            "You can browse channels with the 'Join a channel' button in the sidebar.",
+            "Long-press this message — try report or block to see how it works.",
+            "nods appreciatively",
+        ],
+    ]
+
+    private static let defaultDMBotReplies: [String] = [
+        "Thanks for the message! I'm just a demo bot.",
+        "Parso IRC is open source — check it out on GitHub.",
+        "You can connect to Libera.Chat, OFTC, EFnet, and many more networks.",
+        "Long-press any message to report, delete, or block.",
+        "Add a real server to start chatting for real!",
+    ]
+
+    /// Returns a rotating DM bot reply from `nick`.  `channelId` is the DM
+    /// thread's channel ID so the message is routed to the right view.
+    static func dmBotReply(to nick: String, index: Int, channelId dmChannelId: String) -> Message {
+        let replies = dmBotReplies[nick.lowercased()] ?? defaultDMBotReplies
+        let text = replies[index % replies.count]
+        let isAction = text == "grins" || text == "nods appreciatively"
+        return Message(
+            id: UUID().uuidString,
+            channelId: dmChannelId,
+            sender: nick,
+            content: text,
+            timestamp: Date(),
+            type: isAction ? .action : .message
         )
     }
 }
